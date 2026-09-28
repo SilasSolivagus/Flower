@@ -34,6 +34,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 - **密钥**：敏感配置用 `FLOWER_SECRET_KEY` 加密存储；缺少该环境变量时拒绝启动，不使用任何默认密钥。
 - **运行时**：只依赖 Postgres，不引入 Redis。队列用 `FOR UPDATE SKIP LOCKED`，多实例互斥用 advisory lock。一个镜像，web 和 worker 两种启动模式。
 - **API 形态**：`/api/v1/orgs/{org}/...`，Web 界面也走同一套接口；MCP 是 API 之上的适配层（P4）。
+- **前端**：Next.js + Tailwind CSS + shadcn/ui，默认浅色主题，next-themes 提供深色模式；复用 123plane 的组件。
 
 ## 2. 租户与身份
 
@@ -301,6 +302,39 @@ sections 供 Agent 逐节写作，并由系统校验必填小节是否齐全。
 | 评审效率、驳回率 | `check_item_results` / `check_item_signoffs` + 领域事件 |
 
 先按需实时计算；数据量增大后加每日快照表，不影响现有结构。
+
+### 6.7 AI 能力
+
+Flower 中的 AI 分两类：
+
+- **外部 Agent**（经 MCP 接入）：模型和费用在 Agent 一侧，Flower 不需要配置 key。
+- **内置 AI 功能**（页面内起草 PRD、合入提案、AI 预审、语义查重、别名生成、知识库向量检索）：由 Flower 调用模型，需要配置 key。
+
+**能力分层**：
+
+| 配置 | 可用能力 |
+|---|---|
+| 无 key | 全部业务功能、MCP、知识库全文与双链检索 |
+| 配置对话模型 | 以上 + 页面内 AI 功能 |
+| 再配置向量模型 | 以上 + 知识库语义检索 |
+
+未配置时 AI 入口不隐藏，点开后提示由组织管理员在"组织设置 → AI"中配置。界面标明每次使用的模型。
+
+**key 的层级**：组织级为主；实例级可配默认值兜底，组织已配置时优先用组织的；暂不支持个人 key。
+
+**表**：
+
+| 表 | 关键字段 |
+|---|---|
+| `ai_providers` | org_id（为空表示实例默认）、kind（anthropic / openai_compatible）、name、base_url、api_key（加密）、models（jsonb） |
+| `ai_model_assignments` | org_id、purpose（writing / fast / embedding）、provider_id、model |
+| `ai_usage` | org_id、member_id、feature、provider_id、model、input_tokens、output_tokens、cost_estimate、at |
+
+组织可设置月度额度上限（`organizations.settings.aiMonthlyBudget`），超出后内置 AI 功能暂停并提示。
+
+**实现时机**：与第一个内置 AI 功能一起实现，P0 不包含。push 现有的 AI 预审和别名生成，迁移时只迁历史结果，功能届时接回。
+
+**非功能性需求（后续再定）**：启用 AI 后，界面展示和动效要有明显区别，给用户"切换到智能模式"的感受。
 
 ## 7. 旧数据迁移
 
