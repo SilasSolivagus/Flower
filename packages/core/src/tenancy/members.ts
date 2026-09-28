@@ -120,6 +120,9 @@ export async function updateMember(
     if ((nextRole === 'owner') !== (cur.orgRole === 'owner') && actor.orgRole !== 'owner') {
       throw new AppError('forbidden', '只有 owner 能授予或撤销 owner');
     }
+    if (cur.orgRole === 'owner' && nextStatus !== cur.status && actor.orgRole !== 'owner') {
+      throw new AppError('forbidden', '只有 owner 能授予或撤销 owner');
+    }
     const losingOwner = cur.orgRole === 'owner' && (nextRole !== 'owner' || nextStatus !== 'active');
     if (losingOwner) {
       const others = await tx

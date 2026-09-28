@@ -37,6 +37,16 @@ describe('成员', () => {
     expect(promoted).toMatchObject({ orgRole: 'admin', department: '研发部' });
   });
 
+  it('只有 owner 能通过状态变更撤销 owner', async () => {
+    const other = await createPlaceholderMember(t.db, owner, { displayName: '王五' });
+    const promoted = await updateMember(t.db, owner, other.id, { orgRole: 'owner' });
+    expect(promoted.orgRole).toBe('owner');
+    const adminActor: Actor = { ...owner, memberId: promoted.id, orgRole: 'admin' };
+    await expect(updateMember(t.db, adminActor, promoted.id, { status: 'left' })).rejects.toMatchObject({ code: 'forbidden' });
+    const deactivated = await updateMember(t.db, owner, promoted.id, { status: 'left' });
+    expect(deactivated).toMatchObject({ status: 'left' });
+  });
+
   it('普通成员不能登记成员', async () => {
     await expect(createPlaceholderMember(t.db, { ...owner, orgRole: 'member' }, { displayName: 'x' })).rejects.toMatchObject({ code: 'forbidden' });
   });
