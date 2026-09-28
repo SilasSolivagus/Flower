@@ -5,6 +5,11 @@ import { errorHandler } from './http';
 import { registerAuthRoutes } from './routes/auth';
 import { registerInstanceRoutes } from './routes/instance';
 import { registerSetupRoutes } from './routes/setup';
+import { registerInvitationRoutes } from './routes/invitations';
+import { registerMemberRoutes } from './routes/members';
+import { registerOrgRoutes } from './routes/orgs';
+import { registerProductRoutes } from './routes/products';
+import { registerTokenRoutes } from './routes/tokens';
 
 export type ApiDeps = { db: Db; secureCookies: boolean; publicUrl: string };
 export type ApiEnv = {
@@ -28,6 +33,11 @@ export function createApi(deps: ApiDeps): App {
   registerAuthRoutes(app, deps);
   registerInstanceRoutes(app, deps);
   // Task 16：组织资源路由
+  registerOrgRoutes(app, deps);
+  registerMemberRoutes(app, deps);
+  registerInvitationRoutes(app, deps);
+  registerTokenRoutes(app, deps);
+  registerProductRoutes(app, deps);
   // Task 17：配置定义路由
   return app;
 }
