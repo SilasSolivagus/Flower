@@ -12,6 +12,7 @@ export * from './auth/password';
 export * from './auth/accounts';
 export * from './auth/sessions';
 export * from './access/permissions';
+export * from './access/tokens';
 export * from './definitions/workflow-schema';
 export * from './definitions/defaults';
 export * from './tenancy/orgs';
