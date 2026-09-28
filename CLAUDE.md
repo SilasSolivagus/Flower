@@ -16,6 +16,8 @@
 
 首次开发：`cp .env.example apps/web/.env.local`，填入 `FLOWER_SECRET_KEY`（`openssl rand -base64 48`）。
 
+`pnpm test` 会把集群里 `flower_app` 角色的密码改成测试固定值 `flower_app_test`；测试跑完后、`pnpm dev` 之前先执行一次 `pnpm db:migrate` 把密码改回 `apps/web/.env.local` 里配置的值。
+
 ## 约定
 
 - 业务逻辑只写在 `packages/core`，服务函数签名为 `(db, actor, input)`；`apps/web/src/server/routes` 只做参数校验和调用。
