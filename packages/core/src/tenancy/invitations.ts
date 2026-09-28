@@ -164,14 +164,22 @@ export function acceptInvitation(
 
     await setOrgContext(tx, inv.orgId);
     const [dup] = await tx
-      .select({ id: members.id })
+      .select({ id: members.id, status: members.status })
       .from(members)
       .where(and(eq(members.orgId, inv.orgId), eq(members.accountId, accountId)));
-    if (dup) throw new AppError('conflict', '你已经是该组织的成员');
+    if (dup && dup.status === 'active') throw new AppError('conflict', '你已经是该组织的成员');
 
     let memberId: string;
-    if (inv.memberId) {
-      await tx.update(members).set({ accountId, orgRole: inv.orgRole, email: inv.email }).where(eq(members.id, inv.memberId));
+    if (dup && dup.status === 'left') {
+      await tx.update(members).set({ status: 'active', orgRole: inv.orgRole }).where(eq(members.id, dup.id));
+      memberId = dup.id;
+    } else if (inv.memberId) {
+      const bound = await tx
+        .update(members)
+        .set({ accountId, orgRole: inv.orgRole, email: inv.email, status: 'active' })
+        .where(and(eq(members.id, inv.memberId), isNull(members.accountId)))
+        .returning({ id: members.id });
+      if (bound.length === 0) throw new AppError('conflict', '该成员已关联其他账号');
       memberId = inv.memberId;
     } else {
       const [m] = await tx
