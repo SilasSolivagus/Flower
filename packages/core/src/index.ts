@@ -15,4 +15,5 @@ export * from './access/permissions';
 export * from './definitions/workflow-schema';
 export * from './definitions/defaults';
 export * from './tenancy/orgs';
+export * from './tenancy/products';
 export * from './setup/instance';
