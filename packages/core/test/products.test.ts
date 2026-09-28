@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { members } from '../src/db/schema';
 import type { Actor } from '../src/domain-types';
+import { createAccount } from '../src/auth/accounts';
+import { forkWorkflowForProduct } from '../src/definitions/workflows';
 import { newId } from '../src/ids';
+import { createOrganization, resolveActor } from '../src/tenancy/orgs';
 import { createProduct, getProduct, listProductRoles, listProducts, setProductRole, updateProduct } from '../src/tenancy/products';
 import { createTestDb } from './db';
 import { seedInstance } from './factories';
@@ -66,5 +69,21 @@ describe('产品', () => {
     const u = await updateProduct(t.db, owner, p.id, { name: '新', status: 'archived' });
     expect(u).toMatchObject({ name: '新', status: 'archived' });
     await expect(updateProduct(t.db, member, p.id, { name: 'x' })).rejects.toMatchObject({ code: 'forbidden' });
+  });
+
+  it('创建产品时校验 workflowVersionId：跨组织与兄弟产品的分叉版本都不能用', async () => {
+    const otherAdmin = await createAccount(t.db, { email: 'other-org@example.com', name: 'Other', password: 'password123', isInstanceAdmin: true });
+    const { org: otherOrg } = await createOrganization(t.db, otherAdmin, { name: '别的组织', slug: 'other-org' });
+    const otherOwner = (await resolveActor(t.db, otherAdmin.id, otherOrg.slug))!;
+    const otherProduct = await createProduct(t.db, otherOwner, { name: '别组织产品', key: 'OTH' });
+    await expect(
+      createProduct(t.db, owner, { name: '越权', key: 'CROSS', workflowVersionId: otherProduct.workflowVersionId! }),
+    ).rejects.toMatchObject({ code: 'not_found' });
+
+    const sibling = await createProduct(t.db, owner, { name: '兄弟产品', key: 'SIB' });
+    const { version: fork } = await forkWorkflowForProduct(t.db, owner, sibling.id, { fromVersionId: sibling.workflowVersionId! });
+    await expect(
+      createProduct(t.db, owner, { name: '用兄弟的分叉', key: 'BAD', workflowVersionId: fork.id }),
+    ).rejects.toMatchObject({ code: 'invalid' });
   });
 });

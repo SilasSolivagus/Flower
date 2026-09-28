@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { productRoleOf, requireOrgAdmin, requireProductRole } from '../access/permissions';
 import type { Db } from '../db/client';
-import { members, productMembers, products, workflowDefinitions } from '../db/schema';
+import { members, productMembers, products, workflowDefinitions, workflowVersions } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
@@ -61,7 +61,19 @@ export async function createProduct(
   const key = input.key.trim().toUpperCase();
   if (!PRODUCT_KEY_RE.test(key)) throw new AppError('invalid', '编号前缀须以字母开头，由 2–10 位大写字母或数字组成');
   return withOrg(db, actor.orgId, async (tx) => {
-    const workflowVersionId = input.workflowVersionId ?? (await defaultWorkflowVersion(tx));
+    let workflowVersionId: string | null;
+    if (input.workflowVersionId) {
+      const [row] = await tx
+        .select({ definitionProductId: workflowDefinitions.productId })
+        .from(workflowVersions)
+        .innerJoin(workflowDefinitions, eq(workflowDefinitions.id, workflowVersions.definitionId))
+        .where(eq(workflowVersions.id, input.workflowVersionId));
+      if (!row) throw new AppError('not_found', '流程版本不存在');
+      if (row.definitionProductId !== null) throw new AppError('invalid', '新产品只能使用组织流程模板');
+      workflowVersionId = input.workflowVersionId;
+    } else {
+      workflowVersionId = await defaultWorkflowVersion(tx);
+    }
     let row: typeof products.$inferSelect;
     try {
       [row] = (await tx
@@ -158,6 +170,10 @@ export async function setProductRole(
     if (target.orgRole === 'owner' || target.orgRole === 'admin') {
       throw new AppError('invalid', '组织管理员在所有产品上都是管理员，无需单独设置');
     }
+    const [existing] = await tx
+      .select({ role: productMembers.role })
+      .from(productMembers)
+      .where(and(eq(productMembers.productId, productId), eq(productMembers.memberId, memberId)));
     await tx
       .delete(productMembers)
       .where(and(eq(productMembers.productId, productId), eq(productMembers.memberId, memberId)));
@@ -169,7 +185,7 @@ export async function setProductRole(
       subjectType: 'member',
       subjectId: memberId,
       actor,
-      payload: { role },
+      payload: { changes: [{ field: 'role', old: existing?.role ?? null, new: role }] },
     });
   });
 }
