@@ -1,6 +1,7 @@
-import { eq } from 'drizzle-orm';
-import { type AccountPreferences, accounts } from '../db/schema';
+import { and, eq, ne } from 'drizzle-orm';
+import { type AccountPreferences, accounts, sessions } from '../db/schema';
 import type { Queryable } from '../db/tx';
+import { sha256 } from '../crypto';
 import { AppError, isUniqueViolation } from '../errors';
 import { assertPasswordPolicy, hashPassword, verifyPassword } from './password';
 
@@ -78,7 +79,7 @@ export async function updateProfile(
 export async function changePassword(
   q: Queryable,
   accountId: string,
-  input: { currentPassword: string; newPassword: string },
+  input: { currentPassword: string; newPassword: string; keepSessionToken?: string },
 ): Promise<void> {
   const [row] = await q.select().from(accounts).where(eq(accounts.id, accountId));
   if (!row) throw new AppError('not_found', '账号不存在');
@@ -87,4 +88,8 @@ export async function changePassword(
   }
   assertPasswordPolicy(input.newPassword);
   await q.update(accounts).set({ passwordHash: await hashPassword(input.newPassword) }).where(eq(accounts.id, accountId));
+  const keepHash = input.keepSessionToken ? sha256(input.keepSessionToken) : null;
+  await q.delete(sessions).where(
+    keepHash ? and(eq(sessions.accountId, accountId), ne(sessions.tokenHash, keepHash)) : eq(sessions.accountId, accountId),
+  );
 }

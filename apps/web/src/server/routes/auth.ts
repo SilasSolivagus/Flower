@@ -59,7 +59,8 @@ export function registerAuthRoutes(app: App, deps: ApiDeps): void {
   app.post('/me/password', async (c) => {
     const account = requireAccount(c);
     const body = await readJson(c, z.object({ currentPassword: z.string(), newPassword: z.string() }));
-    await changePassword(deps.db, account.id, body);
+    const keepSessionToken = getCookie(c, SESSION_COOKIE);
+    await changePassword(deps.db, account.id, { ...body, keepSessionToken });
     return c.body(null, 204);
   });
 }

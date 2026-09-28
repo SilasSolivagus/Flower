@@ -75,6 +75,15 @@ describe('会话', () => {
     expect(await resolveSession(t.db, token)).toBeNull();
   });
 
+  it('改密码撤销其他会话，保留当前会话', async () => {
+    const a = await createAccount(t.db, { email: 'g@example.com', name: 'G', password: 'password123' });
+    const s1 = await createSession(t.db, a.id);
+    const s2 = await createSession(t.db, a.id);
+    await changePassword(t.db, a.id, { currentPassword: 'password123', newPassword: 'newpassword1', keepSessionToken: s1.token });
+    expect((await resolveSession(t.db, s1.token))?.id).toBe(a.id);
+    expect(await resolveSession(t.db, s2.token)).toBeNull();
+  });
+
   it('登录时间恒定防止邮箱枚举', async () => {
     await createAccount(t.db, { email: 'timing@example.com', name: 'T', password: 'password123' });
 
