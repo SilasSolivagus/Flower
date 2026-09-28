@@ -29,17 +29,14 @@ services:
       FLOWER_APP_DB_PASSWORD: ${FLOWER_APP_DB_PASSWORD}
       FLOWER_SECRET_KEY: ${FLOWER_SECRET_KEY:?请在 .env 中设置 FLOWER_SECRET_KEY（openssl rand -base64 48）}
       FLOWER_PUBLIC_URL: ${FLOWER_PUBLIC_URL:-http://localhost:3000}
-      # 容器内的健康检查请求 127.0.0.1，不应走宿主机 Docker 配置里的 HTTP 代理
-      # （某些开发机的 ~/.docker/config.json 会给所有容器自动注入 HTTP_PROXY，
-      # 而 busybox wget 不识别 no_proxy 里的 CIDR 段，导致探活请求被错误代理而失败）
-      HTTP_PROXY: ""
-      HTTPS_PROXY: ""
-      http_proxy: ""
-      https_proxy: ""
     ports:
       - "${FLOWER_PORT:-3000}:3000"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/v1/setup/status"]
+      # 只在这条探活命令里清空代理变量，不影响应用进程本身：容器内的健康检查请求 127.0.0.1，
+      # 不应走宿主机 Docker 配置里的 HTTP 代理（某些开发机的 ~/.docker/config.json 会给所有
+      # 容器自动注入 HTTP_PROXY，而 busybox wget 不识别 no_proxy 里的 CIDR 段，导致探活请求
+      # 被错误代理而失败）；应用本身仍需继承代理设置，用于后续阶段的出站 webhook 等请求。
+      test: ["CMD-SHELL", "http_proxy= https_proxy= HTTP_PROXY= HTTPS_PROXY= wget -qO- http://127.0.0.1:3000/api/v1/setup/status"]
       interval: 5s
       timeout: 3s
       retries: 30
