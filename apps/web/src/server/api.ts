@@ -10,6 +10,7 @@ import { registerMemberRoutes } from './routes/members';
 import { registerOrgRoutes } from './routes/orgs';
 import { registerProductRoutes } from './routes/products';
 import { registerTokenRoutes } from './routes/tokens';
+import { registerDefinitionRoutes } from './routes/definitions';
 
 export type ApiDeps = { db: Db; secureCookies: boolean; publicUrl: string };
 export type ApiEnv = {
@@ -32,12 +33,11 @@ export function createApi(deps: ApiDeps): App {
   registerSetupRoutes(app, deps);
   registerAuthRoutes(app, deps);
   registerInstanceRoutes(app, deps);
-  // Task 16：组织资源路由
   registerOrgRoutes(app, deps);
   registerMemberRoutes(app, deps);
   registerInvitationRoutes(app, deps);
   registerTokenRoutes(app, deps);
   registerProductRoutes(app, deps);
-  // Task 17：配置定义路由
+  registerDefinitionRoutes(app, deps);
   return app;
 }
