@@ -74,4 +74,25 @@ describe('会话', () => {
     const { token } = await createSession(t.db, a.id, {}, new Date(Date.now() - 1000));
     expect(await resolveSession(t.db, token)).toBeNull();
   });
+
+  it('登录时间恒定防止邮箱枚举', async () => {
+    await createAccount(t.db, { email: 'timing@example.com', name: 'T', password: 'password123' });
+
+    // Warm up dummy hash cache by attempting login with non-existent email once
+    await login(t.db, { email: 'warmup@example.com', password: 'x' }).catch(() => {});
+
+    // Measure login with wrong password (account exists)
+    const start1 = performance.now();
+    await login(t.db, { email: 'timing@example.com', password: 'wrong-password' }).catch(() => {});
+    const duration1 = performance.now() - start1;
+
+    // Measure login with non-existent email (account doesn't exist)
+    const start2 = performance.now();
+    await login(t.db, { email: 'nonexistent@example.com', password: 'password123' }).catch(() => {});
+    const duration2 = performance.now() - start2;
+
+    // Unknown email should take at least 30% of the time of wrong password
+    // This ensures verifyPassword was called in both paths
+    expect(duration2).toBeGreaterThanOrEqual(duration1 * 0.3);
+  });
 });

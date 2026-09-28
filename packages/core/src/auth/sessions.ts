@@ -4,12 +4,21 @@ import { accounts, sessions } from '../db/schema';
 import type { Queryable } from '../db/tx';
 import { AppError } from '../errors';
 import { type AccountView, normalizeEmail, toAccountView } from './accounts';
-import { verifyPassword } from './password';
+import { hashPassword, verifyPassword } from './password';
 
 export const SESSION_COOKIE = 'flower_session';
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type SessionMeta = { ip?: string | null; userAgent?: string | null };
+
+/** Lazily compute and cache a dummy argon2id hash for timing-constant login verification. */
+let dummyPasswordHashPromise: Promise<string> | null = null;
+async function getDummyPasswordHash(): Promise<string> {
+  if (!dummyPasswordHashPromise) {
+    dummyPasswordHashPromise = hashPassword('');
+  }
+  return dummyPasswordHashPromise;
+}
 
 export async function createSession(
   q: Queryable,
@@ -47,7 +56,9 @@ export async function login(
   meta: SessionMeta = {},
 ): Promise<{ token: string; expiresAt: Date; account: AccountView }> {
   const [row] = await q.select().from(accounts).where(eq(accounts.email, normalizeEmail(input.email)));
-  if (!row || !(await verifyPassword(row.passwordHash, input.password))) {
+  const passwordHash = row?.passwordHash ?? (await getDummyPasswordHash());
+  const passwordValid = await verifyPassword(passwordHash, input.password);
+  if (!row || !passwordValid) {
     throw new AppError('unauthenticated', '邮箱或密码错误');
   }
   await q.update(accounts).set({ lastLoginAt: new Date() }).where(eq(accounts.id, row.id));
