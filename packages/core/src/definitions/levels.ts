@@ -59,10 +59,11 @@ export async function setProductLevelNames(db: Db, actor: Actor, productId: stri
   const clean = names === null ? null : validateLevelNames(names);
   return withOrg(db, actor.orgId, async (tx) => {
     await requireProductRole(tx, actor, productId, 'admin');
+    const [cur] = await tx.select({ names: products.structureLevelNames }).from(products).where(eq(products.id, productId));
     await tx.update(products).set({ structureLevelNames: clean }).where(eq(products.id, productId));
     await recordEvent(tx, {
       orgId: actor.orgId, productId, type: 'product.level_names_set', subjectType: 'product', subjectId: productId, actor,
-      payload: { names: clean },
+      payload: { changes: [{ field: 'structureLevelNames', old: cur?.names ?? null, new: clean }] },
     });
   });
 }

@@ -1,7 +1,11 @@
+import { and, desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { domainEvents } from '../src/db/schema';
+import { withOrg } from '../src/db/tx';
 import type { Actor } from '../src/domain-types';
 import { createFunctionTag, deleteFunctionTag, listFunctionTags, updateFunctionTag } from '../src/tenancy/function-tags';
 import { createAgentMember, createPlaceholderMember, listMembers, setMemberFunctionTags, updateMember } from '../src/tenancy/members';
+import { createProduct, setProductRole } from '../src/tenancy/products';
 import { createTestDb } from './db';
 import { seedInstance } from './factories';
 
@@ -53,6 +57,33 @@ describe('成员', () => {
 
   it('访客不能查看成员列表', async () => {
     await expect(listMembers(t.db, { ...owner, orgRole: 'guest' })).rejects.toMatchObject({ code: 'forbidden' });
+  });
+
+  it('修改资料写入准确的 changes，晋升为 admin 时记录被移除的产品角色覆盖', async () => {
+    const m = await createPlaceholderMember(t.db, owner, { displayName: '赵六', email: 'zhao@example.com', department: '产品部' });
+    const p = await createProduct(t.db, owner, { name: '待授权产品', key: 'GRT' });
+    await setProductRole(t.db, owner, p.id, m.id, 'viewer');
+
+    await updateMember(t.db, owner, m.id, { displayName: '赵六六', email: 'zhao6@example.com' });
+    const [renameEvent] = await withOrg(t.db, owner.orgId, (tx) =>
+      tx.select().from(domainEvents).where(and(eq(domainEvents.subjectId, m.id), eq(domainEvents.type, 'member.updated'))).orderBy(desc(domainEvents.occurredAt)).limit(1),
+    );
+    expect(renameEvent?.payload).toMatchObject({
+      changes: [
+        { field: 'displayName', old: '赵六', new: '赵六六' },
+        { field: 'email', old: 'zhao@example.com', new: 'zhao6@example.com' },
+      ],
+    });
+    expect((renameEvent?.payload as Record<string, unknown>).removedProductRoles).toBeUndefined();
+
+    await updateMember(t.db, owner, m.id, { orgRole: 'admin' });
+    const [promoteEvent] = await withOrg(t.db, owner.orgId, (tx) =>
+      tx.select().from(domainEvents).where(and(eq(domainEvents.subjectId, m.id), eq(domainEvents.type, 'member.updated'))).orderBy(desc(domainEvents.occurredAt)).limit(1),
+    );
+    expect(promoteEvent?.payload).toMatchObject({
+      changes: [{ field: 'orgRole', old: 'member', new: 'admin' }],
+      removedProductRoles: [{ productId: p.id, role: 'viewer' }],
+    });
   });
 });
 

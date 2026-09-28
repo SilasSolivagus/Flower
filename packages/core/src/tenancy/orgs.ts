@@ -160,7 +160,12 @@ export async function updateOrganization(db: Db, actor: Actor, input: { name?: s
       subjectType: 'organization',
       subjectId: actor.orgId,
       actor,
-      payload: { changes: [{ field: 'name', old: cur.name, new: name }] },
+      payload: {
+        changes: [
+          { field: 'name', old: cur.name, new: name },
+          { field: 'timezone', old: cur.settings.timezone ?? null, new: settings.timezone ?? null },
+        ].filter((c) => c.old !== c.new),
+      },
     });
     return toOrgView(org!);
   });

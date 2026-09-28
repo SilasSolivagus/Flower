@@ -126,16 +126,30 @@ export async function updateFieldOption(
     if (!opt) throw new AppError('not_found', '选项不存在');
     const f = await loadField(tx, opt.fieldId);
     await requireManage(tx, actor, f);
+    const label = input.label === undefined ? opt.label : assertLabel(input.label);
+    const color = input.color === undefined ? opt.color : input.color;
+    const active = input.active === undefined ? opt.active : input.active;
     const [row] = await tx
       .update(fieldOptions)
-      .set({
-        ...(input.label === undefined ? {} : { label: assertLabel(input.label) }),
-        ...(input.color === undefined ? {} : { color: input.color }),
-        ...(input.active === undefined ? {} : { active: input.active }),
-      })
+      .set({ label, color, active })
       .where(eq(fieldOptions.id, optionId))
       .returning();
-    await recordEvent(tx, { orgId: actor.orgId, productId: f.productId, type: 'field.option_updated', subjectType: 'field', subjectId: f.id, actor, payload: { optionId, ...input } });
+    await recordEvent(tx, {
+      orgId: actor.orgId,
+      productId: f.productId,
+      type: 'field.option_updated',
+      subjectType: 'field',
+      subjectId: f.id,
+      actor,
+      payload: {
+        optionId,
+        changes: [
+          { field: 'label', old: opt.label, new: label },
+          { field: 'color', old: opt.color, new: color },
+          { field: 'active', old: opt.active, new: active },
+        ].filter((c) => c.old !== c.new),
+      },
+    });
     return optionView(row!);
   });
 }

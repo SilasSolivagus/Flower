@@ -55,18 +55,32 @@ export async function updateFunctionTag(
   requireOrgAdmin(actor);
   assertTag(input);
   return withOrg(db, actor.orgId, async (tx) => {
+    const [cur] = await tx.select().from(functionTags).where(eq(functionTags.id, id));
+    if (!cur) throw new AppError('not_found', '标签不存在');
+    const name = input.name === undefined ? cur.name : input.name.trim();
+    const color = input.color === undefined ? cur.color : input.color;
+    const sort = input.sort === undefined ? cur.sort : input.sort;
     try {
       const [row] = await tx
         .update(functionTags)
-        .set({
-          ...(input.name === undefined ? {} : { name: input.name.trim() }),
-          ...(input.color === undefined ? {} : { color: input.color }),
-          ...(input.sort === undefined ? {} : { sort: input.sort }),
-        })
+        .set({ name, color, sort })
         .where(eq(functionTags.id, id))
         .returning();
       if (!row) throw new AppError('not_found', '标签不存在');
-      await recordEvent(tx, { orgId: actor.orgId, type: 'function_tag.updated', subjectType: 'function_tag', subjectId: id, actor, payload: input });
+      await recordEvent(tx, {
+        orgId: actor.orgId,
+        type: 'function_tag.updated',
+        subjectType: 'function_tag',
+        subjectId: id,
+        actor,
+        payload: {
+          changes: [
+            { field: 'name', old: cur.name, new: name },
+            { field: 'color', old: cur.color, new: color },
+            { field: 'sort', old: cur.sort, new: sort },
+          ].filter((c) => c.old !== c.new),
+        },
+      });
       return view(row);
     } catch (e) {
       if (isUniqueViolation(e)) throw new AppError('conflict', '已存在同名标签');

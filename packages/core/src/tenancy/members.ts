@@ -132,19 +132,24 @@ export async function updateMember(
       if (others.length === 0) throw new AppError('invalid', '组织至少需要保留一个 owner');
     }
 
+    const displayName = input.displayName === undefined ? cur.displayName : assertDisplayName(input.displayName);
+    const email = input.email === undefined ? cur.email : input.email?.trim().toLowerCase() || null;
+    const department = input.department === undefined ? cur.department : input.department?.trim() || null;
+
     await tx
       .update(members)
-      .set({
-        displayName: input.displayName === undefined ? cur.displayName : assertDisplayName(input.displayName),
-        email: input.email === undefined ? cur.email : input.email?.trim().toLowerCase() || null,
-        department: input.department === undefined ? cur.department : input.department?.trim() || null,
-        orgRole: nextRole,
-        status: nextStatus,
-      })
+      .set({ displayName, email, department, orgRole: nextRole, status: nextStatus })
       .where(eq(members.id, memberId));
+
+    let removedProductRoles: Array<{ productId: string; role: ProductRole }> = [];
     if (nextRole === 'owner' || nextRole === 'admin') {
-      await tx.delete(productMembers).where(eq(productMembers.memberId, memberId));
+      const removed = await tx
+        .delete(productMembers)
+        .where(eq(productMembers.memberId, memberId))
+        .returning({ productId: productMembers.productId, role: productMembers.role });
+      removedProductRoles = removed;
     }
+
     await recordEvent(tx, {
       orgId: actor.orgId,
       type: 'member.updated',
@@ -153,9 +158,13 @@ export async function updateMember(
       actor,
       payload: {
         changes: [
+          { field: 'displayName', old: cur.displayName, new: displayName },
+          { field: 'email', old: cur.email, new: email },
+          { field: 'department', old: cur.department, new: department },
           { field: 'orgRole', old: cur.orgRole, new: nextRole },
           { field: 'status', old: cur.status, new: nextStatus },
         ].filter((c) => c.old !== c.new),
+        ...(removedProductRoles.length > 0 ? { removedProductRoles } : {}),
       },
     });
     return loadOne(tx, memberId);

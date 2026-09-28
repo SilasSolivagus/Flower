@@ -1,6 +1,7 @@
+import { and, desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAccount } from '../src/auth/accounts';
-import { fieldDefinitions, fieldOptions, functionTags, instanceSettings, workflowDefinitions } from '../src/db/schema';
+import { domainEvents, fieldDefinitions, fieldOptions, functionTags, instanceSettings, workflowDefinitions } from '../src/db/schema';
 import { withOrg } from '../src/db/tx';
 import { createOrganization, listMyOrganizations, resolveActor, updateOrganization } from '../src/tenancy/orgs';
 import { createTestDb } from './db';
@@ -62,5 +63,16 @@ describe('组织', () => {
     const org = await updateOrganization(t.db, actor, { name: '新名', timezone: 'Asia/Shanghai' });
     expect(org).toMatchObject({ name: '新名', settings: { timezone: 'Asia/Shanghai' } });
     await expect(updateOrganization(t.db, { ...actor, orgRole: 'member' }, { name: 'x' })).rejects.toMatchObject({ code: 'forbidden' });
+  });
+
+  it('只改时区时，事件里只记录时区的变化', async () => {
+    const admin = await createAccount(t.db, { email: 'tz@example.com', name: 'Tz', password: 'password123', isInstanceAdmin: true });
+    await createOrganization(t.db, admin, { name: '时区组织', slug: 'tz-org' });
+    const actor = (await resolveActor(t.db, admin.id, 'tz-org'))!;
+    await updateOrganization(t.db, actor, { timezone: 'Asia/Tokyo' });
+    const [event] = await withOrg(t.db, actor.orgId, (tx) =>
+      tx.select().from(domainEvents).where(and(eq(domainEvents.orgId, actor.orgId), eq(domainEvents.type, 'organization.updated'))).orderBy(desc(domainEvents.occurredAt)),
+    );
+    expect(event?.payload).toMatchObject({ changes: [{ field: 'timezone', old: null, new: 'Asia/Tokyo' }] });
   });
 });
