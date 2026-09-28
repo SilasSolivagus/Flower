@@ -1,0 +1,32 @@
+{
+  "name": "@flower/core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./test/db.ts",
+    "./testing/factories": "./test/factories.ts",
+    "./testing/global-setup": "./test/global-setup.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "build:migrate": "esbuild src/db/migrate-cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/migrate.mjs --banner:js=\"import{createRequire}from'module';const require=createRequire(import.meta.url);\"",
+    "db:migrate": "pnpm build:migrate && node --env-file=../../apps/web/.env.local dist/migrate.mjs"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "^2.2.1",
+    "drizzle-orm": "^0.45.3",
+    "postgres": "^3.4.9",
+    "uuidv7": "^1.2.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "drizzle-kit": "^0.31.11",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  }
+}
