@@ -3,3 +3,7 @@ export * from './ids';
 export * from './crypto';
 export * from './errors';
 export * from './domain-types';
+export * from './db/schema';
+export * from './db/client';
+export * from './db/tx';
+export { runMigrations } from './db/migrate';
