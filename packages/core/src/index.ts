@@ -11,3 +11,4 @@ export { runMigrations } from './db/migrate';
 export * from './auth/password';
 export * from './auth/accounts';
 export * from './auth/sessions';
+export * from './access/permissions';
