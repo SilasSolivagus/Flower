@@ -16,6 +16,8 @@ export * from './access/tokens';
 export * from './definitions/workflow-schema';
 export * from './definitions/workflows';
 export * from './definitions/defaults';
+export * from './definitions/fields';
+export * from './definitions/levels';
 export * from './tenancy/orgs';
 export * from './tenancy/products';
 export * from './tenancy/members';
