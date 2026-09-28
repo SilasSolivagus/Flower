@@ -123,9 +123,13 @@ describe('流程定义', () => {
         .from(domainEvents)
         .where(eq(domainEvents.type, 'product.workflow_changed'));
     });
-    const forkEvent = events.find((e) => e.subjectId === other.id && e.payload.changes[0]?.new === version.id);
+    const forkEvent = events.find((e) => {
+      const changes = (e.payload as { changes: Array<{ field: string; old: unknown; new: unknown }> }).changes;
+      return e.subjectId === other.id && changes[0]?.new === version.id;
+    });
     expect(forkEvent).toBeDefined();
-    expect(forkEvent?.payload.changes[0]?.field).toBe('workflowVersionId');
-    expect(forkEvent?.payload.changes[0]?.new).toBe(version.id);
+    const changes = (forkEvent?.payload as { changes: Array<{ field: string; old: unknown; new: unknown }> }).changes;
+    expect(changes[0]?.field).toBe('workflowVersionId');
+    expect(changes[0]?.new).toBe(version.id);
   });
 });
