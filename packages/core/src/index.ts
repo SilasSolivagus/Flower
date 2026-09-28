@@ -17,5 +17,6 @@ export * from './definitions/defaults';
 export * from './tenancy/orgs';
 export * from './tenancy/products';
 export * from './tenancy/members';
+export * from './tenancy/invitations';
 export * from './tenancy/function-tags';
 export * from './setup/instance';
