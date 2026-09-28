@@ -1,9 +1,13 @@
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 
-export const MIGRATIONS_DIR = fileURLToPath(new URL('../../migrations', import.meta.url));
+// 用 path.join 而非 `new URL('../../migrations', import.meta.url)`：后者是 Turbopack/webpack
+// 识别的静态资源引用写法，构建 apps/web（transpilePackages 包含 @flower/core）时会把
+// migrations 目录当模块解析，报 "Module not found"。
+export const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../migrations');
 
 export function quoteLiteral(v: string): string {
   return `'${v.replace(/'/g, "''")}'`;
