@@ -177,13 +177,26 @@ export async function forkWorkflowForProduct(
     const [src] = await tx.select().from(workflowVersions).where(eq(workflowVersions.id, input.fromVersionId));
     if (!src) throw new AppError('not_found', '流程版本不存在');
     const srcDef = await loadDefinition(tx, src.definitionId);
+    if (srcDef.productId !== null && srcDef.productId !== productId) {
+      throw new AppError('invalid', '不能使用其他产品的流程');
+    }
     const [product] = await tx.select().from(products).where(eq(products.id, productId));
     const [d] = await tx
       .insert(workflowDefinitions)
       .values({ orgId: actor.orgId, productId, name: `${product!.name}的流程（基于${srcDef.name}）`, forkedFromVersionId: src.id })
       .returning();
     const v = await insertVersion(tx, actor, d!, src.body as WorkflowBody, `复制自「${srcDef.name}」v${src.version}`);
+    const [before] = await tx.select({ v: products.workflowVersionId }).from(products).where(eq(products.id, productId));
     await tx.update(products).set({ workflowVersionId: v.id }).where(eq(products.id, productId));
+    await recordEvent(tx, {
+      orgId: actor.orgId,
+      productId,
+      type: 'product.workflow_changed',
+      subjectType: 'product',
+      subjectId: productId,
+      actor,
+      payload: { changes: [{ field: 'workflowVersionId', old: before?.v ?? null, new: v.id }] },
+    });
     return { definition: await definitionView(tx, await loadDefinition(tx, d!.id)), version: versionView(v) };
   });
 }

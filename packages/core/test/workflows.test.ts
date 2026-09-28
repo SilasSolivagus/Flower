@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { DEFAULT_WORKFLOW_BODY } from '../src/definitions/defaults';
 import {
   createWorkflowTemplate,
@@ -11,6 +12,8 @@ import {
 } from '../src/definitions/workflows';
 import type { Actor } from '../src/domain-types';
 import { AppError } from '../src/errors';
+import { domainEvents } from '../src/db/schema';
+import { withOrg } from '../src/db/tx';
 import { createProduct } from '../src/tenancy/products';
 import { createTestDb } from './db';
 import { seedInstance } from './factories';
@@ -99,5 +102,30 @@ describe('流程定义', () => {
 
   it('普通成员不能管理模板', async () => {
     await expect(createWorkflowTemplate(t.db, { ...owner, orgRole: 'member' }, { name: 'x', body: DEFAULT_WORKFLOW_BODY })).rejects.toMatchObject({ code: 'forbidden' });
+  });
+
+  it('产品不能复制其他产品的流程覆盖', async () => {
+    const other = await createProduct(t.db, owner, { name: '文档', key: 'DOC' });
+    const otherFork = await forkWorkflowForProduct(t.db, owner, other.id, {
+      fromVersionId: (await listWorkflowTemplates(t.db, owner))[0]!.currentVersionId!,
+    });
+    await expect(forkWorkflowForProduct(t.db, owner, productId, { fromVersionId: otherFork.version.id })).rejects.toMatchObject({ code: 'invalid' });
+  });
+
+  it('复制流程后产生 product.workflow_changed 事件', async () => {
+    const other = await createProduct(t.db, owner, { name: '任务', key: 'TODO' });
+    const { version } = await forkWorkflowForProduct(t.db, owner, other.id, {
+      fromVersionId: (await listWorkflowTemplates(t.db, owner))[0]!.currentVersionId!,
+    });
+    const events = await withOrg(t.db, owner.orgId, async (tx) => {
+      return tx
+        .select()
+        .from(domainEvents)
+        .where(eq(domainEvents.type, 'product.workflow_changed'));
+    });
+    const forkEvent = events.find((e) => e.subjectId === other.id && e.payload.changes[0]?.new === version.id);
+    expect(forkEvent).toBeDefined();
+    expect(forkEvent?.payload.changes[0]?.field).toBe('workflowVersionId');
+    expect(forkEvent?.payload.changes[0]?.new).toBe(version.id);
   });
 });
