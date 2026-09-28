@@ -51,6 +51,9 @@ export async function issueToken(
   if (!scope.success) throw new AppError('invalid', 'Token 范围格式不正确');
   const name = input.name.trim();
   if (!name || name.length > 50) throw new AppError('invalid', 'Token 名称不能为空，且不超过 50 个字符');
+  if (input.expiresAt && input.expiresAt.getTime() <= Date.now()) {
+    throw new AppError('invalid', '过期时间必须晚于当前时间');
+  }
 
   return withOrg(db, actor.orgId, async (tx) => {
     const [target] = await tx.select().from(members).where(eq(members.id, input.memberId));
@@ -109,6 +112,7 @@ export async function revokeToken(db: Db, actor: Actor, tokenId: string): Promis
     const [row] = await tx.select().from(apiTokens).where(eq(apiTokens.id, tokenId));
     if (!row) throw new AppError('not_found', 'Token 不存在');
     if (row.memberId !== actor.memberId) requireOrgAdmin(actor);
+    if (row.revokedAt) return;
     await tx.update(apiTokens).set({ revokedAt: new Date() }).where(eq(apiTokens.id, tokenId));
     await recordEvent(tx, { orgId: actor.orgId, type: 'api_token.revoked', subjectType: 'api_token', subjectId: tokenId, actor });
   });

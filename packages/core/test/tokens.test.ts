@@ -1,5 +1,8 @@
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { authenticateToken, issueToken, listTokens, revokeToken } from '../src/access/tokens';
+import { apiTokens, domainEvents } from '../src/db/schema';
+import { withOrg } from '../src/db/tx';
 import type { Actor } from '../src/domain-types';
 import { createAgentMember, createPlaceholderMember } from '../src/tenancy/members';
 import { createProduct } from '../src/tenancy/products';
@@ -60,12 +63,36 @@ describe('API Token', () => {
     expect(await authenticateToken(t.db, a.token)).toBeNull();
 
     const b = await issueToken(t.db, owner, {
-      memberId: owner.memberId, name: '已过期', scope: { products: 'all', access: 'read' }, expiresAt: new Date(Date.now() - 1000),
+      memberId: owner.memberId, name: '已过期', scope: { products: 'all', access: 'read' }, expiresAt: new Date(Date.now() + 60_000),
     });
+    // issueToken 拒绝过去的过期时间，这里直接改库模拟"已经过期"的既有 Token。
+    await withOrg(t.db, owner.orgId, (tx) => tx.update(apiTokens).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(apiTokens.id, b.record.id)));
     expect(await authenticateToken(t.db, b.token)).toBeNull();
 
     expect(await authenticateToken(t.db, 'flw_bad')).toBeNull();
     const tampered = `${a.token.slice(0, -1)}${a.token.endsWith('A') ? 'B' : 'A'}`;
     expect(await authenticateToken(t.db, tampered)).toBeNull();
+  });
+
+  it('过期时间必须晚于当前时间', async () => {
+    await expect(
+      issueToken(t.db, owner, {
+        memberId: owner.memberId, name: '过去的时间', scope: { products: 'all', access: 'read' }, expiresAt: new Date(Date.now() - 1000),
+      }),
+    ).rejects.toMatchObject({ code: 'invalid' });
+  });
+
+  it('撤销已撤销的 Token 是空操作：不再次记录事件，revokedAt 不变', async () => {
+    const { record } = await issueToken(t.db, owner, { memberId: owner.memberId, name: '将两次撤销', scope: { products: 'all', access: 'read' } });
+    await revokeToken(t.db, owner, record.id);
+    const firstRevokedAt = (await listTokens(t.db, owner)).find((x) => x.id === record.id)?.revokedAt;
+    expect(firstRevokedAt).toBeTruthy();
+    await revokeToken(t.db, owner, record.id);
+    const secondRevokedAt = (await listTokens(t.db, owner)).find((x) => x.id === record.id)?.revokedAt;
+    expect(secondRevokedAt?.getTime()).toBe(firstRevokedAt?.getTime());
+    const events = await withOrg(t.db, owner.orgId, (tx) =>
+      tx.select().from(domainEvents).where(and(eq(domainEvents.subjectId, record.id), eq(domainEvents.type, 'api_token.revoked'))),
+    );
+    expect(events).toHaveLength(1);
   });
 });
