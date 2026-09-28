@@ -1,4 +1,4 @@
-import { AppError, SESSION_COOKIE } from '@flower/core';
+import { AppError, pgErrorCode, SESSION_COOKIE } from '@flower/core';
 import type { Context } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import { HTTPException } from 'hono/http-exception';
@@ -18,11 +18,18 @@ export function errorHandler(err: Error, c: Context) {
     return c.json({ error: { code: err.code, message: err.message, details: err.details ?? null } }, STATUS[err.code]);
   }
   if (err instanceof HTTPException) return err.getResponse();
+  if (pgErrorCode(err) === '22P02') {
+    return c.json({ error: { code: 'not_found', message: '资源不存在', details: null } }, 404);
+  }
   console.error(err);
   return c.json({ error: { code: 'internal', message: '服务器内部错误', details: null } }, 500);
 }
 
 export async function readJson<T extends z.ZodType>(c: Context, schema: T): Promise<z.infer<T>> {
+  const contentType = (c.req.header('content-type') ?? '').toLowerCase().split(';')[0]?.trim();
+  if (contentType !== 'application/json') {
+    throw new AppError('invalid', '请求必须使用 application/json');
+  }
   let raw: unknown;
   try {
     raw = await c.req.json();

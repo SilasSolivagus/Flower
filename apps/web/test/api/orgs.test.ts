@@ -27,6 +27,23 @@ describe('组织与产品', () => {
     const l = await call(app, 'GET', '/orgs/acme/products', { session });
     expect(l.body.products.map((p: { key: string }) => p.key)).toEqual(['PAN']);
   });
+
+  it('非 UUID 的资源 id 返回 404 而不是 500', async () => {
+    const r = await call(app, 'GET', '/orgs/acme/products/abc', { session });
+    expect(r.status).toBe(404);
+    expect(r.body.error.code).toBe('not_found');
+  });
+
+  it('非 application/json 的请求体被拒绝', async () => {
+    const res = await app.request('/api/v1/orgs/acme/products', {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain', cookie: `flower_session=${session}` },
+      body: JSON.stringify({ name: 'x', key: 'XX' }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe('invalid');
+  });
 });
 
 describe('成员与邀请', () => {
