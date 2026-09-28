@@ -6,4 +6,5 @@ export * from './domain-types';
 export * from './db/schema';
 export * from './db/client';
 export * from './db/tx';
+export * from './events';
 export { runMigrations } from './db/migrate';
