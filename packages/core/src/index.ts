@@ -8,3 +8,6 @@ export * from './db/client';
 export * from './db/tx';
 export * from './events';
 export { runMigrations } from './db/migrate';
+export * from './auth/password';
+export * from './auth/accounts';
+export * from './auth/sessions';
