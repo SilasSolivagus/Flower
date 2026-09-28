@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { organizations, products } from '../src/db/schema';
+import { domainEvents, organizations, products } from '../src/db/schema';
 import { withOrg, withSystem } from '../src/db/tx';
 import { newId } from '../src/ids';
 import { createTestDb } from './db';
@@ -61,5 +61,18 @@ describe('行级安全', () => {
   it('withSystem 可以跨组织读取', async () => {
     const rows = await withSystem(t.db, (tx) => tx.select().from(products));
     expect(rows).toHaveLength(2);
+  });
+
+  it('运行时角色不能修改或删除 domain_events（只能追加）', async () => {
+    const eventId = newId();
+    await t.adminDb.insert(domainEvents).values({
+      id: eventId, orgId: orgA, type: 'test.happened', subjectType: 'test', subjectId: newId(), payload: {},
+    });
+    await expect(
+      withOrg(t.db, orgA, (tx) => tx.update(domainEvents).set({ type: 'tampered' }).where(eq(domainEvents.id, eventId))),
+    ).rejects.toThrow();
+    await expect(
+      withOrg(t.db, orgA, (tx) => tx.delete(domainEvents).where(eq(domainEvents.id, eventId))),
+    ).rejects.toThrow();
   });
 });
