@@ -341,7 +341,8 @@ push 主状态映射到检查项与迭代：评审中 → 检查项 in_progress�
 
 **PRD**
 
-- 123plane 的 186 个 prd_link 指向 163 份不同文档（182 个为企微文档）。每份外部文档建一条变更 PRD，正文挂 external_link；被多条需求共用的 14 份即 1:N 覆盖。其检查项迁移时手工设置，不走 auto。
+- 外部 PRD 链接不迁移：123plane 的 prd_link（186 个，多为企微文档）和 push 的 prd_url 都不导入。今后 PRD 统一写在 Flower 的文档模块里。
+- 123plane 的 prd_status 迁移为"PRD"检查项的手工状态，不附链接。
 - prd 系统的 11 份未删除页面 → 变更 PRD 正文文档，连同 114 条修订、99 个附件、6 条评论（anchor_state = unanchored）。
 
 **迭代与发布版本**
@@ -374,10 +375,12 @@ push 主状态映射到检查项与迭代：评审中 → 检查项 in_progress�
 | P0 | monorepo（`apps/web`、`packages/core`、`packages/mcp`）；§2 租户与身份、§3 可配置定义；RLS；领域事件表；docker compose（app + postgres）；初始化向导 |
 | P1 | §4 需求、迭代、任务；迁移脚本与对账报告 |
 | P2 | §5 文档 |
-| P3 | §6.2 通知中心 |
+| P3 | §6.2 通知中心（先接测试群 webhook 联调，正式环境切换另行安排）；基础数据看板（§6.6 中已可计算的指标） |
 | P4 | OpenAPI + MCP server |
 | P5 | 知识库（向量检索）、Agent 按模板起草 PRD、合入提案 |
 | P6 | b123 数据联动、管理员看板完善 |
+
+每个阶段结束时都要有可操作的界面，用来验收该阶段交付的用户价值（见 `docs/story-map/flower-story-map.html`）。P0 的验收演示对象是管理员。P3 完成前，新旧系统并行运行。
 
 ## 9. 待定事项
 

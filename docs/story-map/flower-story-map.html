@@ -1,0 +1,296 @@
+<title>Flower 用户故事地图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;600&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --surface-2:#eef1f4; --ink:#15181d; --muted:#5b6370; --line:#dde1e7;
+  --accent:#0f7b6c; --accent-soft:#e3f2ef; --flag:#a45a00; --flag-soft:#fdf1e1;
+  --p0:#0b5e53; --p1:#12806f; --p2:#2d9a87; --p3:#5aae9d; --p4:#7a8fb0; --p5:#8f7fb3; --p6:#a77a95;
+  --chip-ink:#ffffff;
+  --shadow:0 1px 2px rgba(21,24,29,.06);
+  --sans:"IBM Plex Sans","Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111418; --surface:#181c21; --surface-2:#20252c; --ink:#e7eaee; --muted:#9aa3af; --line:#2c323a;
+    --accent:#4cc3ad; --accent-soft:#16332e; --flag:#f0a64a; --flag-soft:#33250f;
+    --p0:#1f8f7e; --p1:#2a9f8c; --p2:#3aab97; --p3:#5bb6a4; --p4:#6f86ad; --p5:#8a79b5; --p6:#a47592;
+    --shadow:none; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111418; --surface:#181c21; --surface-2:#20252c; --ink:#e7eaee; --muted:#9aa3af; --line:#2c323a;
+  --accent:#4cc3ad; --accent-soft:#16332e; --flag:#f0a64a; --flag-soft:#33250f;
+  --p0:#1f8f7e; --p1:#2a9f8c; --p2:#3aab97; --p3:#5bb6a4; --p4:#6f86ad; --p5:#8a79b5; --p6:#a47592;
+  --shadow:none; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.55;padding-inline:16px;padding-block:0 48px}
+.wrap{max-width:1680px;margin:0 auto}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);padding-block:18px 12px;border-bottom:1px solid var(--line)}
+h1{font-size:22px;font-weight:700;margin:0;text-wrap:balance;letter-spacing:.01em}
+.sub{color:var(--muted);margin:4px 0 12px;max-width:72ch}
+.controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{font:inherit;border:0;background:transparent;color:var(--muted);padding:6px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.phases{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.phases .lbl,.ctl-lbl{color:var(--muted);font-size:12px;letter-spacing:.04em}
+.pchip{font:500 12px var(--mono);border:1px solid transparent;border-radius:999px;padding:3px 9px;cursor:pointer;color:var(--chip-ink)}
+.pchip[aria-pressed="false"]{background:transparent!important;color:var(--muted);border-color:var(--line)}
+label.flagonly{display:inline-flex;gap:6px;align-items:center;color:var(--muted);font-size:13px;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.board{margin-top:16px;overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table.map{border-collapse:separate;border-spacing:0;min-width:1500px;width:100%}
+.map th,.map td{vertical-align:top;border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:10px}
+.map thead th{position:sticky;top:0;background:var(--surface-2);z-index:2;text-align:left;font-weight:600;font-size:13px}
+.map thead th .step{display:block;font:500 11px var(--mono);color:var(--muted);letter-spacing:.04em}
+.map th.rowh{position:sticky;left:0;z-index:3;background:var(--surface);width:168px;min-width:168px;text-align:left}
+.map thead th.rowh{z-index:4;background:var(--surface-2)}
+.rowh .name{font-weight:700;font-size:14px}
+.rowh .desc{display:block;color:var(--muted);font-weight:400;font-size:12px;margin-top:2px}
+.rowh .hat{display:inline-block;font:500 11px var(--mono);color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:0 5px;margin-top:4px}
+tr.cross th.rowh,tr.cross td{background:var(--accent-soft)}
+td.cell{min-width:132px}
+.cards{display:flex;flex-direction:column;gap:6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;box-shadow:var(--shadow);font-size:12.5px;line-height:1.45}
+tr.cross .card{background:var(--surface)}
+.card .meta{display:flex;gap:6px;align-items:center;margin-bottom:2px}
+.ptag{font:500 10.5px var(--mono);color:var(--chip-ink);border-radius:3px;padding:0 5px}
+.rtag{font-size:11px;color:var(--muted)}
+.card.flag{border-color:var(--flag);background:var(--flag-soft)}
+.card .fl{color:var(--flag);font-weight:700;margin-left:auto;font-size:12px}
+.card .note{display:block;color:var(--flag);font-size:11.5px;margin-top:3px}
+.empty{color:var(--line);font-size:12px}
+.phase-row th.rowh .value{display:block;font-weight:400;font-size:12px;color:var(--muted);margin-top:4px;line-height:1.45}
+
+section.notes{margin-top:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+.panel h2{font-size:15px;margin:0 0 10px}
+.panel ol,.panel ul{margin:0;padding-left:20px;display:grid;gap:8px}
+.panel li{max-width:70ch}
+.panel .pend{color:var(--flag);font-weight:600}
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;color:var(--muted);font-size:12px;margin-top:10px}
+@media (prefers-reduced-motion: no-preference){.card{transition:border-color .15s}}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <h1>Flower 用户故事地图</h1>
+  <p class="sub">角色是身份帽子，不是账号：同一个人可以同时戴几顶。横向是主干活动，纵向按角色（或按阶段）展开故事；⚑ 表示当前阶段划分可能不合理、需要讨论。</p>
+  <div class="controls">
+    <span class="ctl-lbl">视图</span>
+    <div class="seg" role="group" aria-label="视图">
+      <button type="button" id="v-role" aria-pressed="true">按角色</button>
+      <button type="button" id="v-phase" aria-pressed="false">按阶段</button>
+    </div>
+    <div class="phases" id="phase-filter" aria-label="阶段筛选"><span class="lbl">阶段</span></div>
+    <label class="flagonly"><input type="checkbox" id="flag-only"> 只看 ⚑ 待讨论</label>
+  </div>
+</header>
+
+<div class="board"><table class="map" id="map"></table></div>
+
+<section class="notes">
+  <div class="panel">
+    <h2>阶段调整记录（2026-09-28）</h2>
+    <ol id="flag-list"></ol>
+  </div>
+  <div class="panel">
+    <h2>各阶段交付的用户价值</h2>
+    <ul id="value-list"></ul>
+    <div class="legend">阶段划分见 spec §8，已按 2026-09-28 的讨论调整。</div>
+  </div>
+  <div class="panel">
+    <h2>待确认</h2>
+    <ul>
+      <li><span class="pend">超级管理员能否自动看到所有组织的数据？</span> 地图暂按推荐方案 A 画：不能自动看到，超级管理员 = 实例管理员 + 在需要的组织里明确加入为 owner，所有访问可审计。</li>
+    </ul>
+  </div>
+</section>
+</div>
+
+<script>
+const PHASES = [
+  {k:"P0", v:"管理员能装好 Flower、建好组织、邀请团队，配置好流程、字典和 Agent 身份。"},
+  {k:"P1", v:"团队在 Flower 里管理需求、评审签字、迭代与任务；旧系统数据全部迁入。"},
+  {k:"P2", v:"PRD 在 Flower 里按模板写作、评审、合入模块文档，需求与 PRD 打通。"},
+  {k:"P3", v:"各类消息按规则推送到不同的企微机器人、飞书或 webhook（先接测试群）；管理层看到基础数据看板。"},
+  {k:"P4", v:"外部 Agent 通过 MCP 以受限身份读写 Flower。"},
+  {k:"P5", v:"Agent 读代码和组件按模板起草 PRD、起草合入提案；知识库检索。"},
+  {k:"P6", v:"管理层看到流速、达成率，并与业务数据联动。"}
+];
+const ACTS = ["部署与初始化","组织搭建","需求收集","评估与 PRD","评审与签字","排期进迭代","开发交付","发布上线","复盘与度量","知识沉淀"];
+const ROLES = [
+  {k:"multi", n:"一人多帽", d:"同时戴多顶帽子的人（例如你）", hat:"横向", cross:true},
+  {k:"sa", n:"超级管理员", d:"平台的主人，横跨所有组织和产品"},
+  {k:"ia", n:"实例管理员", d:"用 docker 部署和运维 Flower"},
+  {k:"oa", n:"组织管理员", d:"管理一个组织的成员、配置与通道"},
+  {k:"pm", n:"产品经理", d:"需求负责人，写 PRD"},
+  {k:"ui", n:"设计", d:"UI，负责设计签字"},
+  {k:"dev", n:"开发 / 测试", d:"领任务、排期、交付"},
+  {k:"req", n:"业务提出人", d:"可能没有账号，只提需求、看进度"},
+  {k:"mgmt", n:"管理层", d:"看看板，参与关键签字（如饶总）"},
+  {k:"agent", n:"外部 Agent", d:"通过 MCP 读代码、起草 PRD、回写链接"}
+];
+// [role, activityIndex, phase, story, flagNote?]
+const S = [
+  ["multi",1,"P0","个人设置：资料、密码、个人 API Token"],
+  ["multi",1,"P0","在我加入的组织之间切换"],
+  ["multi",2,"P1","统一工作台：跨组织、跨身份汇总我负责的需求、分给我的任务、等我签字的检查项"],
+  ["multi",4,"P1","一个入口处理所有组织里等我签字的项"],
+  ["multi",7,"P3","按事件类型设置我的通知偏好（站内 / 邮件）"],
+
+  ["sa",0,"P0","部署后我自动成为实例管理员"],
+  ["sa",1,"P0","为每家公司创建组织，并以 owner 身份加入"],
+  ["sa",1,"P0","查看我加入的全部组织和产品概况"],
+  ["sa",8,"P6","跨组织、跨产品对比需求流速与版本按期达成率"],
+
+  ["ia",0,"P0","docker compose 启动，只依赖 Postgres"],
+  ["ia",0,"P0","首次打开进入初始化向导，创建第一个账号"],
+  ["ia",0,"P0","缺少主密钥时拒绝启动，并提示如何生成"],
+  ["ia",0,"P0","升级镜像时自动执行数据库迁移"],
+  ["ia",1,"P0","设置是否开放注册、是否允许用户自建组织"],
+  ["ia",7,"P3","维护 HTTP 取数白名单"],
+  ["ia",8,"P3","查看事件积压与投递失败，判断实例是否健康"],
+
+  ["oa",1,"P0","通过邀请链接邀请成员"],
+  ["oa",1,"P0","登记没有账号的成员（如业务提出人），以后可升级为账号"],
+  ["oa",1,"P0","设置成员的组织角色和产品角色"],
+  ["oa",1,"P0","配置职能标签（PM、UI、开发、线条负责人…）"],
+  ["oa",1,"P0","创建产品并设定编号前缀（如 PAN）"],
+  ["oa",1,"P0","配置流程模板：状态、流转、条件、检查项与签字规则"],
+  ["oa",1,"P0","配置字典：优先级、平台、来源、业务线"],
+  ["oa",1,"P0","设置结构树层级叫法（业务域 / 模块 / 功能点）"],
+  ["oa",1,"P0","创建 Agent 成员，签发有范围限制的 Token"],
+  ["oa",2,"P1","导入旧系统数据，核对对账报告和人员对照表"],
+  ["oa",7,"P3","登记通知通道：同一个群的多个企微机器人按群归组"],
+  ["oa",8,"P1","查看审计日志：谁在什么时候改了什么"],
+  ["oa",9,"P2","登记产品资源：代码仓库、Figma 文件、组件库及其凭据"],
+
+  ["pm",1,"P0","为我的产品覆盖流程和字段"],
+  ["pm",1,"P1","维护产品结构树（业务域 → 模块 → 功能点）"],
+  ["pm",2,"P1","快速录入需求：标题、提出人、优先级、平台"],
+  ["pm",2,"P1","查重，合并重复需求"],
+  ["pm",2,"P1","按状态、业务域、优先级筛选需求看板"],
+  ["pm",3,"P2","按模板写变更 PRD，一份覆盖多条需求"],
+  ["pm",3,"P2","在 PRD 里用 [[ ]] 引用需求和功能点"],
+  ["pm",4,"P1","发起评审，看检查项与会签进度"],
+  ["pm",4,"P1","条件不满足时看到卡在哪一项"],
+  ["pm",4,"P1","必要时强制流转并填写原因"],
+  ["pm",5,"P1","规划常规迭代与组织级专项"],
+  ["pm",5,"P1","把需求加入迭代（受准入条件约束）"],
+  ["pm",5,"P1","甘特排期，按人查看跨迭代负载"],
+  ["pm",7,"P1","登记发布版本并关联需求"],
+  ["pm",7,"P2","上线后把变更 PRD 合入模块文档"],
+  ["pm",8,"P1","对比迭代的承诺范围与实际完成"],
+  ["pm",9,"P2","在模块文档里查看每个功能点的历史"],
+  ["pm",9,"P2","全文搜索需求和文档"],
+
+  ["ui",3,"P2","在 PRD 里看到需要设计的功能点"],
+  ["ui",4,"P1","在工作台看到等我签字的设计项并完成会签"],
+  ["ui",4,"P3","收到签字请求的企微通知"],
+  ["ui",4,"P1","签字时引用某个 Figma 画框作为依据"],
+  ["ui",6,"P2","把高保真稿链接挂到需求或 PRD 上"],
+
+  ["dev",5,"P1","查看我在所有并行迭代里的任务"],
+  ["dev",6,"P1","更新任务状态和进度"],
+  ["dev",6,"P1","记录阻塞项"],
+  ["dev",6,"P2","关联 PR 或提交"],
+  ["dev",6,"P2","从 PRD 通过双链跳转到需求"],
+  ["dev",7,"P1","完成任务，需求随流程推进"],
+
+  ["req",2,"P1","没有账号也能被登记为提出人"],
+  ["req",2,"P1","收到邀请开通账号后，看到自己提过的全部需求"],
+  ["req",2,"P1","自己提交需求（访客或成员）"],
+  ["req",3,"P1","看需求当前状态、下一步卡在哪"],
+  ["req",7,"P3","需求上线时收到企微通知"],
+
+  ["mgmt",4,"P1","在待办里完成关键会签"],
+  ["mgmt",7,"P3","每天收到产研日报或图卡"],
+  ["mgmt",8,"P3","看基础数据看板：需求流速、版本按期达成率、专项完成率"],
+  ["mgmt",8,"P6","看板完善：更多指标与跨产品对比"],
+  ["mgmt",8,"P6","对照版本上线前后的业务指标（b123）"],
+
+  ["agent",1,"P0","以 Agent 成员身份持有受限 Token"],
+  ["agent",2,"P4","通过 MCP 创建和查询需求"],
+  ["agent",3,"P5","读取产品资源（代码、组件）后，按模板起草变更 PRD"],
+  ["agent",6,"P5","通过 Figma MCP 画高保真稿，并把链接回写到 Flower"],
+  ["agent",7,"P5","起草模块文档合入提案，等人确认"],
+  ["agent",9,"P5","检索知识库：全文 + 向量 + 沿双链扩展"]
+];
+const FLAGS = [
+  "外部 PRD 链接（123plane 的 prd_link、push 的 prd_url）不迁移，今后 PRD 统一写在 Flower 的文档模块里。",
+  "通知中心仍在 P3，开发时先接测试群 webhook 联调；正式环境切换另行安排，P3 完成前新旧系统并行。",
+  "基础数据看板提前到 P3，P6 做完善和 b123 数据联动。",
+  "P0 的验收演示对象是管理员：初始化向导、登录、组织与产品设置、成员与邀请、流程和字典配置、Agent 与 Token、个人设置。"
+];
+
+const phaseColor = p => `var(--${p.toLowerCase()})`;
+let view = "role", flagOnly = false;
+const active = new Set(PHASES.map(p=>p.k));
+try{ const s = JSON.parse(localStorage.getItem("flower-map")||"null"); if(s){ view=s.view||view; flagOnly=!!s.flagOnly; if(Array.isArray(s.active)&&s.active.length){active.clear(); s.active.forEach(x=>active.add(x));} } }catch(e){}
+const save = () => { try{ localStorage.setItem("flower-map", JSON.stringify({view, flagOnly, active:[...active]})); }catch(e){} };
+
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const roleName = k => ROLES.find(r=>r.k===k).n;
+const visible = st => active.has(st[2]) && (!flagOnly || st[4]);
+
+function card(st, showRole){
+  const [r,,p,text,flag] = st;
+  return `<div class="card${flag?" flag":""}"><span class="meta"><span class="ptag" style="background:${phaseColor(p)}">${p}</span>${showRole?`<span class="rtag">${esc(roleName(r))}</span>`:""}${flag?'<span class="fl" title="待讨论">⚑</span>':""}</span>${esc(text)}${flag?`<span class="note">${esc(flag)}</span>`:""}</div>`;
+}
+function head(){
+  return `<thead><tr><th class="rowh">${view==="role"?"角色 \\ 活动":"阶段 \\ 活动"}</th>${ACTS.map((a,i)=>`<th><span class="step">${String(i+1).padStart(2,"0")}</span>${a}</th>`).join("")}</tr></thead>`;
+}
+function render(){
+  const t = document.getElementById("map");
+  let body = "";
+  if(view==="role"){
+    for(const r of ROLES){
+      const rows = S.filter(s=>s[0]===r.k && visible(s));
+      if(flagOnly && !rows.length) continue;
+      body += `<tr class="${r.cross?"cross":""}"><th class="rowh"><span class="name">${r.n}</span><span class="desc">${r.d}</span>${r.hat?`<span class="hat">${r.hat}</span>`:""}</th>`;
+      ACTS.forEach((_,i)=>{
+        const cs = rows.filter(s=>s[1]===i).sort((a,b)=>a[2].localeCompare(b[2]));
+        body += `<td class="cell">${cs.length?`<div class="cards">${cs.map(c=>card(c,false)).join("")}</div>`:'<span class="empty">—</span>'}</td>`;
+      });
+      body += "</tr>";
+    }
+  } else {
+    for(const p of PHASES){
+      if(!active.has(p.k)) continue;
+      const rows = S.filter(s=>s[2]===p.k && visible(s));
+      if(flagOnly && !rows.length) continue;
+      body += `<tr class="phase-row"><th class="rowh"><span class="ptag" style="background:${phaseColor(p.k)}">${p.k}</span><span class="value">${esc(p.v)}</span></th>`;
+      ACTS.forEach((_,i)=>{
+        const cs = rows.filter(s=>s[1]===i);
+        body += `<td class="cell">${cs.length?`<div class="cards">${cs.map(c=>card(c,true)).join("")}</div>`:'<span class="empty">—</span>'}</td>`;
+      });
+      body += "</tr>";
+    }
+  }
+  t.innerHTML = head() + `<tbody>${body}</tbody>`;
+  document.getElementById("v-role").setAttribute("aria-pressed", view==="role");
+  document.getElementById("v-phase").setAttribute("aria-pressed", view==="phase");
+  document.querySelectorAll(".pchip").forEach(b=>b.setAttribute("aria-pressed", active.has(b.dataset.p)));
+  document.getElementById("flag-only").checked = flagOnly;
+}
+
+const pf = document.getElementById("phase-filter");
+PHASES.forEach(p=>{
+  const b = document.createElement("button");
+  b.type="button"; b.className="pchip"; b.dataset.p=p.k; b.textContent=p.k; b.style.background=phaseColor(p.k); b.title=p.v;
+  b.addEventListener("click",()=>{ if(active.has(p.k)){ if(active.size>1) active.delete(p.k); } else active.add(p.k); save(); render(); });
+  pf.appendChild(b);
+});
+document.getElementById("v-role").addEventListener("click",()=>{view="role";save();render();});
+document.getElementById("v-phase").addEventListener("click",()=>{view="phase";save();render();});
+document.getElementById("flag-only").addEventListener("change",e=>{flagOnly=e.target.checked;save();render();});
+document.getElementById("flag-list").innerHTML = FLAGS.map(f=>`<li>${esc(f)}</li>`).join("");
+document.getElementById("value-list").innerHTML = PHASES.map(p=>`<li><span class="ptag" style="background:${phaseColor(p.k)}">${p.k}</span> ${esc(p.v)}</li>`).join("");
+render();
+</script>
