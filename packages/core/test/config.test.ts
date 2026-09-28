@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ConfigError, loadConfig } from '../src/config';
+import { ConfigError, loadConfig, loadServerConfig } from '../src/config';
 
 const full = {
   DATABASE_URL: 'postgres://a',
@@ -23,5 +23,28 @@ describe('loadConfig', () => {
     expect(c.databaseUrl).toBe('postgres://a');
     expect(c.publicUrl).toBe('http://localhost:3000');
     expect(c.isProduction).toBe(true);
+  });
+});
+
+describe('loadServerConfig', () => {
+  const serverEnv = { DATABASE_URL: 'postgres://a', FLOWER_SECRET_KEY: 'x'.repeat(48) };
+
+  it('只需要 DATABASE_URL 与 FLOWER_SECRET_KEY，不含超级用户凭证', () => {
+    const c = loadServerConfig(serverEnv);
+    expect(c).toEqual({
+      databaseUrl: 'postgres://a',
+      secretKey: 'x'.repeat(48),
+      publicUrl: 'http://localhost:3000',
+      isProduction: false,
+    });
+  });
+
+  it('缺少变量时报错', () => {
+    expect(() => loadServerConfig({})).toThrow(ConfigError);
+    expect(() => loadServerConfig({})).toThrow(/DATABASE_URL.*FLOWER_SECRET_KEY/);
+  });
+
+  it('密钥过短时拒绝', () => {
+    expect(() => loadServerConfig({ ...serverEnv, FLOWER_SECRET_KEY: 'short' })).toThrow(/至少 32 个字符/);
   });
 });
