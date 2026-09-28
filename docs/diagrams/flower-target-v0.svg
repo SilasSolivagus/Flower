@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 900" width="1280" height="900">
+<style>text{font-family:"Helvetica Neue",Helvetica,Arial,"PingFang SC","Microsoft YaHei",sans-serif;}</style><defs>
+<marker id="ab" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker>
+<marker id="ag" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/></marker>
+<marker id="ap" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/></marker>
+</defs><rect width="1280" height="900" fill="#ffffff"/>
+<text x="40" y="42" font-size="20" font-weight="600" fill="#111827">Flower 目标架构（草案 v0，供讨论）</text>
+<text x="40" y="64" font-size="12" fill="#6b7280">一个应用 + 一个 Postgres；所有能力先做成 REST API，MCP 是 API 之上的薄适配层；组织 → 产品两级租户</text>
+<rect x="150" y="88" width="220" height="50" rx="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="162" y="109" font-size="14" font-weight="600" fill="#111827">产品/研发成员</text>
+<text x="162" y="127" font-size="12" fill="#6b7280">浏览器</text>
+<rect x="530" y="88" width="220" height="50" rx="8" fill="#eff6ff" stroke="#bfdbfe" stroke-width="1.5"/>
+<text x="542" y="109" font-size="14" font-weight="600" fill="#111827">外部系统</text>
+<text x="542" y="127" font-size="12" fill="#6b7280">API Token · 入站 webhook</text>
+<rect x="910" y="88" width="220" height="50" rx="8" fill="#faf5ff" stroke="#d8b4fe" stroke-width="1.5"/>
+<text x="922" y="109" font-size="14" font-weight="600" fill="#111827">外部 Agent</text>
+<text x="922" y="127" font-size="12" fill="#6b7280">MCP 客户端</text>
+<rect data-graph-role="container" x="40" y="168" width="1200" height="540" rx="10" fill="#fafaf9" stroke="#a8a29e" stroke-width="1.2"/>
+<text x="60" y="694" font-size="13" font-weight="600" fill="#374151">Flower（单一 docker 镜像：web + worker 两种启动模式）</text>
+<rect x="130" y="204" width="260" height="50" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="142" y="225" font-size="14" font-weight="600" fill="#111827">Web UI（Next.js）</text>
+<text x="142" y="243" font-size="12" fill="#6b7280">需求 / 版本 / 评审 / PRD / 设置</text>
+<rect x="510" y="204" width="260" height="50" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="522" y="225" font-size="14" font-weight="600" fill="#111827">REST API  /api/v1</text>
+<text x="522" y="243" font-size="12" fill="#6b7280">OpenAPI 描述 · 唯一业务入口</text>
+<rect x="890" y="204" width="260" height="50" rx="8" fill="#faf5ff" stroke="#d8b4fe" stroke-width="1.5"/>
+<text x="902" y="225" font-size="14" font-weight="600" fill="#111827">MCP Server</text>
+<text x="902" y="243" font-size="12" fill="#6b7280">工具 = API 端点的映射</text>
+<line x1="260" y1="138" x2="260" y2="202" stroke="#2563eb" stroke-width="1.8" marker-end="url(#ab)"/>
+<line x1="640" y1="138" x2="640" y2="202" stroke="#2563eb" stroke-width="1.8" marker-end="url(#ab)"/>
+<line x1="1020" y1="138" x2="1020" y2="202" stroke="#9333ea" stroke-width="1.8" marker-end="url(#ap)"/>
+<line x1="390" y1="229" x2="508" y2="229" stroke="#2563eb" stroke-width="1.8" marker-end="url(#ab)"/>
+<line x1="890" y1="229" x2="772" y2="229" stroke="#9333ea" stroke-width="1.8" marker-end="url(#ap)"/>
+<rect x="130" y="286" width="1020" height="50" rx="8" fill="#fef3c7" stroke="#fcd34d" stroke-width="1.5"/>
+<text x="142" y="307" font-size="14" font-weight="600" fill="#111827">身份与权限</text>
+<text x="142" y="325" font-size="12" fill="#6b7280">组织 → 产品 → 成员角色 · 一个用户可属多个组织 · API Token 按作用域授权（Agent 权限可配置）· 每条数据带 org_id / product_id</text>
+<line x1="640" y1="254" x2="640" y2="284" stroke="#2563eb" stroke-width="1.8" marker-end="url(#ab)"/>
+<rect data-graph-role="container" x="60" y="368" width="1160" height="120" rx="10" fill="none" stroke="#9ca3af" stroke-width="1.2" stroke-dasharray="6,4"/>
+<text x="74" y="390" font-size="13" font-weight="600" fill="#374151">业务模块（按组织 / 产品隔离）</text>
+<rect x="80" y="400" width="204" height="70" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="92" y="421" font-size="14" font-weight="600" fill="#111827">需求</text>
+<text x="92" y="439" font-size="12" fill="#6b7280">统一需求池 + 状态流</text>
+<text x="92" y="457" font-size="11" fill="#b45309">来自：123plane + push</text>
+<rect x="304" y="400" width="204" height="70" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="316" y="421" font-size="14" font-weight="600" fill="#111827">版本 / 迭代</text>
+<text x="316" y="439" font-size="12" fill="#6b7280">版本、迭代、甘特排期</text>
+<text x="316" y="457" font-size="11" fill="#b45309">来自：123plane + push</text>
+<rect x="528" y="400" width="204" height="70" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="540" y="421" font-size="14" font-weight="600" fill="#111827">评审门禁</text>
+<text x="540" y="439" font-size="12" fill="#6b7280">PRD 评审 · 签字 · 准入</text>
+<text x="540" y="457" font-size="11" fill="#b45309">来自：push</text>
+<rect x="752" y="400" width="204" height="70" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="764" y="421" font-size="14" font-weight="600" fill="#111827">PRD 文档</text>
+<text x="764" y="439" font-size="12" fill="#6b7280">编辑器 · 模板 · 历史 · 评论</text>
+<text x="764" y="457" font-size="11" fill="#b45309">来自：prd</text>
+<rect x="976" y="400" width="204" height="70" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="988" y="421" font-size="14" font-weight="600" fill="#111827">数据洞察</text>
+<text x="988" y="439" font-size="12" fill="#6b7280">指标连接器 · 发布归因</text>
+<text x="988" y="457" font-size="11" fill="#b45309">来自：b123（新接口）</text>
+<line x1="640" y1="336" x2="640" y2="366" stroke="#2563eb" stroke-width="1.8" marker-end="url(#ab)"/>
+<rect data-graph-role="container" x="60" y="546" width="1160" height="124" rx="10" fill="none" stroke="#9ca3af" stroke-width="1.2" stroke-dasharray="6,4"/>
+<text x="74" y="568" font-size="13" font-weight="600" fill="#374151">平台服务</text>
+<rect x="80" y="578" width="204" height="52" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="92" y="599" font-size="14" font-weight="600" fill="#111827">事件 Outbox</text>
+<text x="92" y="617" font-size="12" fill="#6b7280">领域事件 · 至少一次投递</text>
+<rect x="304" y="578" width="204" height="70" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="316" y="599" font-size="14" font-weight="600" fill="#111827">通知中心</text>
+<text x="316" y="617" font-size="12" fill="#6b7280">订阅规则 → 通道 · 限流</text>
+<text x="316" y="635" font-size="11" fill="#b45309">来自：push 消息部分</text>
+<rect x="528" y="578" width="204" height="70" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="540" y="599" font-size="14" font-weight="600" fill="#111827">知识库 / 检索</text>
+<text x="540" y="617" font-size="12" fill="#6b7280">全文（jieba）→ 向量</text>
+<text x="540" y="635" font-size="11" fill="#b45309">来自：prd 搜索</text>
+<rect x="752" y="578" width="204" height="70" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="764" y="599" font-size="14" font-weight="600" fill="#111827">配置与模板</text>
+<text x="764" y="617" font-size="12" fill="#6b7280">状态流 · 业务域 · 平台 · PRD 模板</text>
+<text x="764" y="635" font-size="11" fill="#b45309">来自：各仓硬编码</text>
+<rect x="976" y="578" width="204" height="52" rx="8" fill="#ffffff" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="988" y="599" font-size="14" font-weight="600" fill="#111827">Worker</text>
+<text x="988" y="617" font-size="12" fill="#6b7280">定时任务 · 队列消费</text>
+<line x1="640" y1="488" x2="640" y2="544" stroke="#2563eb" stroke-width="1.8" marker-end="url(#ab)"/>
+<line x1="182" y1="708" x2="182" y2="744" stroke="#16a34a" stroke-width="1.8" marker-end="url(#ag)"/>
+<path d="M80,752 a102.0,6 0 0,1 204,0 v46 a102.0,6 0 0,1 -204,0 z" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/><path d="M80,752 a102.0,6 0 0,0 204,0" fill="none" stroke="#86efac" stroke-width="1.5"/>
+<text x="92" y="771" font-size="14" font-weight="600" fill="#111827">PostgreSQL</text><text x="92" y="788" font-size="12" fill="#6b7280">业务数据 · pgvector</text>
+<line x1="406" y1="708" x2="406" y2="744" stroke="#16a34a" stroke-width="1.8" marker-end="url(#ag)"/>
+<rect x="304" y="746" width="204" height="56" rx="8" fill="#f9fafb" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="316" y="767" font-size="14" font-weight="600" fill="#111827">文件存储</text>
+<text x="316" y="785" font-size="12" fill="#6b7280">本地卷 / S3 兼容</text>
+<line x1="630" y1="708" x2="630" y2="744" stroke="#16a34a" stroke-width="1.8" marker-end="url(#ag)"/>
+<rect x="528" y="746" width="204" height="56" rx="8" fill="#f9fafb" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="540" y="767" font-size="14" font-weight="600" fill="#111827">IM / Webhook</text>
+<text x="540" y="785" font-size="12" fill="#6b7280">企微 · 飞书 · 钉钉 · 通用</text>
+<line x1="854" y1="708" x2="854" y2="744" stroke="#16a34a" stroke-width="1.8" marker-end="url(#ag)"/>
+<rect x="752" y="746" width="204" height="56" rx="8" fill="#f9fafb" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="764" y="767" font-size="14" font-weight="600" fill="#111827">b123 数仓</text>
+<text x="764" y="785" font-size="12" fill="#6b7280">公司后台数据（独立服务）</text>
+<line x1="1078" y1="708" x2="1078" y2="744" stroke="#16a34a" stroke-width="1.8" marker-end="url(#ag)"/>
+<rect x="976" y="746" width="204" height="56" rx="8" fill="#f9fafb" stroke="#d1d5db" stroke-width="1.5"/>
+<text x="988" y="767" font-size="14" font-weight="600" fill="#111827">代码仓库</text>
+<text x="988" y="785" font-size="12" fill="#6b7280">知识库索引源 · Agent 读取</text>
+<g transform="translate(40,840)">
+<line x1="0" y1="8" x2="34" y2="8" stroke="#2563eb" stroke-width="1.8" marker-end="url(#ab)"/><text x="42" y="12" font-size="12" fill="#6b7280">请求调用</text>
+<line x1="130" y1="8" x2="164" y2="8" stroke="#9333ea" stroke-width="1.8" marker-end="url(#ap)"/><text x="172" y="12" font-size="12" fill="#6b7280">Agent 调用（经 MCP 转 API）</text>
+<line x1="370" y1="8" x2="404" y2="8" stroke="#16a34a" stroke-width="1.8" marker-end="url(#ag)"/><text x="412" y="12" font-size="12" fill="#6b7280">依赖的存储 / 外部系统</text>
+<text x="590" y="12" font-size="12" fill="#b45309">橙字 = 从现有哪个仓迁入</text>
+<text x="0" y="36" font-size="12" fill="#6b7280">不在 Flower 内：123prd.dirctable.com（暂不动）、silas（个人站）、onus（后续迁走）。下线：ai-jixiao、hr-product、deepcode、quiz。</text>
+</g></svg>
