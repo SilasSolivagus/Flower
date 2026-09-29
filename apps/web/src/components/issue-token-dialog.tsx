@@ -155,7 +155,7 @@ export function IssueTokenDialog({
               <Button type="button" variant="outline" onClick={() => close(false)}>
                 取消
               </Button>
-              <Button type="submit" disabled={m.isPending}>
+              <Button type="submit" disabled={m.isPending || (!all && picked.length === 0)}>
                 签发
               </Button>
             </DialogFooter>
