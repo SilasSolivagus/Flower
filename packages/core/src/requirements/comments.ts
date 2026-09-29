@@ -51,6 +51,7 @@ export async function addRequirementComment(
   requirementId: string,
   input: { body: string; kind?: 'comment' | 'update'; parentId?: string | null },
 ): Promise<CommentView> {
+  if (actor.tokenScope?.access === 'read') throw new AppError('forbidden', '只读 Token 不能评论');
   const body = input.body.trim();
   if (!body || body.length > 10_000) throw new AppError('invalid', '评论不能为空，且不超过 10000 个字符');
   return withOrg(db, actor.orgId, async (tx) => {
@@ -88,6 +89,7 @@ export async function addRequirementComment(
 }
 
 export async function markRequirementCommentsRead(db: Db, actor: Actor, requirementId: string): Promise<number> {
+  if (actor.tokenScope?.access === 'read') throw new AppError('forbidden', '只读 Token 不能标记已读');
   return withOrg(db, actor.orgId, async (tx) => {
     const req = await loadRequirement(tx, requirementId);
     await requireProductRole(tx, actor, req.productId, 'viewer');

@@ -55,4 +55,13 @@ describe('需求评论', () => {
     expect(reply.parentId).toBe(first!.id);
     await expect(addRequirementComment(t.db, owner, reqId, { body: 'x', parentId: reqId })).rejects.toMatchObject({ code: 'invalid' });
   });
+
+  it('只读 Token 不能评论或标记已读，但可以列表', async () => {
+    const readToken = { ...owner, tokenId: 'x', tokenScope: { products: 'all' as const, access: 'read' as const } };
+    await expect(addRequirementComment(t.db, readToken, reqId, { body: '评论' })).rejects.toMatchObject({ code: 'forbidden', message: '只读 Token 不能评论' });
+    await expect(markRequirementCommentsRead(t.db, readToken, reqId)).rejects.toMatchObject({ code: 'forbidden', message: '只读 Token 不能标记已读' });
+    const comments = await listRequirementComments(t.db, readToken, reqId);
+    expect(comments).toBeDefined();
+    expect(comments.length).toBeGreaterThan(0);
+  });
 });
