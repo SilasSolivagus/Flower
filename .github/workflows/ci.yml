@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: 类型检查与单元测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      # 与 docker-compose.dev.yml 保持一致：测试代码固定连接 localhost:54329 的 flower_admin/flower_admin
+      postgres: &postgres
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: flower_admin
+          POSTGRES_PASSWORD: flower_admin
+          POSTGRES_DB: flower
+        ports:
+          - 54329:5432
+        options: >-
+          --health-cmd "pg_isready -U flower_admin -d flower"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  e2e:
+    name: 端到端测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres: *postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @flower/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @flower/web e2e
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: apps/web/test-results/
+          retention-days: 7
+
+  smoke:
+    name: 镜像冒烟测试
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/smoke.sh
