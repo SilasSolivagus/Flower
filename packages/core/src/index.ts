@@ -39,3 +39,4 @@ export * from './iterations/membership';
 export * from './releases/releases';
 export * from './requirements/blockers';
 export * from './requirements/relations';
+export * from './structure/nodes';
