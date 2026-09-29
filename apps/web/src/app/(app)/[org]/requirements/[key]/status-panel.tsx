@@ -27,6 +27,11 @@ export function StatusPanel({ org, requirement: r }: { org: string; requirement:
     },
   });
   const canEdit = r.myRole !== 'viewer';
+  const closeForcing = () => {
+    setForcing(null);
+    setReason('');
+    force.reset();
+  };
 
   return (
     <section className="rounded-md border bg-card p-4" aria-labelledby="status-title">
@@ -52,15 +57,15 @@ export function StatusPanel({ org, requirement: r }: { org: string; requirement:
             </div>
             {t.unmet.length > 0 && (
               <ul className="pl-1 text-[12px] text-muted-foreground">
-                {t.unmet.map((u) => (
-                  <li key={u.message}>· {u.message}</li>
+                {t.unmet.map((u, i) => (
+                  <li key={i}>· {u.message}</li>
                 ))}
               </ul>
             )}
           </li>
         ))}
       </ul>
-      <Dialog open={!!forcing} onOpenChange={(o) => !o && setForcing(null)}>
+      <Dialog open={!!forcing} onOpenChange={(o) => !o && closeForcing()}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>强制流转到「{forcing?.label}」</DialogTitle>
@@ -69,7 +74,7 @@ export function StatusPanel({ org, requirement: r }: { org: string; requirement:
           <Textarea aria-label="原因" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
           <FormError error={force.error} />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setForcing(null)}>
+            <Button variant="outline" onClick={closeForcing}>
               取消
             </Button>
             <Button disabled={!reason.trim() || force.isPending} onClick={() => force.mutate({ to: forcing!.to, reason })}>

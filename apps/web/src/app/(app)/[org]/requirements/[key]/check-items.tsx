@@ -98,16 +98,25 @@ export function CheckItems({ org, requirement: r }: { org: string; requirement: 
                       )}
                       {c.canSign.includes(s.index) && (
                         <>
-                          <Button size="sm" variant="outline" className="h-6 px-2 text-[12px]" onClick={() => sign.mutate({ key: c.key, decision: 'passed', ruleIndex: s.index })}>
+                          <Button size="sm" variant="outline" className="h-6 px-2 text-[12px]" disabled={sign.isPending} onClick={() => sign.mutate({ key: c.key, decision: 'passed', ruleIndex: s.index })}>
                             通过
                           </Button>
-                          <Button size="sm" variant="outline" className="h-6 px-2 text-[12px]" onClick={() => sign.mutate({ key: c.key, decision: 'rejected', ruleIndex: s.index })}>
+                          <Button size="sm" variant="outline" className="h-6 px-2 text-[12px]" disabled={sign.isPending} onClick={() => sign.mutate({ key: c.key, decision: 'rejected', ruleIndex: s.index })}>
                             驳回
                           </Button>
                         </>
                       )}
                       {c.canSignOnBehalf.includes(s.index) && (
-                        <Button size="sm" variant="ghost" className="h-6 px-2 text-[12px]" onClick={() => setProxy({ item: c, ruleIndex: s.index })}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-[12px]"
+                          onClick={() => {
+                            setDecision('passed');
+                            setNote('');
+                            setProxy({ item: c, ruleIndex: s.index });
+                          }}
+                        >
                           代签
                         </Button>
                       )}
@@ -138,7 +147,9 @@ export function CheckItems({ org, requirement: r }: { org: string; requirement: 
             <Button variant="outline" onClick={() => setProxy(null)}>
               取消
             </Button>
-            <Button onClick={() => proxy && sign.mutate({ key: proxy.item.key, decision, ruleIndex: proxy.ruleIndex, onBehalf: true, note })}>确认代签</Button>
+            <Button disabled={sign.isPending} onClick={() => proxy && sign.mutate({ key: proxy.item.key, decision, ruleIndex: proxy.ruleIndex, onBehalf: true, note })}>
+              确认代签
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

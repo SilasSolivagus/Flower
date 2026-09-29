@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { NoAccess } from '@/components/no-access';
 import { PageHeader } from '@/components/page-header';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError, api } from '@/lib/api';
@@ -35,6 +36,15 @@ export default function RequirementPage() {
   }, [r, decodedKey, org, router]);
 
   if (q.error instanceof ApiError && q.error.status === 404) return <NoAccess message="需求不存在，或你没有查看它所在产品的权限。" />;
+  if (q.isError)
+    return (
+      <div className="flex flex-col items-center gap-3 py-24 text-center">
+        <p className="text-muted-foreground">加载需求失败，请重试。</p>
+        <Button variant="outline" onClick={() => q.refetch()}>
+          重试
+        </Button>
+      </div>
+    );
   if (!r) return <Skeleton className="h-64" />;
   const canEdit = r.myRole !== 'viewer';
 
