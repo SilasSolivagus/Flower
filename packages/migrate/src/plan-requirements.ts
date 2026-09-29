@@ -1,6 +1,6 @@
 import { type CheckState, signoffResultState } from '@flower/core';
 import type { PlaneRequirement, PushRequirement } from './legacy-types';
-import { addDays, normTitle, parseJsonArray, parseLegacyDate, splitNames, splitPlatforms } from './normalize';
+import { addDays, normTitle, parseJsonArray, parseLegacyDate, parseLegacyTime, splitNames, splitPlatforms } from './normalize';
 import type { PlanContext } from './plan-types';
 import {
   BLOCKER_STATUS,
@@ -22,8 +22,19 @@ import {
 type Pair = { plane: PlaneRequirement | null; push: PushRequirement | null };
 type CheckRow = { state: CheckState; note?: string | null; meta?: Record<string, unknown>; updatedBy?: string | null; updatedAt?: Date };
 
-const byCreated = <T extends { created_at: string | null; id: string | number }>(a: T, b: T) =>
-  (a.created_at ?? '').localeCompare(b.created_at ?? '') || String(a.id).localeCompare(String(b.id), 'en', { numeric: true });
+/**
+ * 按解析后的时间排序，而非原始字符串——123plane 同时存在 `YYYY-MM-DD HH:MM:SS`（空格）与
+ * 带 `T`/时区的 ISO 写法，同一天内直接比较字符串会因分隔符不同而得出错误的先后顺序。
+ * 时间无法解析的排在最后，其余按 id 数值比较打破平局。
+ */
+const byCreated = <T extends { created_at: string | null; id: string | number }>(a: T, b: T): number => {
+  const ta = parseLegacyTime(a.created_at)?.getTime();
+  const tb = parseLegacyTime(b.created_at)?.getTime();
+  if (ta === undefined && tb === undefined) return String(a.id).localeCompare(String(b.id), 'en', { numeric: true });
+  if (ta === undefined) return 1;
+  if (tb === undefined) return -1;
+  return ta - tb || String(a.id).localeCompare(String(b.id), 'en', { numeric: true });
+};
 
 export function buildRequirements(ctx: PlanContext): void {
   const { data, rows, report, orgId, productId, resolver } = ctx;
@@ -31,6 +42,20 @@ export function buildRequirements(ctx: PlanContext): void {
   const pushAll = [...data.push.requirements].sort(byCreated);
   const pushActive = pushAll.filter((p) => p.merged_into === null);
   const planeById = new Map(planeReqs.map((r) => [r.id, r]));
+  const pushById = new Map(pushAll.map((p) => [p.id, p]));
+
+  /** 沿 merged_into 链找到最终的（未被合并的）push 需求 id；遇到环时停在环上任一点，避免死循环。 */
+  const resolveMergedPushId = (id: number): number => {
+    const seen = new Set<number>();
+    let cur = id;
+    for (;;) {
+      if (seen.has(cur)) return cur;
+      seen.add(cur);
+      const rec = pushById.get(cur);
+      if (!rec || rec.merged_into === null) return cur;
+      cur = rec.merged_into;
+    }
+  };
 
   // 1. 匹配
   const pushForPlane = new Map<string, PushRequirement>();
@@ -155,7 +180,7 @@ export function buildRequirements(ctx: PlanContext): void {
       if (rows.fieldValues.some((v) => v.entityId === id && v.optionId === optionId)) return;
       rows.fieldValues.push({ id: ctx.id('field-value', `${id}:${optionId}`), orgId, entityType: 'requirement', entityId: id, fieldId: ctx.fieldId.get(fieldKey)!, optionId });
     };
-    const priority = (plane?.priority ?? push?.priority ?? '').trim();
+    const priority = plane?.priority?.trim() || push?.priority?.trim() || '';
     if (priority) {
       if (!PRIORITY_KEYS[priority]) ctx.problem(`优先级「${priority}」没有对应选项`);
       addValue('priority', PRIORITY_KEYS[priority]);
@@ -286,7 +311,7 @@ export function buildRequirements(ctx: PlanContext): void {
     }
 
     // 流转历史
-    const logs = plane ? data.plane.activityLog.filter((a) => a.requirement_id === plane.id && a.action === 'status_change') : [];
+    const logs = plane ? data.plane.activityLog.filter((a) => a.requirement_id === plane.id && a.action === 'status_change').sort(byCreated) : [];
     const mapState = (label: string | null) => {
       const k = PLANE_STATUS_TO_STATE[label ?? ''];
       if (!k) ctx.problem(`123plane 状态「${label}」没有对应的流程状态`);
@@ -313,6 +338,12 @@ export function buildRequirements(ctx: PlanContext): void {
   rows.products[0]!.requirementSeq = pairs.length;
 
   // 3. 评论、进展、迭代日志、已读
+  /** 邮箱与姓名任一匹配即可；只有两者都未匹配时才记为未知人员，避免邮箱没配对照表别名时被误记为缺失。 */
+  const resolvePersonId = (primary: string | null | undefined, secondary: string | null | undefined): string | null => {
+    const found = resolver.personPeek(primary) ?? resolver.personPeek(secondary);
+    if (found) return ctx.memberIdByKey.get(found.key) ?? null;
+    return ctx.memberId(primary) ?? ctx.memberId(secondary);
+  };
   let orphanComments = 0;
   for (const c of data.plane.comments) {
     const target = reqIdOfPlane.get(c.requirement_id);
@@ -325,7 +356,7 @@ export function buildRequirements(ctx: PlanContext): void {
       orgId,
       targetType: 'requirement',
       targetId: target,
-      authorMemberId: ctx.memberId(c.user_email) ?? ctx.memberId(c.user_name),
+      authorMemberId: resolvePersonId(c.user_email, c.user_name),
       body: c.content,
       kind: 'comment',
       createdAt: ctx.time(c.created_at),
@@ -360,35 +391,51 @@ export function buildRequirements(ctx: PlanContext): void {
     });
   }
   if (orphanComments) report.skipped.push({ what: '已删除需求上的评论', count: orphanComments, reason: '需求已在 123plane 中物理删除' });
+  let orphanCommentReads = 0;
   for (const r of data.plane.commentReads) {
     const target = reqIdOfPlane.get(r.requirement_id);
+    if (!target) {
+      orphanCommentReads += 1;
+      continue;
+    }
     const memberId = ctx.memberId(r.user_email);
     const readAt = ctx.time(r.last_read_at);
-    if (!target || !memberId) continue;
+    if (!memberId) continue;
     for (const c of rows.comments.filter((x) => x.targetId === target && x.createdAt!.getTime() <= readAt.getTime())) {
       if (rows.commentReads.some((x) => x.commentId === c.id && x.memberId === memberId)) continue;
       rows.commentReads.push({ orgId, commentId: c.id!, memberId, readAt });
     }
   }
+  if (orphanCommentReads) report.skipped.push({ what: '已删除需求上的评论已读记录', count: orphanCommentReads, reason: '需求已在 123plane 中物理删除' });
 
   // 4. 阻塞项
+  let orphanBlockers = 0;
   for (const b of data.plane.blockers) {
     const target = reqIdOfPlane.get(b.requirement_id);
-    if (!target) continue;
+    if (!target) {
+      orphanBlockers += 1;
+      continue;
+    }
     const status = BLOCKER_STATUS[b.status ?? 'active'];
     if (!status) ctx.problem(`阻塞项状态「${b.status}」没有对应规则`);
     rows.blockers.push({ id: ctx.id('blocker', b.id), orgId, requirementId: target, description: b.description, status: status ?? 'active', ownerMemberId: null, createdAt: ctx.time(b.created_at), resolvedAt: b.resolved_at ? ctx.time(b.resolved_at) : null });
   }
+  if (orphanBlockers) report.skipped.push({ what: '已删除需求上的阻塞项', count: orphanBlockers, reason: '需求已在 123plane 中物理删除' });
 
   // 5. 任务
+  let orphanSubtasks = 0;
   for (const s of data.plane.subtasks) {
     const target = reqIdOfPlane.get(s.requirement_id);
-    if (!target) continue;
+    if (!target) {
+      orphanSubtasks += 1;
+      continue;
+    }
     const status = SUBTASK_STATUS[s.status ?? 'todo'];
     if (!status) ctx.problem(`子任务状态「${s.status}」没有对应规则`);
     const createdAt = ctx.time(s.created_at);
     rows.tasks.push({ id: ctx.id('task', `plane:${s.id}`), orgId, productId, requirementId: target, iterationId: iterationOf.get(target) ?? null, title: s.title, assigneeMemberId: ctx.memberId(s.assignee), status: status ?? 'todo', meta: {}, legacyKey: `plane:${s.id}`, createdAt, updatedAt: ctx.time(s.updated_at, createdAt) });
   }
+  if (orphanSubtasks) report.skipped.push({ what: '已删除需求上的子任务', count: orphanSubtasks, reason: '需求已在 123plane 中物理删除' });
   for (const g of data.push.ganttTasks) {
     const it = g.version_id?.trim() ? resolver.iteration('push', g.version_id) : null;
     const start = parseLegacyDate(g.plan_start);
@@ -399,7 +446,7 @@ export function buildRequirements(ctx: PlanContext): void {
       id: ctx.id('task', `push:${g.id}`),
       orgId,
       productId,
-      requirementId: g.requirement_id === null ? null : (reqIdOfPush.get(g.requirement_id) ?? null),
+      requirementId: g.requirement_id === null ? null : (reqIdOfPush.get(resolveMergedPushId(g.requirement_id)) ?? null),
       iterationId: it ? ctx.iterationIdByKey.get(it.key) ?? null : null,
       title: g.title,
       alias: g.alias,
@@ -419,13 +466,19 @@ export function buildRequirements(ctx: PlanContext): void {
   }
 
   // 6. 发布版本关联
+  let orphanReleases = 0;
   for (const rv of data.plane.requirementVersions) {
     const requirementId = reqIdOfPlane.get(rv.requirement_id);
+    if (!requirementId) {
+      orphanReleases += 1;
+      continue;
+    }
     const releaseId = ctx.releaseIdByPlaneId.get(rv.version_id);
-    if (!requirementId || !releaseId) continue;
+    if (!releaseId) continue;
     if (rows.requirementReleases.some((x) => x.requirementId === requirementId && x.releaseId === releaseId)) continue;
     rows.requirementReleases.push({ orgId, requirementId, releaseId });
   }
+  if (orphanReleases) report.skipped.push({ what: '已删除需求上的发布版本关联', count: orphanReleases, reason: '需求已在 123plane 中物理删除' });
 
   // 7. 审计事件
   for (const a of data.plane.activityLog) {
@@ -451,7 +504,7 @@ export function buildRequirements(ctx: PlanContext): void {
   }
   for (const c of data.push.changeLog) {
     const pushId = Number(c.entity_id);
-    const subject = reqIdOfPush.get(pushId) ?? ctx.id('deleted-requirement', `push:${c.entity_id}`);
+    const subject = reqIdOfPush.get(resolveMergedPushId(pushId)) ?? ctx.id('deleted-requirement', `push:${c.entity_id}`);
     rows.domainEvents.push({
       id: ctx.id('event', `push:${c.id}`),
       orgId,

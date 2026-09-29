@@ -62,6 +62,13 @@ export class Resolver {
     return p ?? null;
   }
 
+  /** 与 person 相同的查找，但不记录未匹配值；用于"多个候选值，任一匹配即可"的场景，避免记录虚假的缺失项。 */
+  personPeek(raw: string | null | undefined): PersonEntry | null {
+    const t = raw?.trim();
+    if (!t) return null;
+    return this.personByAlias.get(aliasKey(t)) ?? null;
+  }
+
   personByMappingKey(key: string): PersonEntry | null {
     return this.personByKey.get(key) ?? null;
   }

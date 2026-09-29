@@ -2,7 +2,7 @@ import type { Mapping } from '../src/mapping';
 import { suggestMapping } from '../src/suggest';
 import type { LegacyData, PlaneRequirement, PushRequirement } from '../src/legacy-types';
 
-const planeReq = (r: Partial<PlaneRequirement> & { id: string; title: string }): PlaneRequirement => ({
+export const planeReq = (r: Partial<PlaneRequirement> & { id: string; title: string }): PlaneRequirement => ({
   description: null, status: '收集', phase: null, priority: 'P2', business_domain: '', platform: '', requester: null, owner: null,
   version_id: null, source: null, estimated_effort: null, prd_link: null, notes: null, created_at: '2026-03-01T00:00:00Z',
   updated_at: null, prd_status: 'not-started', feasibility_status: 'not-assessed', iteration_status: 'active',

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildImportPlan } from '../src/plan';
 import type { ImportOptions } from '../src/plan-types';
-import { makeLegacyData, reviewedMapping } from './fixtures';
+import { makeLegacyData, planeReq, reviewedMapping } from './fixtures';
 
 const OPTS: ImportOptions = { orgSlug: 'pan123', orgName: '123云盘', productKey: 'PAN', productName: '123云盘', asOf: '2026-09-29', owner: null };
 
@@ -132,5 +132,90 @@ describe('导入计划：需求', () => {
 
   it('同样的输入得到同样的计划', () => {
     expect(buildImportPlan(makeLegacyData(), reviewedMapping(), OPTS)).toEqual(plan);
+  });
+});
+
+describe('导入计划：需求（修复回归）', () => {
+  it('已删除需求上的阻塞项、子任务、发布版本关联与评论已读记录会计入 skipped', () => {
+    const data = makeLegacyData();
+    data.plane.blockers.push({ id: 'b2', requirement_id: 'X999', description: '孤儿阻塞', status: 'active', created_at: '2026-03-06T00:00:00Z', created_by: '张三', resolved_at: null, resolved_by: null });
+    data.plane.subtasks.push({ id: 's2', requirement_id: 'X999', title: '孤儿任务', status: 'todo', assignee: null, created_at: '2026-03-06T00:00:00Z', updated_at: null });
+    data.plane.requirementVersions.push({ requirement_id: 'X999', platform: 'PC客户端', version_id: 'pc-1.0.0' });
+    data.plane.commentReads.push({ user_email: 'zhangsan@example.com', requirement_id: 'X999', last_read_at: '2026-03-06T00:00:00Z' });
+    const p = buildImportPlan(data, reviewedMapping(), OPTS);
+    expect(p.report.skipped).toEqual(
+      expect.arrayContaining([
+        { what: '已删除需求上的阻塞项', count: 1, reason: '需求已在 123plane 中物理删除' },
+        { what: '已删除需求上的子任务', count: 1, reason: '需求已在 123plane 中物理删除' },
+        { what: '已删除需求上的发布版本关联', count: 1, reason: '需求已在 123plane 中物理删除' },
+        { what: '已删除需求上的评论已读记录', count: 1, reason: '需求已在 123plane 中物理删除' },
+      ]),
+    );
+  });
+
+  it('push 合并需求：甘特任务与变更记录跟随 merged_into 链接到合并目标', () => {
+    const data = makeLegacyData();
+    // push id 4 已 merged_into 3；push id 3 是独有需求（对应 PAN-4）
+    data.push.ganttTasks.push({
+      id: 3, requirement_id: 4, version_id: null, title: '重复任务甘特', assignee: null, phase: null, plan_start: null,
+      plan_days: null, delay_days: null, actual_status: '', note: '', flag: '', created_at: null, alias: null,
+      starred: null, ov_assignee: null, ov_status: null, ov_progress: null, manual: null,
+    });
+    data.push.changeLog.push({ id: 2, entity_type: 'requirement', entity_id: '4', field: 'status', old_value: '待排期', new_value: '已搁置', edited_by: '赵六', edited_at: '2026-03-06 00:00:00' });
+    const p = buildImportPlan(data, reviewedMapping(), OPTS);
+    const target = p.rows.requirements.find((r) => r.number === 4)!;
+    expect(target.legacyKey).toBe('push-3');
+    expect(p.rows.tasks.find((t) => t.title === '重复任务甘特')).toMatchObject({ requirementId: target.id });
+    const event = p.rows.domainEvents.find((e) => e.type === 'legacy.push.change' && (e.payload as { entityId: string }).entityId === '4')!;
+    expect(event.subjectId).toBe(target.id);
+  });
+
+  it('需求排序按解析后的时间而非原始字符串比较', () => {
+    const data = makeLegacyData();
+    data.plane.requirements.push(
+      planeReq({ id: 'X010', title: '需求A', created_at: '2026-03-05T08:00:00Z' }),
+      planeReq({ id: 'X011', title: '需求B', created_at: '2026-03-05 09:00:00' }),
+    );
+    const p = buildImportPlan(data, reviewedMapping(), OPTS);
+    const a = p.rows.requirements.find((r) => r.legacyKey === 'X010')!;
+    const b = p.rows.requirements.find((r) => r.legacyKey === 'X011')!;
+    expect(a.number).toBeLessThan(b.number);
+  });
+
+  it('优先级：123plane 为空字符串时取 push 的值', () => {
+    const data = makeLegacyData();
+    data.plane.requirements[0]!.priority = '';
+    const p = buildImportPlan(data, reviewedMapping(), OPTS);
+    const target = p.rows.requirements.find((r) => r.number === 1)!;
+    const values = p.rows.fieldValues.filter((v) => v.entityId === target.id).map((v) => p.rows.fieldOptions.find((o) => o.id === v.optionId)!.label);
+    expect(values).toContain('P0');
+    expect(values).not.toContain('P1');
+  });
+
+  it('评论作者：邮箱未匹配但姓名匹配时不应记为未知人员', () => {
+    const data = makeLegacyData();
+    data.plane.comments.push({ id: 'c3', requirement_id: 'X001', user_email: 'ghost@example.com', user_name: '张三', content: '姓名回退', created_at: '2026-03-07T00:00:00Z' });
+    const p = buildImportPlan(data, reviewedMapping(), OPTS);
+    const zs = p.rows.members.find((m) => m.displayName === '张三')!;
+    const c = p.rows.comments.find((x) => x.body === '姓名回退')!;
+    expect(c.authorMemberId).toBe(zs.id);
+    expect(p.report.problems).not.toEqual(expect.arrayContaining(['人员对照表缺少：ghost@example.com']));
+  });
+
+  it('报告补全：settings / taskTargets / reviewObjections', () => {
+    const data = makeLegacyData();
+    data.plane.counts.settings = 5;
+    data.push.counts.settings = 4;
+    data.push.counts.taskTargets = 3;
+    data.push.counts.reviewObjections = 2;
+    const p = buildImportPlan(data, reviewedMapping(), OPTS);
+    expect(p.report.deferred).toEqual(
+      expect.arrayContaining([
+        { what: 'push 任务对象（task_targets）', count: 3, phase: 'P3 通知' },
+        { what: '123plane 系统设置（旧系统配置，按 P3 通知重新配置）', count: 5, phase: 'P3 通知' },
+        { what: 'push 系统设置（旧系统配置，按 P3 通知重新配置）', count: 4, phase: 'P3 通知' },
+      ]),
+    );
+    expect(p.report.skipped).toEqual(expect.arrayContaining([{ what: 'push 评审异议（review_objections）', count: 2, reason: '无数据/不迁移' }]));
   });
 });
