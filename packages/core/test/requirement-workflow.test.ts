@@ -5,7 +5,8 @@ import { withOrg } from '../src/db/tx';
 import { createWorkflowTemplate, setProductWorkflowVersion } from '../src/definitions/workflows';
 import type { Actor } from '../src/domain-types';
 import { getRequirementByKey } from '../src/requirements/detail';
-import { createRequirement } from '../src/requirements/requirements';
+import { addRequirementComment, listRequirementComments } from '../src/requirements/comments';
+import { createRequirement, listRequirements, updateRequirement } from '../src/requirements/requirements';
 import { setCheckItemState, signCheckItem, transitionRequirement } from '../src/requirements/transitions';
 import { listFunctionTags } from '../src/tenancy/function-tags';
 import { createAgentMember, createPlaceholderMember, setMemberFunctionTags } from '../src/tenancy/members';
@@ -156,6 +157,28 @@ describe('Token 权限范围与访客', () => {
     await expect(transitionRequirement(t.db, readActor, reqId, { to: 'backlog' })).rejects.toMatchObject({ code: 'forbidden' });
     const d = await getRequirementByKey(t.db, readActor, 'PAN-1');
     expect(d.checkItems[1]).toMatchObject({ canSign: [], canSignOnBehalf: [] });
+  });
+
+  it('限定产品的 Token 读写不到其他产品的需求', async () => {
+    const productId = (await getRequirementByKey(t.db, owner, 'PAN-1')).productId;
+    const otherProduct = (await createProduct(t.db, owner, { name: '相册', key: 'ALB' })).id;
+    const scoped: Actor = { ...owner, tokenId: '00000000-0000-0000-0000-0000000000f2', tokenScope: { products: [otherProduct], access: 'write' } };
+    const notFound = { code: 'not_found' };
+    await expect(getRequirementByKey(t.db, scoped, 'PAN-1')).rejects.toMatchObject(notFound);
+    await expect(listRequirements(t.db, scoped, productId)).rejects.toMatchObject(notFound);
+    await expect(updateRequirement(t.db, scoped, reqId, { title: '越权修改' })).rejects.toMatchObject(notFound);
+    await expect(transitionRequirement(t.db, scoped, reqId, { to: 'backlog', force: true, reason: '越权' })).rejects.toMatchObject(notFound);
+    await expect(signCheckItem(t.db, scoped, reqId, 'design', { decision: 'passed' })).rejects.toMatchObject(notFound);
+    await expect(listRequirementComments(t.db, scoped, reqId)).rejects.toMatchObject(notFound);
+    await expect(addRequirementComment(t.db, scoped, reqId, { body: '越权评论' })).rejects.toMatchObject(notFound);
+  });
+
+  it('其他组织的成员拿到需求 ID 也读写不到', async () => {
+    const outsider: Actor = { ...owner, orgId: '00000000-0000-0000-0000-00000000beef' };
+    await expect(getRequirementByKey(t.db, outsider, 'PAN-1')).rejects.toMatchObject({ code: 'not_found' });
+    await expect(updateRequirement(t.db, outsider, reqId, { title: '跨组织修改' })).rejects.toMatchObject({ code: 'not_found' });
+    await expect(listRequirementComments(t.db, outsider, reqId)).rejects.toMatchObject({ code: 'not_found' });
+    await expect(addRequirementComment(t.db, outsider, reqId, { body: '跨组织评论' })).rejects.toMatchObject({ code: 'not_found' });
   });
 
   it('访客没有产品角色时，需求详情返回 not_found', async () => {

@@ -58,6 +58,10 @@ export async function writeImport(adminDb: Db, plan: ImportPlan, opts: { replace
     const [existing] = await tx.select({ id: core.organizations.id }).from(core.organizations).where(eq(core.organizations.slug, org.slug));
     if (existing) {
       if (!opts.replace) throw new Error(`组织「${org.slug}」已存在；确认要用本次导入覆盖时加 --replace`);
+      // 覆盖会删掉现有的全部成员关系；计划里没有关联账号的所有者时，覆盖后就没有任何账号能进入该组织
+      if (!plan.rows.members.some((m) => m.accountId && m.orgRole === 'owner')) {
+        throw new Error(`覆盖组织「${org.slug}」时必须用 --owner-email 指定所有者账号，否则覆盖后没有任何账号能登录该组织`);
+      }
       await deleteOrgData(tx, existing.id);
     }
     for (const key of INSERT_ORDER) {

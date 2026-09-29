@@ -88,6 +88,13 @@ describe('写入数据库', () => {
     expect(await t.adminDb.select().from(comments).where(eq(comments.body, '导入后的评论'))).toEqual([]);
   });
 
+  it('覆盖时没有指定所有者账号则拒绝，原数据保持不变', async () => {
+    const plan = buildImportPlan(makeLegacyData(), reviewedMapping(), { ...opts, owner: null });
+    await expect(writeImport(t.adminDb, plan, { replace: true })).rejects.toThrow('--owner-email');
+    const actor = (await resolveActor(t.db, opts.owner!.accountId, 'pan123'))!;
+    expect(actor.orgRole).toBe('owner');
+  });
+
   it('计划中有问题时拒绝写入', async () => {
     const data = makeLegacyData();
     data.plane.requirements[0]!.requester = '新面孔';
