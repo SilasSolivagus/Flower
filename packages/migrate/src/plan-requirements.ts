@@ -7,7 +7,7 @@ import {
   FEASIBILITY_TO_CHECK,
   ITERATION_LOG_LABEL,
   LINE_OPTIONS,
-  PLANE_STATUS_TO_STATE,
+  planeStatusToState,
   PRD_STATUS_TO_CHECK,
   PRIORITY_KEYS,
   PUSH_REVIEW_TO_CHECK,
@@ -109,8 +109,9 @@ export function buildRequirements(ctx: PlanContext): void {
 
     let stateKey: string;
     if (plane) {
-      stateKey = PLANE_STATUS_TO_STATE[plane.status ?? ''] ?? 'collect';
-      if (!PLANE_STATUS_TO_STATE[plane.status ?? '']) ctx.problem(`123plane 状态「${plane.status}」没有对应的流程状态`);
+      const mapped = planeStatusToState(plane.status);
+      stateKey = mapped ?? 'collect';
+      if (!mapped) ctx.problem(`123plane 状态「${plane.status}」没有对应的流程状态`);
     } else {
       stateKey = push!.status === '已搁置' ? 'shelved' : 'to_evaluate';
     }
@@ -313,7 +314,7 @@ export function buildRequirements(ctx: PlanContext): void {
     // 流转历史
     const logs = plane ? data.plane.activityLog.filter((a) => a.requirement_id === plane.id && a.action === 'status_change').sort(byCreated) : [];
     const mapState = (label: string | null) => {
-      const k = PLANE_STATUS_TO_STATE[label ?? ''];
+      const k = planeStatusToState(label);
       if (!k) ctx.problem(`123plane 状态「${label}」没有对应的流程状态`);
       return k ?? 'collect';
     };
@@ -534,5 +535,8 @@ export function buildRequirements(ctx: PlanContext): void {
       status: row.status ?? 'planning',
       requirements: rows.requirements.filter((r) => r.iterationId === itId).length,
     });
+  }
+  if (resolver.ignoredIterationRefs) {
+    report.skipped.push({ what: '迭代对照表中忽略的迭代引用', count: resolver.ignoredIterationRefs, reason: '对照表 ignore 列表（测试或无效的迭代编号）' });
   }
 }

@@ -218,4 +218,28 @@ describe('导入计划：需求（修复回归）', () => {
     );
     expect(p.report.skipped).toEqual(expect.arrayContaining([{ what: 'push 评审异议（review_objections）', count: 2, reason: '无数据/不迁移' }]));
   });
+
+  it('123plane 历史状态「已暂停」按别名映射为 shelved，不产生问题', () => {
+    const data = makeLegacyData();
+    data.plane.activityLog.push({ id: 'a4', requirement_id: 'X001', user_email: 'zhangsan@example.com', action: 'status_change', old_value: '开发中', new_value: '已暂停', details: '{}', created_at: '2026-03-07T00:00:00Z' });
+    const p = buildImportPlan(data, reviewedMapping(), OPTS);
+    expect(p.report.problems).toEqual([]);
+    const req1 = p.rows.requirements.find((r) => r.legacyKey === 'X001')!;
+    const history = p.rows.stateTransitions.filter((s) => s.requirementId === req1.id).map((s) => [s.fromState, s.toState]);
+    expect(history).toContainEqual(['developing', 'shelved']);
+  });
+
+  it('迭代对照表 ignore 列表：忽略的引用不计入未匹配，计入 skipped', () => {
+    const data = makeLegacyData();
+    data.plane.requirements[2]!.iteration_id = 'VTEST';
+    const mapping = reviewedMapping();
+    mapping.iterations.ignore = ['plane:VTEST'];
+    const p = buildImportPlan(data, mapping, OPTS);
+    expect(p.report.problems).toEqual([]);
+    expect(p.report.skipped).toEqual(
+      expect.arrayContaining([{ what: '迭代对照表中忽略的迭代引用', count: 1, reason: '对照表 ignore 列表（测试或无效的迭代编号）' }]),
+    );
+    const req3 = p.rows.requirements.find((r) => r.legacyKey === 'X003')!;
+    expect(req3.iterationId).toBeNull();
+  });
 });

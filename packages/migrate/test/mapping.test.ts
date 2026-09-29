@@ -62,6 +62,17 @@ describe('建议对照表', () => {
   });
 });
 
+describe('迭代 ignore 列表', () => {
+  it('ignore 列表中的引用返回 null，不计入 unmapped，计入 ignoredIterationRefs', () => {
+    const m = suggestMapping(makeLegacyData(), null);
+    m.iterations.ignore = ['plane:VTEST'];
+    const r = new Resolver(m);
+    expect(r.iteration('plane', 'VTEST')).toBeNull();
+    expect([...r.unmapped.iterations]).not.toContain('plane:VTEST');
+    expect(r.ignoredIterationRefs).toBe(1);
+  });
+});
+
 describe('对照表文件', () => {
   it('写入后读回；已有条目在重新生成时保留用户的修改', () => {
     const dir = mkdtempSync(path.join(tmpdir(), 'flower-mapping-'));
@@ -74,5 +85,14 @@ describe('对照表文件', () => {
     expect(again.people.people.find((p) => p.aliases.includes('王五'))?.displayName).toBe('王五（后端）');
     expect(again.domains.nodes.map((n) => n.name)).toEqual(['会员与支付', '跨盘迁移']);
     expect(new Resolver(again).domain('会员')).toBe('会员与支付');
+  });
+
+  it('已有的 ignore 列表在重新生成时保留', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'flower-mapping-'));
+    const m = suggestMapping(makeLegacyData(), null);
+    m.iterations.ignore = ['plane:VTEST'];
+    writeMapping(dir, m);
+    const again = suggestMapping(makeLegacyData(), readMapping(dir));
+    expect(again.iterations.ignore).toEqual(['plane:VTEST']);
   });
 });

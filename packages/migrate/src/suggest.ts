@@ -207,7 +207,7 @@ function suggestIterations(data: LegacyData, existing: Mapping['iterations'] | n
     });
     if (overlaps) e.type = 'special';
   }
-  return { iterations: [...entries, ...fresh] };
+  return { iterations: [...entries, ...fresh], ...(existing?.ignore ? { ignore: existing.ignore } : {}) };
 }
 
 export function suggestMapping(data: LegacyData, existing: Mapping | null): Mapping {

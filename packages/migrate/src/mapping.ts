@@ -17,7 +17,7 @@ export type Mapping = {
   people: { people: PersonEntry[]; signoffRoles: Record<string, string> };
   platforms: { options: Array<{ key: string; label: string }>; aliases: Record<string, string[]> };
   domains: { nodes: Array<{ name: string; description: string | null; aliases: string[] }> };
-  iterations: { iterations: IterationEntry[] };
+  iterations: { iterations: IterationEntry[]; ignore?: string[] };
 };
 
 export const MAPPING_FILES = { people: 'people.json', platforms: 'platforms.json', domains: 'domains.json', iterations: 'iterations.json' } as const;
@@ -41,6 +41,9 @@ export class Resolver {
   private readonly personByKey = new Map<string, PersonEntry>();
   private readonly domainByAlias = new Map<string, string>();
   private readonly iterationBySource = new Map<string, IterationEntry>();
+  private readonly ignoredIterations: Set<string>;
+  /** 命中 `iterations.ignore` 列表而被跳过的迭代引用次数（不计入 unmapped）。 */
+  ignoredIterationRefs = 0;
 
   constructor(readonly mapping: Mapping) {
     for (const p of mapping.people.people) {
@@ -52,6 +55,7 @@ export class Resolver {
       for (const id of it.planeIds) this.iterationBySource.set(`plane:${id}`, it);
       for (const id of it.pushIds) this.iterationBySource.set(`push:${id}`, it);
     }
+    this.ignoredIterations = new Set(mapping.iterations.ignore ?? []);
   }
 
   person(raw: string | null | undefined): PersonEntry | null {
@@ -100,8 +104,13 @@ export class Resolver {
   iteration(source: 'plane' | 'push', id: string | null | undefined): IterationEntry | null {
     const t = id?.trim();
     if (!t) return null;
-    const it = this.iterationBySource.get(`${source}:${t}`);
-    if (!it) this.unmapped.iterations.add(`${source}:${t}`);
+    const key = `${source}:${t}`;
+    if (this.ignoredIterations.has(key)) {
+      this.ignoredIterationRefs += 1;
+      return null;
+    }
+    const it = this.iterationBySource.get(key);
+    if (!it) this.unmapped.iterations.add(key);
     return it ?? null;
   }
 }

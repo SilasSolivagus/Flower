@@ -15,6 +15,13 @@ export const V1_STATES: WorkflowBody['states'] = [
 ];
 
 export const PLANE_STATUS_TO_STATE: Record<string, string> = Object.fromEntries(V1_STATES.map((s) => [s.label, s.key]));
+/** 123plane 历史上用过、但当前状态列表里已经没有对应标签的写法。 */
+export const PLANE_LEGACY_STATUS_ALIASES: Record<string, string> = { 已暂停: 'shelved' };
+
+export function planeStatusToState(label: string | null | undefined): string | undefined {
+  const l = label ?? '';
+  return PLANE_STATUS_TO_STATE[l] ?? PLANE_LEGACY_STATUS_ALIASES[l];
+}
 
 export const SIGNOFF_ROLES = ['UI', '线条负责人', '产品负责人', '饶总'] as const;
 export const BOSS_ROLE = '饶总';
