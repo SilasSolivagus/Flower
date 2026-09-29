@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { createProduct, login, OWNER, setupInstance } from './helpers';
+import { createProduct, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -50,6 +50,39 @@ test('迭代列表：新建常规迭代与专项，时间重叠时提示，编�
   await page.getByLabel('名称', { exact: true }).fill('迭代0701-改');
   await page.getByRole('button', { name: '保存' }).click();
   await expect(pan.getByRole('link', { name: '迭代0701-改' })).toBeVisible();
+});
+
+test('迭代列表：产品编辑者可以创建常规迭代，但看不到专项选项', async ({ page, request, browser }) => {
+  const productId = await createProduct(request);
+  const inv = await ok(request.post('/api/v1/orgs/acme/invitations', { data: { email: 'editor@example.com', orgRole: 'member' } }));
+  const { token } = (await inv.json()) as { token: string };
+
+  const ctx = await browser.newContext();
+  const editorPage = await ctx.newPage();
+  await editorPage.goto(`/invite/${token}`);
+  await editorPage.getByLabel('你的姓名').fill('编辑者');
+  await editorPage.getByLabel('设置密码').fill('password123');
+  await editorPage.getByRole('button', { name: '接受邀请' }).click();
+  await editorPage.waitForURL('**/acme');
+
+  const members = (await (await ok(request.get('/api/v1/orgs/acme/members'))).json()).members as Array<{ id: string; email: string | null }>;
+  const editorMemberId = members.find((m) => m.email === 'editor@example.com')!.id;
+  await ok(request.put(`/api/v1/orgs/acme/products/${productId}/roles/${editorMemberId}`, { data: { role: 'editor' } }));
+
+  await editorPage.goto('/acme/iterations');
+  await expect(editorPage.getByRole('button', { name: '新建迭代' })).toBeVisible();
+  await editorPage.getByRole('button', { name: '新建迭代' }).click();
+  await editorPage.getByRole('combobox', { name: '所属' }).click();
+  await expect(editorPage.getByRole('option', { name: '专项（跨产品）' })).toHaveCount(0);
+  await editorPage.getByRole('option', { name: '网盘（常规迭代）' }).click();
+  await editorPage.getByLabel('名称', { exact: true }).fill('编辑者迭代');
+  await editorPage.getByLabel('开始日期').fill('2026-08-01');
+  await editorPage.getByLabel('结束日期').fill('2026-08-14');
+  await editorPage.getByRole('button', { name: '创建' }).click();
+  await expect(editorPage.getByText('已创建迭代')).toBeVisible();
+  await expect(editorPage.getByRole('region', { name: '网盘' }).getByRole('link', { name: '编辑者迭代' })).toBeVisible();
+  await ctx.close();
+  await page.close();
 });
 
 test('迭代列表：加载失败显示重试', async ({ page }) => {

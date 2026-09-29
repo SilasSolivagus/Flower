@@ -24,8 +24,8 @@ export default function IterationsPage() {
   const q = useIterations(org);
   const [dialog, setDialog] = useState<{ open: boolean; iteration: Iteration | null }>({ open: false, iteration: null });
   const orgAdmin = !!orgQ.data && isOrgAdminRole(orgQ.data.me.orgRole);
-  const adminProducts = (products.data ?? []).filter((p) => p.myRole === 'admin');
-  const canCreate = orgAdmin || adminProducts.length > 0;
+  const manageableProducts = (products.data ?? []).filter((p) => p.myRole === 'admin' || p.myRole === 'editor');
+  const canCreate = orgAdmin || manageableProducts.length > 0;
 
   if (q.isError) {
     return (
@@ -47,7 +47,7 @@ export default function IterationsPage() {
       {!q.data ? (
         <Skeleton className="h-40" />
       ) : groups.length === 0 ? (
-        <EmptyState icon={CalendarRange} title="还没有迭代" description={canCreate ? '点击「新建迭代」创建第一个迭代。' : '产品管理员创建迭代后会显示在这里。'} />
+        <EmptyState icon={CalendarRange} title="还没有迭代" description={canCreate ? '点击「新建迭代」创建第一个迭代。' : '产品管理员或编辑创建迭代后会显示在这里。'} />
       ) : (
         groups.map((g) => (
           <section key={g.key} aria-label={g.title} className="flex flex-col gap-2">
@@ -97,7 +97,7 @@ export default function IterationsPage() {
         org={org}
         open={dialog.open}
         iteration={dialog.iteration}
-        products={adminProducts}
+        products={manageableProducts}
         allowSpecial={orgAdmin}
         onOpenChange={(open) => setDialog((d) => ({ ...d, open }))}
       />
