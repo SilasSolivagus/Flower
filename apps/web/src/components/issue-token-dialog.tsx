@@ -64,7 +64,7 @@ export function IssueTokenDialog({
         {token ? (
           <>
             <CopyField label="Token（只显示一次）" value={token} />
-            <p className="text-[13px] text-muted-foreground">关闭后无法再次查看。请立即保存到 Agent 的配置中。</p>
+            <p className="text-[13px] text-muted-foreground">关闭后无法再次查看。请立即保存好这个 Token。</p>
             <DialogFooter>
               <Button onClick={() => close(false)}>我已保存</Button>
             </DialogFooter>
