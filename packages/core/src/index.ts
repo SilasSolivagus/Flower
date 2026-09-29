@@ -30,3 +30,5 @@ export * from './requirements/workflow-runtime';
 export * from './requirements/context';
 export * from './requirements/requirements';
 export * from './requirements/lookups';
+export * from './requirements/detail';
+export * from './requirements/transitions';
