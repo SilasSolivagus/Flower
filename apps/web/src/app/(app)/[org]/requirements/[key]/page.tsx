@@ -14,6 +14,7 @@ import { CheckItems } from './check-items';
 import { Comments } from './comments';
 import { FieldsPanel } from './fields-panel';
 import { History } from './history';
+import { Releases } from './releases';
 import { SideLists } from './side-lists';
 import { StatusPanel } from './status-panel';
 
@@ -130,6 +131,7 @@ export default function RequirementPage() {
           <StatusPanel org={org} requirement={r} />
           <FieldsPanel org={org} requirement={r} />
           <SideLists org={org} requirement={r} />
+          <Releases org={org} requirement={r} />
         </div>
       </div>
     </>

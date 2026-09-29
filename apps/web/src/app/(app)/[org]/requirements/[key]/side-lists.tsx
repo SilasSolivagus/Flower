@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { formatDate } from '@/features/requirements/format';
 import { RELATION_LABEL, TASK_STATUS_LABEL } from '@/lib/labels';
 import type { RequirementDetail } from '@/lib/types';
 
@@ -45,16 +44,6 @@ export function SideLists({ org, requirement: r }: { org: string; requirement: R
               <span className="text-[12px] text-muted-foreground">
                 {[t.assignee?.displayName, TASK_STATUS_LABEL[t.status], t.planStart && `${t.planStart} 起`, t.planDays && `${t.planDays} 天`].filter(Boolean).join(' · ')}
               </span>
-            </li>
-          ))}
-        </Block>
-      )}
-      {r.releases.length > 0 && (
-        <Block title="发布版本">
-          {r.releases.map((x) => (
-            <li key={x.id}>
-              {x.platform?.label} <span className="font-mono">{x.versionName}</span>
-              <span className="text-muted-foreground"> · {x.status === 'released' ? `已发布 ${x.releasedAt ? formatDate(x.releasedAt) : ''}` : '计划中'}</span>
             </li>
           ))}
         </Block>

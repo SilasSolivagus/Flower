@@ -1,6 +1,11 @@
-import type { Iteration, IterationMilestone } from '@/lib/types';
+import type { Iteration, IterationMilestone, Product } from '@/lib/types';
 
 export type IterationGroup = { key: string; title: string; iterations: Iteration[] };
+
+/** 迭代内可管理需求/发布版本的产品：本人非只读，且（专项迭代不限，常规迭代仅本产品）。 */
+export function editableIterationProducts(products: Product[], iteration: { product: { id: string } | null }): Product[] {
+  return products.filter((p) => p.myRole !== 'viewer' && (!iteration.product || p.id === iteration.product.id));
+}
 
 /** 按产品分组（产品按编号前缀排序），专项放最后；组内保持接口顺序（开始日期倒序）。 */
 export function groupIterations(list: Iteration[]): IterationGroup[] {

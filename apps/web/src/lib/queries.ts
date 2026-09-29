@@ -20,6 +20,7 @@ import type {
   OrgMe,
   Product,
   ProductRole,
+  Release,
   RequirementComment,
   RequirementDetail,
   RequirementList,
@@ -54,6 +55,7 @@ export const qk = {
   iterationList: (o: string) => ['org', o, 'iterations', 'list'] as const,
   iteration: (o: string, id: string) => ['org', o, 'iterations', 'detail', id] as const,
   iterationScope: (o: string, id: string) => ['org', o, 'iterations', 'scope', id] as const,
+  releases: (o: string, query: string) => ['org', o, 'releases', query] as const,
 };
 
 export const useSetupStatus = () => useQuery({ queryKey: qk.setup, queryFn: () => api<InstanceStatus>('/setup/status') });
@@ -101,11 +103,12 @@ export const useWorkflow = (o: string, id: string) =>
     queryKey: qk.workflow(o, id),
     queryFn: () => api<{ definition: WorkflowDefinition; versions: WorkflowVersion[] }>(`/orgs/${o}/workflows/${id}`),
   });
-export const useFields = (o: string, productId?: string) =>
+export const useFields = (o: string, productId?: string, enabled = true) =>
   useQuery({
     queryKey: qk.fields(o, productId),
     queryFn: () => api<{ fields: Field[] }>(`/orgs/${o}/fields${productId ? `?product=${productId}` : ''}`),
     select: (d) => d.fields,
+    enabled,
   });
 export const useLevelNames = (o: string, productId?: string) =>
   useQuery({
@@ -128,6 +131,12 @@ export const useIteration = (o: string, id: string) =>
   useQuery({ queryKey: qk.iteration(o, id), queryFn: () => api<{ iteration: IterationDetail }>(`/orgs/${o}/iterations/${id}`), select: (d) => d.iteration });
 export const useIterationScope = (o: string, id: string) =>
   useQuery({ queryKey: qk.iterationScope(o, id), queryFn: () => api<{ scope: IterationScope }>(`/orgs/${o}/iterations/${id}/scope`), select: (d) => d.scope });
+
+/** 发布版本查询的公共前缀。 */
+export const releaseKeys = (o: string) => ['org', o, 'releases'] as const;
+
+export const useReleases = (o: string, query: string, enabled = true) =>
+  useQuery({ queryKey: qk.releases(o, query), queryFn: () => api<{ releases: Release[] }>(`/orgs/${o}/releases?${query}`), select: (d) => d.releases, enabled });
 
 export const useRequirements = (o: string, productId: string | undefined, query: string) =>
   useQuery({

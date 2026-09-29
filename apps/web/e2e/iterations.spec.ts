@@ -212,3 +212,47 @@ test('迭代详情：不存在时显示无权访问；加载失败（非 404）�
   await page.getByRole('button', { name: '重试' }).click();
   await expect(page.getByRole('heading', { name: '迭代0901' })).toBeVisible();
 });
+
+test('发布版本：在迭代详情新建、改计划日期（基线不变）、标记发布；在需求详情关联与解除', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const fields = (await (await ok(request.get('/api/v1/orgs/acme/fields'))).json()).fields;
+  const platform = fields.find((f: { key: string }) => f.key === 'platform');
+  await ok(request.post(`/api/v1/orgs/acme/fields/${platform.id}/options`, { data: { label: 'PC客户端' } }));
+  await ok(request.post(`/api/v1/orgs/acme/products/${productId}/requirements`, { data: { title: '分享链接加密码' } }));
+  const iteration = (
+    await (await ok(request.post('/api/v1/orgs/acme/iterations', { data: { type: 'regular', productId, name: '迭代0801', startDate: '2026-08-01', endDate: '2026-08-14' } }))).json()
+  ).iteration;
+
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/iterations/${iteration.id}`);
+  await page.getByRole('tab', { name: '发布版本' }).click();
+  await page.getByRole('button', { name: '新建发布版本' }).click();
+  await page.getByLabel('版本号').fill('3.2.0');
+  await page.getByRole('combobox', { name: '平台' }).click();
+  await page.getByRole('option', { name: 'PC客户端' }).click();
+  await page.getByLabel('计划发布日期').fill('2026-08-14');
+  await page.getByRole('button', { name: '创建' }).click();
+  await expect(page.getByText('已创建发布版本')).toBeVisible();
+  const row = page.getByRole('row').filter({ hasText: '3.2.0' });
+  await expect(row).toContainText('计划中');
+
+  await row.getByRole('button', { name: '编辑 3.2.0' }).click();
+  await page.getByLabel('计划发布日期').fill('2026-08-20');
+  await page.getByRole('button', { name: '保存' }).click();
+  await expect(row).toContainText('2026-08-20');
+  await expect(row).toContainText('2026-08-14');
+
+  await row.getByRole('button', { name: '标记发布 3.2.0' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: '标记发布' }).click();
+  await expect(row).toContainText('已发布');
+
+  await page.goto('/acme/requirements/PAN-1');
+  const releases = page.getByRole('region', { name: '发布版本' });
+  await expect(releases).toContainText('未关联');
+  await releases.getByRole('combobox', { name: '关联发布版本' }).click();
+  await page.getByRole('option', { name: /3\.2\.0/ }).click();
+  await expect(page.getByText('已关联版本')).toBeVisible();
+  await expect(releases).toContainText('3.2.0');
+  await releases.getByRole('button', { name: '解除 3.2.0' }).click();
+  await expect(releases).toContainText('未关联');
+});

@@ -14,6 +14,7 @@ import { ApiError, api } from '@/lib/api';
 import { ITERATION_STATUS_LABEL } from '@/lib/labels';
 import { iterationKeys, qk, useApiMutation, useIteration } from '@/lib/queries';
 import { cn } from '@/lib/utils';
+import { ReleasesTab } from './releases-tab';
 import { RequirementsTab } from './requirements-tab';
 import { ScopeTab } from './scope-tab';
 
@@ -104,6 +105,7 @@ export default function IterationPage() {
         <TabsList>
           <TabsTrigger value="requirements">需求（{it.requirementCount}）</TabsTrigger>
           {started && <TabsTrigger value="scope">范围对比</TabsTrigger>}
+          <TabsTrigger value="releases">发布版本</TabsTrigger>
         </TabsList>
         <TabsContent value="requirements">
           <RequirementsTab org={org} iteration={it} />
@@ -113,6 +115,9 @@ export default function IterationPage() {
             <ScopeTab org={org} iterationId={it.id} />
           </TabsContent>
         )}
+        <TabsContent value="releases">
+          <ReleasesTab org={org} iteration={it} />
+        </TabsContent>
       </Tabs>
     </>
   );

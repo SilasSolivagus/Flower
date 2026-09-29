@@ -8,13 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { editableIterationProducts } from '@/features/iterations/model';
 import { api, unmetFrom } from '@/lib/api';
 import { iterationKeys, requirementKeys, useApiMutation, useProducts, useRequirements } from '@/lib/queries';
 import type { IterationDetail, RequirementListItem } from '@/lib/types';
 
 export function RequirementsTab({ org, iteration: it }: { org: string; iteration: IterationDetail }) {
   const products = useProducts(org);
-  const editable = (products.data ?? []).filter((p) => p.myRole !== 'viewer' && (!it.product || p.id === it.product.id));
+  const editable = editableIterationProducts(products.data ?? [], it);
   const joinable = it.status === 'planning' || it.status === 'active';
   const [productId, setProductId] = useState('');
   const picked = editable.find((p) => p.id === productId) ?? editable[0];

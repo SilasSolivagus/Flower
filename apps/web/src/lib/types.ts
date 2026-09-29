@@ -19,6 +19,7 @@ import type {
   OrgView,
   ProductRole as CoreProductRole,
   ProductView,
+  ReleaseView,
   RequirementDetail as CoreRequirementDetail,
   RequirementList as CoreRequirementList,
   RequirementListItem as CoreRequirementListItem,
@@ -70,3 +71,4 @@ export type Iteration = Jsonify<IterationView>;
 export type IterationMilestone = CoreIterationMilestone;
 export type IterationDetail = Jsonify<CoreIterationDetail>;
 export type IterationScope = Jsonify<CoreIterationScope>;
+export type Release = Jsonify<ReleaseView>;
