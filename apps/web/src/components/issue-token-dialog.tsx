@@ -56,7 +56,15 @@ export function IssueTokenDialog({
   }
   return (
     <Dialog open={open} onOpenChange={close}>
-      <DialogContent className="max-w-lg">
+      <DialogContent
+        className="max-w-lg"
+        onEscapeKeyDown={(e) => {
+          if (token) e.preventDefault();
+        }}
+        onInteractOutside={(e) => {
+          if (token) e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>签发 Token</DialogTitle>
           <DialogDescription>实际权限 = 持有者当前的权限 ∩ Token 的范围。持有者权限被下调时，Token 随之收窄。</DialogDescription>
