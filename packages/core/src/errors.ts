@@ -4,7 +4,8 @@ export type ErrorCode =
   | 'forbidden'
   | 'not_found'
   | 'conflict'
-  | 'already_initialized';
+  | 'already_initialized'
+  | 'rate_limited';
 
 export class AppError extends Error {
   constructor(

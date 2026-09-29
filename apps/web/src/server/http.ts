@@ -11,6 +11,7 @@ const STATUS = {
   not_found: 404,
   conflict: 409,
   already_initialized: 409,
+  rate_limited: 429,
 } as const;
 
 export function errorHandler(err: Error, c: Context) {

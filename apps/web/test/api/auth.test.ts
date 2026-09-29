@@ -74,4 +74,13 @@ describe('初始化与登录', () => {
     expect(r.status).toBe(404);
     expect(r.body.error.code).toBe('not_found');
   });
+
+  it('登录被限流时返回 429', async () => {
+    for (let i = 0; i < 5; i++) {
+      await call(app, 'POST', '/auth/login', { body: { email: 'owner@example.com', password: 'bad-password' } });
+    }
+    const r = await call(app, 'POST', '/auth/login', { body: { email: 'owner@example.com', password: 'password456' } });
+    expect(r.status).toBe(429);
+    expect(r.body.error.code).toBe('rate_limited');
+  });
 });

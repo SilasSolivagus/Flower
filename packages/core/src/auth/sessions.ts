@@ -1,10 +1,11 @@
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, lt } from 'drizzle-orm';
 import { randomToken, sha256 } from '../crypto';
 import { accounts, sessions } from '../db/schema';
 import type { Queryable } from '../db/tx';
 import { AppError } from '../errors';
 import { type AccountView, normalizeEmail, toAccountView } from './accounts';
 import { hashPassword, verifyPassword } from './password';
+import { assertNotThrottled, clearLoginFailures, recordLoginFailure, throttleKeys } from './throttle';
 
 export const SESSION_COOKIE = 'flower_session';
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -50,17 +51,27 @@ export async function revokeSession(q: Queryable, token: string): Promise<void> 
   await q.delete(sessions).where(eq(sessions.tokenHash, sha256(token)));
 }
 
+export async function purgeExpiredSessions(q: Queryable, now: Date = new Date()): Promise<number> {
+  const rows = await q.delete(sessions).where(lt(sessions.expiresAt, now)).returning({ id: sessions.id });
+  return rows.length;
+}
+
 export async function login(
   q: Queryable,
   input: { email: string; password: string },
   meta: SessionMeta = {},
 ): Promise<{ token: string; expiresAt: Date; account: AccountView }> {
+  const keys = throttleKeys(input.email, meta.ip);
+  await assertNotThrottled(q, keys);
   const [row] = await q.select().from(accounts).where(eq(accounts.email, normalizeEmail(input.email)));
   const passwordHash = row?.passwordHash ?? (await getDummyPasswordHash());
   const passwordValid = await verifyPassword(passwordHash, input.password);
   if (!row || !passwordValid) {
+    await recordLoginFailure(q, keys);
     throw new AppError('unauthenticated', '邮箱或密码错误');
   }
+  await clearLoginFailures(q, keys[0]!.key);
+  await purgeExpiredSessions(q);
   await q.update(accounts).set({ lastLoginAt: new Date() }).where(eq(accounts.id, row.id));
   const session = await createSession(q, row.id, meta);
   return { ...session, account: toAccountView(row) };
