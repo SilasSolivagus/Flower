@@ -1,7 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { addFieldOption, listFields } from '../src/definitions/fields';
-import { domainEvents, stateTransitions, structureNodes } from '../src/db/schema';
+import { addFieldOption, forkFieldForProduct, listFields } from '../src/definitions/fields';
+import { domainEvents, fieldValues, stateTransitions, structureNodes } from '../src/db/schema';
 import { withOrg } from '../src/db/tx';
 import type { Actor } from '../src/domain-types';
 import { AppError } from '../src/errors';
@@ -124,6 +124,35 @@ describe('修改需求', () => {
     await expect(setRequirementField(t.db, owner, r!.id, 'priority', [p0, p1])).rejects.toThrow(AppError);
     await expect(setRequirementField(t.db, owner, r!.id, 'nope', [])).rejects.toMatchObject({ code: 'not_found' });
     await expect(setRequirementField(t.db, viewer, r!.id, 'platform', [web])).rejects.toMatchObject({ code: 'forbidden' });
+  });
+});
+
+describe('字段按产品覆盖后', () => {
+  it('已有需求的字段值迁到产品级选项：单选只剩一个值、可清空、按新选项能筛到旧需求', async () => {
+    const pid = (await createProduct(t.db, owner, { name: '文档', key: 'DOC' })).id;
+    const old = await createRequirement(t.db, owner, pid, { title: '覆盖前的需求', fields: { priority: [p1] } });
+    const orgFields = await listFields(t.db, owner);
+    const forkedPriority = await forkFieldForProduct(t.db, owner, pid, orgFields.find((f) => f.key === 'priority')!.id);
+    const newP0 = forkedPriority.options.find((o) => o.key === 'p0')!.id;
+    const newP1 = forkedPriority.options.find((o) => o.key === 'p1')!.id;
+    const [e] = await withOrg(t.db, owner.orgId, (tx) =>
+      tx.select().from(domainEvents).where(and(eq(domainEvents.subjectId, forkedPriority.id), eq(domainEvents.type, 'field.forked'))),
+    );
+    expect(e!.payload).toMatchObject({ movedValues: 1 });
+
+    expect((await listRequirements(t.db, owner, pid, { priorityOptionIds: [newP1] })).items.map((r) => r.title)).toEqual(['覆盖前的需求']);
+
+    const priorityValues = () =>
+      withOrg(t.db, owner.orgId, (tx) =>
+        tx
+          .select({ fieldId: fieldValues.fieldId, optionId: fieldValues.optionId })
+          .from(fieldValues)
+          .where(and(eq(fieldValues.entityId, old.id), inArray(fieldValues.optionId, [p0, p1, newP0, newP1]))),
+      );
+    await setRequirementField(t.db, owner, old.id, 'priority', [newP0]);
+    expect(await priorityValues()).toEqual([{ fieldId: forkedPriority.id, optionId: newP0 }]);
+    await setRequirementField(t.db, owner, old.id, 'priority', []);
+    expect(await priorityValues()).toEqual([]);
   });
 });
 
