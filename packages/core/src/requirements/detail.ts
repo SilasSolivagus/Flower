@@ -120,7 +120,11 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
     const signoffs = results.length
       ? await tx.select().from(checkItemSignoffs).where(inArray(checkItemSignoffs.resultId, results.map((r) => r.id))).orderBy(asc(checkItemSignoffs.at), asc(checkItemSignoffs.id))
       : [];
-    const history = await tx.select().from(stateTransitions).where(eq(stateTransitions.requirementId, row.id)).orderBy(asc(stateTransitions.at));
+    const history = await tx
+      .select()
+      .from(stateTransitions)
+      .where(eq(stateTransitions.requirementId, row.id))
+      .orderBy(asc(stateTransitions.at), asc(stateTransitions.id));
     const assignments = await tx.select().from(requirementAssignments).where(eq(requirementAssignments.requirementId, row.id));
     const blockerRows = await tx.select().from(blockers).where(eq(blockers.requirementId, row.id)).orderBy(asc(blockers.createdAt));
     const relationRows = await tx
@@ -162,8 +166,20 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
       const o = id ? optionRows.find((x) => x.id === id) : undefined;
       return o ? { id: o.id, key: o.key, label: o.label, color: o.color } : null;
     };
-    const otherIds = relationRows.map((r) => (r.fromId === row.id ? r.toId : r.fromId));
-    const others = otherIds.length ? await tx.select().from(requirements).where(inArray(requirements.id, otherIds)) : [];
+    const otherIds = [...new Set(relationRows.map((r) => (r.fromId === row.id ? r.toId : r.fromId)))];
+    const otherRows = otherIds.length
+      ? await tx
+          .select({ r: requirements, productKey: products.key })
+          .from(requirements)
+          .innerJoin(products, eq(products.id, requirements.productId))
+          .where(and(inArray(requirements.id, otherIds), isNull(requirements.deletedAt), isNull(products.deletedAt)))
+      : [];
+    const otherProductIds = [...new Set(otherRows.map((x) => x.r.productId).filter((id) => id !== row.productId))];
+    const otherRoles = new Map<string, ProductRole | null>();
+    for (const pid of otherProductIds) otherRoles.set(pid, await productRoleOf(tx, actor, pid));
+    const others = otherRows
+      .filter((x) => x.r.productId === row.productId || otherRoles.get(x.r.productId))
+      .map((x) => ({ id: x.r.id, number: x.r.number, title: x.r.title, productKey: x.productKey }));
 
     const identity = await signerIdentity(tx, actor, role);
     const states = checkStatesFor(body, results.map((r) => ({ itemKey: r.itemKey, state: r.state })));
@@ -191,8 +207,11 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
           signoffs: signoffs
             .filter((s) => s.resultId === result?.id)
             .map((s) => ({ id: s.id, signer: ref(s.signerMemberId)!, actedBy: ref(s.actedByMemberId), ruleIndex: s.signerRuleIndex, decision: s.decision, note: s.note, at: s.at })),
-          canSign: c.type === 'signoff' ? matchingSignerRules(c, identity) : [],
-          canSignOnBehalf: c.type === 'signoff' && role === 'admin' ? signers.filter((s) => s.by === 'member' && s.ref !== actor.memberId).map((s) => s.index) : [],
+          canSign: c.type === 'signoff' && actor.tokenScope?.access !== 'read' ? matchingSignerRules(c, identity) : [],
+          canSignOnBehalf:
+            c.type === 'signoff' && role === 'admin' && actor.tokenScope?.access !== 'read'
+              ? signers.filter((s) => s.by === 'member' && s.ref !== actor.memberId).map((s) => s.index)
+              : [],
         };
       });
 
@@ -223,11 +242,14 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
         platform: optionRef(a.platformOptionId),
       })),
       blockers: blockerRows.map((b) => ({ id: b.id, description: b.description, status: b.status, owner: ref(b.ownerMemberId), createdAt: b.createdAt, resolvedAt: b.resolvedAt })),
-      relations: relationRows.map((r) => {
-        const otherId = r.fromId === row.id ? r.toId : r.fromId;
-        const o = others.find((x) => x.id === otherId);
-        return { type: r.type, direction: r.fromId === row.id ? ('out' as const) : ('in' as const), other: { id: otherId, displayKey: o ? displayKey(product!.key, o.number) : '', title: o?.title ?? '' } };
-      }),
+      relations: relationRows
+        .map((r) => {
+          const otherId = r.fromId === row.id ? r.toId : r.fromId;
+          const o = others.find((x) => x.id === otherId);
+          if (!o) return null;
+          return { type: r.type, direction: r.fromId === row.id ? ('out' as const) : ('in' as const), other: { id: otherId, displayKey: displayKey(o.productKey, o.number), title: o.title } };
+        })
+        .filter((x): x is NonNullable<typeof x> => x !== null),
       releases: releaseRows.map(({ r }) => ({ id: r.id, versionName: r.versionName, platform: optionRef(r.platformOptionId), status: r.status, releasedAt: r.releasedAt })),
       tasks: taskRows.map((x) => ({ id: x.id, title: x.title, assignee: ref(x.assigneeMemberId), status: x.status, planStart: x.planStart, planDays: x.planDays })),
       aliases: aliasRows.map((a) => a.alias).sort(),

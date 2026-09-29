@@ -7,7 +7,7 @@ import { CHECK_STATES } from '../definitions/workflow-schema';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
-import { effectiveFields, loadRequirement, productWorkflowBody } from './context';
+import { effectiveFields, loadRequirementForUpdate, productWorkflowBody } from './context';
 import type { CheckState } from './labels';
 import { checkStatesFor, findTransitionRule, matchingSignerRules, signoffResultState, unmetConditions } from './workflow-runtime';
 
@@ -28,7 +28,7 @@ export async function transitionRequirement(
   input: { to: string; force?: boolean; reason?: string },
 ): Promise<{ stateKey: string }> {
   return withOrg(db, actor.orgId, async (tx) => {
-    const cur = await loadRequirement(tx, requirementId);
+    const cur = await loadRequirementForUpdate(tx, requirementId);
     const role = await requireProductRole(tx, actor, cur.productId, 'editor');
     const body = await productWorkflowBody(tx, cur.productId);
     const target = body.states.find((s) => s.key === input.to);
@@ -99,7 +99,7 @@ export async function setCheckItemState(
 ): Promise<{ state: CheckState }> {
   if (!(CHECK_STATES as readonly string[]).includes(input.state)) throw new AppError('invalid', '检查状态无效');
   return withOrg(db, actor.orgId, async (tx) => {
-    const cur = await loadRequirement(tx, requirementId);
+    const cur = await loadRequirementForUpdate(tx, requirementId);
     await requireProductRole(tx, actor, cur.productId, 'editor');
     const body = await productWorkflowBody(tx, cur.productId);
     const item = body.checkItems.find((c) => c.key === itemKey && c.scope === 'requirement');
@@ -130,8 +130,9 @@ export async function signCheckItem(
   itemKey: string,
   input: { decision: 'passed' | 'rejected'; note?: string | null; ruleIndex?: number; onBehalf?: boolean },
 ): Promise<{ state: CheckState }> {
+  if (actor.tokenScope?.access === 'read') throw new AppError('forbidden', '只读 Token 不能签字');
   return withOrg(db, actor.orgId, async (tx) => {
-    const cur = await loadRequirement(tx, requirementId);
+    const cur = await loadRequirementForUpdate(tx, requirementId);
     const role = await requireProductRole(tx, actor, cur.productId, 'viewer');
     const body = await productWorkflowBody(tx, cur.productId);
     const item = body.checkItems.find((c) => c.key === itemKey && c.scope === 'requirement');
@@ -144,6 +145,7 @@ export async function signCheckItem(
       if (role !== 'admin') throw new AppError('forbidden', '只有产品管理员可以代签');
       const rule = input.ruleIndex === undefined ? undefined : item.signers?.[input.ruleIndex];
       if (!rule || rule.by !== 'member') throw new AppError('invalid', '只能代签"指定成员"类的签字规则');
+      if (rule.ref === actor.memberId) throw new AppError('invalid', '不能代自己签字');
       ruleIndex = input.ruleIndex!;
       signer = rule.ref;
       actedBy = actor.memberId;

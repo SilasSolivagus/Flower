@@ -56,6 +56,17 @@ export async function loadRequirement(tx: Tx, id: string): Promise<typeof requir
   return r;
 }
 
+/** 加行锁读取需求：用于状态流转、检查项与签字，避免并发写入基于同一份旧状态重复通过校验。 */
+export async function loadRequirementForUpdate(tx: Tx, id: string): Promise<typeof requirements.$inferSelect> {
+  const [r] = await tx
+    .select()
+    .from(requirements)
+    .where(and(eq(requirements.id, id), isNull(requirements.deletedAt)))
+    .for('update');
+  if (!r) throw new AppError('not_found', '需求不存在');
+  return r;
+}
+
 export async function memberNames(tx: Tx, ids: Array<string | null>): Promise<Map<string, string>> {
   const unique = [...new Set(ids.filter((x): x is string => !!x))];
   if (unique.length === 0) return new Map();
