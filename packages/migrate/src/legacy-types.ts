@@ -47,7 +47,7 @@ export type PushData = {
 };
 export type PrdData = {
   domains: Array<{ name: string; type: S; group: S; status: string; display_order: number }>;
-  users: Array<{ email: string; name: string }>;
+  users: Array<{ email: string; name: S }>;
   counts: { pages: number; pageVersions: number; attachments: number; comments: number };
 };
 export type LegacyData = { plane: PlaneData; push: PushData; prd: PrdData };

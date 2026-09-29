@@ -63,7 +63,7 @@ function suggestPeople(data: LegacyData, existing: Mapping['people'] | null): Ma
   };
   people.forEach(index);
   const nameToEmail = new Map<string, string>();
-  for (const u of [...data.plane.users, ...data.prd.users]) nameToEmail.set(aliasKey(u.name), u.email.trim().toLowerCase());
+  for (const u of [...data.plane.users, ...data.prd.users]) if (u.name) nameToEmail.set(aliasKey(u.name), u.email.trim().toLowerCase());
   const planeUser = new Map(data.plane.users.map((u) => [u.email.trim().toLowerCase(), u]));
   const usedKeys = new Set(people.map((p) => p.key));
   const uniqueKey = (base: string) => {
