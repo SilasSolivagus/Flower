@@ -1,4 +1,5 @@
 import { and, eq, ne } from 'drizzle-orm';
+import type { Db } from '../db/client';
 import { type AccountPreferences, accounts, sessions } from '../db/schema';
 import type { Queryable } from '../db/tx';
 import { sha256 } from '../crypto';
@@ -77,19 +78,21 @@ export async function updateProfile(
 }
 
 export async function changePassword(
-  q: Queryable,
+  db: Db,
   accountId: string,
   input: { currentPassword: string; newPassword: string; keepSessionToken?: string },
 ): Promise<void> {
-  const [row] = await q.select().from(accounts).where(eq(accounts.id, accountId));
-  if (!row) throw new AppError('not_found', '账号不存在');
-  if (!(await verifyPassword(row.passwordHash, input.currentPassword))) {
-    throw new AppError('invalid', '当前密码不正确');
-  }
-  assertPasswordPolicy(input.newPassword);
-  await q.update(accounts).set({ passwordHash: await hashPassword(input.newPassword) }).where(eq(accounts.id, accountId));
-  const keepHash = input.keepSessionToken ? sha256(input.keepSessionToken) : null;
-  await q.delete(sessions).where(
-    keepHash ? and(eq(sessions.accountId, accountId), ne(sessions.tokenHash, keepHash)) : eq(sessions.accountId, accountId),
-  );
+  await db.transaction(async (tx) => {
+    const [row] = await tx.select().from(accounts).where(eq(accounts.id, accountId));
+    if (!row) throw new AppError('not_found', '账号不存在');
+    if (!(await verifyPassword(row.passwordHash, input.currentPassword))) {
+      throw new AppError('invalid', '当前密码不正确');
+    }
+    assertPasswordPolicy(input.newPassword);
+    await tx.update(accounts).set({ passwordHash: await hashPassword(input.newPassword) }).where(eq(accounts.id, accountId));
+    const keepHash = input.keepSessionToken ? sha256(input.keepSessionToken) : null;
+    await tx
+      .delete(sessions)
+      .where(keepHash ? and(eq(sessions.accountId, accountId), ne(sessions.tokenHash, keepHash)) : eq(sessions.accountId, accountId));
+  });
 }

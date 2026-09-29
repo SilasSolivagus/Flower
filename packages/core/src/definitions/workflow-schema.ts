@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+z.config(z.locales.zhCN());
+
 export const STATE_CATEGORIES = ['backlog', 'unstarted', 'started', 'completed', 'canceled'] as const;
 export const CHECK_STATES = ['not_started', 'in_progress', 'passed', 'rejected', 'not_needed'] as const;
 
@@ -8,7 +10,7 @@ const color = z.string().regex(/^#[0-9a-fA-F]{6}$/, '颜色格式应为 #RRGGBB'
 const label = z.string().trim().min(1, '名称不能为空').max(20, '名称不超过 20 个字符');
 
 export const conditionSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('check_item'), item: key, in: z.array(z.enum(CHECK_STATES)).min(1) }),
+  z.object({ type: z.literal('check_item'), item: key, in: z.array(z.enum(CHECK_STATES)).min(1, '至少选择一个检查状态') }),
   z.object({ type: z.literal('field_set'), field: key }),
   z.object({ type: z.literal('has_iteration') }),
   z.object({ type: z.literal('has_change_document') }),
@@ -20,14 +22,14 @@ export const stateSchema = z.object({
   label,
   color,
   order: z.number().int(),
-  group: z.string().trim().max(20).default(''),
+  group: z.string().trim().max(20, '分组名不超过 20 个字符').default(''),
   category: z.enum(STATE_CATEGORIES),
 });
 
 export const transitionSchema = z.object({
   from: z.union([key, z.literal('*')]),
   to: key,
-  label: z.string().max(20).optional(),
+  label: z.string().max(20, '名称不超过 20 个字符').optional(),
   conditions: z.array(conditionSchema).default([]),
 });
 
@@ -36,7 +38,9 @@ export const checkItemSchema = z.object({
   label,
   scope: z.enum(['requirement', 'document']),
   type: z.enum(['single', 'signoff']),
-  signers: z.array(z.object({ by: z.enum(['function_tag', 'member', 'product_role']), ref: z.string().min(1) })).optional(),
+  signers: z
+    .array(z.object({ by: z.enum(['function_tag', 'member', 'product_role']), ref: z.string().min(1, '签字人不能为空') }))
+    .optional(),
   signoffRule: z.enum(['all', 'any']).optional(),
   auto: z.literal('prd_status').optional(),
   defaultState: z.enum(CHECK_STATES).default('not_started'),

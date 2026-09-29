@@ -64,12 +64,13 @@ export async function createProduct(
     let workflowVersionId: string | null;
     if (input.workflowVersionId) {
       const [row] = await tx
-        .select({ definitionProductId: workflowDefinitions.productId })
+        .select({ definitionProductId: workflowDefinitions.productId, archivedAt: workflowDefinitions.archivedAt })
         .from(workflowVersions)
         .innerJoin(workflowDefinitions, eq(workflowDefinitions.id, workflowVersions.definitionId))
         .where(eq(workflowVersions.id, input.workflowVersionId));
       if (!row) throw new AppError('not_found', '流程版本不存在');
       if (row.definitionProductId !== null) throw new AppError('invalid', '新产品只能使用组织流程模板');
+      if (row.archivedAt) throw new AppError('invalid', '该流程模板已归档');
       workflowVersionId = input.workflowVersionId;
     } else {
       workflowVersionId = await defaultWorkflowVersion(tx);

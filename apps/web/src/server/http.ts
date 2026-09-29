@@ -11,6 +11,7 @@ const STATUS = {
   not_found: 404,
   conflict: 409,
   already_initialized: 409,
+  rate_limited: 429,
 } as const;
 
 export function errorHandler(err: Error, c: Context) {
@@ -55,9 +56,18 @@ export function clearSessionCookie(c: Context): void {
   deleteCookie(c, SESSION_COOKIE, { path: '/' });
 }
 
+/** 从 X-Forwarded-For 中取可信的客户端 IP：跳过 `FLOWER_TRUSTED_PROXY_HOPS` 个反向代理注入的地址。 */
+export function clientIpFromForwardedFor(forwardedFor: string | undefined, trustedProxyHops: number): string | null {
+  if (trustedProxyHops <= 0) return null;
+  const parts = forwardedFor?.split(',').map((p) => p.trim()) ?? [];
+  const ip = parts[parts.length - trustedProxyHops];
+  return ip || null;
+}
+
 export function sessionMeta(c: Context): { ip: string | null; userAgent: string | null } {
+  const trustedProxyHops = Number.parseInt(process.env.FLOWER_TRUSTED_PROXY_HOPS ?? '0', 10) || 0;
   return {
-    ip: c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+    ip: clientIpFromForwardedFor(c.req.header('x-forwarded-for'), trustedProxyHops),
     userAgent: c.req.header('user-agent') ?? null,
   };
 }

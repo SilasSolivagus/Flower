@@ -13,10 +13,13 @@
 | 类型检查 | `pnpm typecheck` |
 | 修改 schema 后生成迁移 | `pnpm --filter @flower/core db:generate` |
 | 镜像冒烟测试 | `./scripts/smoke.sh` |
+| 端到端测试（需要 db:up；会占用 3100 端口，不要与 pnpm dev 同时运行） | `pnpm --filter @flower/web e2e` |
 
 首次开发：`cp .env.example apps/web/.env.local`，填入 `FLOWER_SECRET_KEY`（`openssl rand -base64 48`）。
 
 `pnpm test` 会把集群里 `flower_app` 角色的密码改成测试固定值 `flower_app_test`；测试跑完后、`pnpm dev` 之前先执行一次 `pnpm db:migrate` 把密码改回 `apps/web/.env.local` 里配置的值。
+
+首次跑端到端测试前执行一次 `pnpm --filter @flower/web exec playwright install chromium`。`apps/web/e2e/db.ts` 里 `createDatabase()` 只在 `global-setup.ts` 跑一次，建库并迁移到 `flower_e2e`；每个 spec 在 `beforeEach`/用例开头调用的 `resetDatabase()` 只是 TRUNCATE 所有业务表，不会重建数据库或重跑迁移。
 
 ## 约定
 
@@ -26,3 +29,5 @@
 - 每个写操作在同一事务内调用 `recordEvent`。
 - 服务函数一律声明为 `async`，保证权限校验失败以 Promise 拒绝的形式返回。
 - 面向用户的错误信息用中文，通过 `AppError(code, message, details?)` 抛出。
+- 页面是客户端组件，通过 `/api/v1` 取数；只允许 `import type` 引用 `@flower/core`，以及浏览器安全的 `@flower/core/workflow-schema`。
+- 纯逻辑放在 `apps/web/src/features/**/model.ts` 并写 Vitest 单测；页面行为用 Playwright 覆盖，每个 spec 自己调用 `resetDatabase()`。

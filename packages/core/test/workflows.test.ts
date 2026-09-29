@@ -9,6 +9,7 @@ import {
   listWorkflowTemplates,
   publishWorkflowVersion,
   setProductWorkflowVersion,
+  updateWorkflowDefinition,
 } from '../src/definitions/workflows';
 import type { Actor } from '../src/domain-types';
 import { AppError } from '../src/errors';
@@ -131,5 +132,35 @@ describe('流程定义', () => {
     const changes = (forkEvent?.payload as { changes: Array<{ field: string; old: unknown; new: unknown }> }).changes;
     expect(changes[0]?.field).toBe('workflowVersionId');
     expect(changes[0]?.new).toBe(version.id);
+  });
+
+  it('模板改名与归档；最后一个启用中的模板不能归档；已归档模板不能用于新产品', async () => {
+    const { definition } = await createWorkflowTemplate(t.db, owner, { name: '待归档', body: DEFAULT_WORKFLOW_BODY });
+    const renamed = await updateWorkflowDefinition(t.db, owner, definition.id, { name: '旧流程' });
+    expect(renamed.name).toBe('旧流程');
+    const archived = await updateWorkflowDefinition(t.db, owner, definition.id, { archived: true });
+    expect(archived.archivedAt).toBeTruthy();
+    await expect(
+      createProduct(t.db, owner, { name: '用归档', key: 'ARC', workflowVersionId: archived.currentVersionId! }),
+    ).rejects.toMatchObject({ code: 'invalid', message: '该流程模板已归档' });
+    const restored = await updateWorkflowDefinition(t.db, owner, definition.id, { archived: false });
+    expect(restored.archivedAt).toBeNull();
+
+    const active = (await listWorkflowTemplates(t.db, owner)).filter((d) => !d.archivedAt);
+    for (const d of active.slice(1)) await updateWorkflowDefinition(t.db, owner, d.id, { archived: true });
+    await expect(updateWorkflowDefinition(t.db, owner, active[0]!.id, { archived: true })).rejects.toMatchObject({
+      code: 'invalid',
+      message: '至少需要保留一个启用中的流程模板',
+    });
+  });
+
+  it('产品覆盖的流程不能归档，名称校验与创建一致', async () => {
+    const pw = await getProductWorkflow(t.db, owner, productId);
+    const fork = await forkWorkflowForProduct(t.db, owner, productId, { fromVersionId: pw.version.id });
+    await expect(updateWorkflowDefinition(t.db, owner, fork.definition.id, { archived: true })).rejects.toMatchObject({
+      code: 'invalid',
+      message: '只有组织流程模板可以归档',
+    });
+    await expect(updateWorkflowDefinition(t.db, owner, fork.definition.id, { name: ' ' })).rejects.toMatchObject({ code: 'invalid' });
   });
 });

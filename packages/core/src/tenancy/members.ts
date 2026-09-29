@@ -1,7 +1,7 @@
-import { and, asc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { requireNonGuest, requireOrgAdmin } from '../access/permissions';
 import type { Db } from '../db/client';
-import { functionTags, memberFunctionTags, members, productMembers } from '../db/schema';
+import { apiTokens, functionTags, memberFunctionTags, members, productMembers } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor, OrgRole, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
@@ -141,13 +141,22 @@ export async function updateMember(
       .set({ displayName, email, department, orgRole: nextRole, status: nextStatus })
       .where(eq(members.id, memberId));
 
+    const leaving = cur.status === 'active' && nextStatus === 'left';
     let removedProductRoles: Array<{ productId: string; role: ProductRole }> = [];
-    if (nextRole === 'owner' || nextRole === 'admin') {
-      const removed = await tx
+    if (nextRole === 'owner' || nextRole === 'admin' || leaving) {
+      removedProductRoles = await tx
         .delete(productMembers)
         .where(eq(productMembers.memberId, memberId))
         .returning({ productId: productMembers.productId, role: productMembers.role });
-      removedProductRoles = removed;
+    }
+    let revokedTokenIds: string[] = [];
+    if (leaving) {
+      const revoked = await tx
+        .update(apiTokens)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(apiTokens.memberId, memberId), isNull(apiTokens.revokedAt)))
+        .returning({ id: apiTokens.id });
+      revokedTokenIds = revoked.map((r) => r.id);
     }
 
     await recordEvent(tx, {
@@ -165,6 +174,7 @@ export async function updateMember(
           { field: 'status', old: cur.status, new: nextStatus },
         ].filter((c) => c.old !== c.new),
         ...(removedProductRoles.length > 0 ? { removedProductRoles } : {}),
+        ...(revokedTokenIds.length > 0 ? { revokedTokenIds } : {}),
       },
     });
     return loadOne(tx, memberId);

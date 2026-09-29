@@ -11,6 +11,7 @@ export { runMigrations } from './db/migrate';
 export * from './auth/password';
 export * from './auth/accounts';
 export * from './auth/sessions';
+export * from './auth/throttle';
 export * from './access/permissions';
 export * from './access/tokens';
 export * from './definitions/workflow-schema';

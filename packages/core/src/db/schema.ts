@@ -50,16 +50,27 @@ export const accounts = pgTable('accounts', {
   lastLoginAt: ts('last_login_at'),
 });
 
-export const sessions = pgTable('sessions', {
-  id: id(),
-  accountId: uuid('account_id')
-    .notNull()
-    .references(() => accounts.id, { onDelete: 'cascade' }),
-  tokenHash: text('token_hash').notNull().unique(),
-  expiresAt: ts('expires_at').notNull(),
-  ip: text('ip'),
-  userAgent: text('user_agent'),
-  createdAt: createdAt(),
+export const sessions = pgTable(
+  'sessions',
+  {
+    id: id(),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    expiresAt: ts('expires_at').notNull(),
+    ip: text('ip'),
+    userAgent: text('user_agent'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('sessions_expires_at').on(t.expiresAt)],
+);
+
+export const authThrottle = pgTable('auth_throttle', {
+  key: text('key').primaryKey(),
+  failures: integer('failures').notNull().default(0),
+  windowStart: ts('window_start').notNull().defaultNow(),
+  lockedUntil: ts('locked_until'),
 });
 
 // ---------- 租户表（RLS，见 0002_rls.sql） ----------

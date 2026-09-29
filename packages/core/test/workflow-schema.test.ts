@@ -86,6 +86,20 @@ describe('validateWorkflowBody', () => {
     expect(msgs).toContain('自动同步 PRD 状态的检查项作用范围必须是 PRD');
   });
 
+  it('检查项条件 in 为空数组时返回中文提示', () => {
+    const r = validateWorkflowBody(
+      {
+        ...valid,
+        transitions: [{ from: 'todo', to: 'doing', conditions: [{ type: 'check_item', item: 'design', in: [] }] }],
+      },
+      { fieldKeys: ['priority'] },
+    );
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.issues.some((i) => i.message === '至少选择一个检查状态')).toBe(true);
+    }
+  });
+
   it('结构错误（类别非法、颜色格式错误）返回带路径的问题', () => {
     const r = validateWorkflowBody(
       { ...valid, states: [{ ...valid.states[0], category: 'weird', color: 'red' }] },

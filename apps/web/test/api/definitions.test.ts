@@ -41,6 +41,14 @@ describe('流程', () => {
     const back = await call(app, 'PUT', `/orgs/acme/products/${productId}/workflow`, { session, body: { versionId: pw.body.version.id } });
     expect(back.status).toBe(204);
   });
+
+  it('模板改名', async () => {
+    const list = await call(app, 'GET', '/orgs/acme/workflows', { session });
+    const id = list.body.workflows[0].id;
+    const r = await call(app, 'PATCH', `/orgs/acme/workflows/${id}`, { session, body: { name: '网盘需求流程' } });
+    expect(r.status).toBe(200);
+    expect(r.body.workflow.name).toBe('网盘需求流程');
+  });
 });
 
 describe('字段与层级', () => {

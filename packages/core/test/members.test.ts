@@ -4,6 +4,7 @@ import { domainEvents } from '../src/db/schema';
 import { withOrg } from '../src/db/tx';
 import type { Actor } from '../src/domain-types';
 import { createFunctionTag, deleteFunctionTag, listFunctionTags, updateFunctionTag } from '../src/tenancy/function-tags';
+import { authenticateToken, issueToken } from '../src/access/tokens';
 import { createAgentMember, createPlaceholderMember, listMembers, setMemberFunctionTags, updateMember } from '../src/tenancy/members';
 import { createProduct, setProductRole } from '../src/tenancy/products';
 import { createTestDb } from './db';
@@ -84,6 +85,22 @@ describe('成员', () => {
       changes: [{ field: 'orgRole', old: 'member', new: 'admin' }],
       removedProductRoles: [{ productId: p.id, role: 'viewer' }],
     });
+  });
+
+  it('成员离开时清掉产品角色并吊销 Token，重新启用后不恢复', async () => {
+    const product = await createProduct(t.db, owner, { name: '离开测试', key: 'LVE' });
+    const agent = await createAgentMember(t.db, owner, { displayName: '离开的助手' });
+    await setProductRole(t.db, owner, product.id, agent.id, 'viewer');
+    const { token } = await issueToken(t.db, owner, { memberId: agent.id, name: 't', scope: { products: 'all', access: 'read' } });
+    expect(await authenticateToken(t.db, token)).not.toBeNull();
+
+    const left = await updateMember(t.db, owner, agent.id, { status: 'left' });
+    expect(left.productRoles).toEqual([]);
+    expect(await authenticateToken(t.db, token)).toBeNull();
+
+    const back = await updateMember(t.db, owner, agent.id, { status: 'active' });
+    expect(back.productRoles).toEqual([]);
+    expect(await authenticateToken(t.db, token)).toBeNull();
   });
 });
 
