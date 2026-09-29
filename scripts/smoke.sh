@@ -36,6 +36,10 @@ echo "4. 重新登录（验证 argon2 原生模块在镜像内可用）"
 curl -fs -c "$JAR" -H 'content-type: application/json' \
   -d '{"email":"owner@example.com","password":"password123"}' "$BASE/auth/login" >/dev/null
 
+echo "4b. 页面可以访问"
+env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY curl -fs -o /dev/null -w '%{http_code}' http://localhost:3900/login | grep -q '200'
+env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY curl -fs http://localhost:3900/login | grep -q '<title>Flower</title>'
+
 echo "5. 重启后数据仍在，迁移可重复执行"
 docker compose restart flower >/dev/null
 docker compose up -d --wait >/dev/null
