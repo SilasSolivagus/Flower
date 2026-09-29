@@ -72,6 +72,33 @@ describe('成功登录不消耗 IP 限流预算', () => {
   });
 });
 
+describe('第 max 次尝试仍正常校验密码，不提前锁定', () => {
+  it('邮箱前 4 次错误密码，第 5 次正确密码登录成功，且不影响后续登录', async () => {
+    const acc = await createAccount(t.db, { email: 'fiveok@example.com', name: 'F', password: 'password123' });
+    for (let i = 0; i < 4; i++) {
+      await expect(
+        login(t.db, { email: 'fiveok@example.com', password: 'wrong-pass' }, { ip: '10.3.3.1' }),
+      ).rejects.toMatchObject({ code: 'unauthenticated' });
+    }
+    const ok = await login(t.db, { email: 'fiveok@example.com', password: 'password123' }, { ip: '10.3.3.1' });
+    expect(ok.account.id).toBe(acc.id);
+    const again = await login(t.db, { email: 'fiveok@example.com', password: 'password123' }, { ip: '10.3.3.1' });
+    expect(again.account.id).toBe(acc.id);
+  });
+
+  it('IP 前 19 次失败（不同邮箱），第 20 次正确密码登录成功，该 IP 后续登录也不受限', async () => {
+    for (let i = 0; i < 19; i++) {
+      await expect(
+        login(t.db, { email: `ipnobody${i}@example.com`, password: 'x' }, { ip: '10.4.4.1' }),
+      ).rejects.toMatchObject({ code: 'unauthenticated' });
+    }
+    const ok = await login(t.db, { email: 'th@example.com', password: 'password123' }, { ip: '10.4.4.1' });
+    expect(ok.account.email).toBe('th@example.com');
+    const again = await login(t.db, { email: 'th@example.com', password: 'password123' }, { ip: '10.4.4.1' });
+    expect(again.account.email).toBe('th@example.com');
+  });
+});
+
 describe('过期会话清理', () => {
   it('删除已过期的会话，保留有效会话', async () => {
     const acc = await createAccount(t.db, { email: 'purge@example.com', name: 'P', password: 'password123' });

@@ -36,8 +36,10 @@ export type ThrottleAttempt = { key: string; failures: number; lockedUntil: Date
 
 /**
  * 原子地为每个 key 记一次登录尝试（在校验密码之前调用，无论密码是否正确）。
- * 用一条 INSERT ... ON CONFLICT DO UPDATE 语句完成「读当前计数 → 判断窗口是否过期 → 计数或重置 → 达到上限则锁定」，
+ * 用一条 INSERT ... ON CONFLICT DO UPDATE 语句完成「读当前计数 → 判断窗口是否过期 → 计数或重置 → 超过上限才锁定」，
  * 避免并发请求之间先查后写的竞态（丢失更新、或对同一新 key 并发插入导致主键冲突）。
+ * 注意锁定的判断是「计数 > max」而不是「>= max」：第 max 次尝试仍然正常放行去校验密码（这次可能是正确密码），
+ * 只有超过 max 的第 max+1 次才会在校验密码前被 assertAttemptsWithinLimit 拒绝并置上 locked_until。
  */
 export async function recordLoginAttempt(
   q: Queryable,
@@ -48,7 +50,7 @@ export async function recordLoginAttempt(
   for (const { key, rule } of keys) {
     const windowExpired = sql`auth_throttle.window_start + (${rule.windowMs} * interval '1 millisecond') <= ${now.toISOString()}::timestamptz`;
     const failuresExpr = sql`(case when ${windowExpired} then 1 else auth_throttle.failures + 1 end)`;
-    const initialLockedUntil = 1 >= rule.max ? new Date(now.getTime() + rule.lockMs) : null;
+    const initialLockedUntil = 1 > rule.max ? new Date(now.getTime() + rule.lockMs) : null;
     const rows = await q.execute<{ failures: number; locked_until: string | null }>(sql`
       insert into auth_throttle (key, failures, window_start, locked_until)
       values (${key}, 1, ${now.toISOString()}::timestamptz, ${initialLockedUntil?.toISOString() ?? null}::timestamptz)
@@ -56,7 +58,7 @@ export async function recordLoginAttempt(
         failures = ${failuresExpr},
         window_start = case when ${windowExpired} then ${now.toISOString()}::timestamptz else auth_throttle.window_start end,
         locked_until = case
-          when ${failuresExpr} >= ${rule.max}
+          when ${failuresExpr} > ${rule.max}
           then ${now.toISOString()}::timestamptz + (${rule.lockMs} * interval '1 millisecond')
           else auth_throttle.locked_until
         end
