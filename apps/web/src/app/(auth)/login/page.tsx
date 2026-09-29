@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label';
 import { safeNext } from '@/features/auth/next';
 import { api } from '@/lib/api';
 import { qk, useApiMutation, useSetupStatus } from '@/lib/queries';
-import type { Account, MyOrg } from '@/lib/types';
 
 function LoginForm() {
   const router = useRouter();
@@ -24,9 +23,8 @@ function LoginForm() {
   const m = useApiMutation(() => api('/auth/login', { method: 'POST', body: { email, password } }), {
     silentError: true,
     onSuccess: async () => {
-      const me = await qc.fetchQuery({ queryKey: qk.me, queryFn: () => api<{ account: Account; orgs: MyOrg[] }>('/me') });
-      // 还没有落地页（Task 7），默认跳转到跳转参数指定的地址；没有指定时进入第一个所属组织。
-      router.replace(target !== '/' ? target : (me.orgs[0] ? `/${me.orgs[0].slug}` : '/'));
+      await qc.invalidateQueries({ queryKey: qk.me });
+      router.replace(target);
     },
   });
 

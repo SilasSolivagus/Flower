@@ -31,6 +31,7 @@ test.describe('初始化与登录', () => {
     await page.getByLabel('邮箱').fill(OWNER.email);
     await page.getByLabel('密码').fill('wrong-password');
     await page.getByRole('button', { name: '登录' }).click();
+    // Next.js 内置的路由变更播报节点也带 role="alert"，用 hasText 排除掉它，避免 strict mode 冲突。
     await expect(page.getByRole('alert').filter({ hasText: '邮箱或密码错误' })).toBeVisible();
     await login(page, OWNER.email, OWNER.password);
     await page.waitForURL('**/acme');
