@@ -257,6 +257,14 @@ function RequirementsPage() {
           </TableBody>
         </Table>
         {data.data && data.data.items.length === 0 && <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">没有符合条件的需求</p>}
+        {data.isError && (
+          <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+            <p className="text-[13px] text-muted-foreground">加载需求列表失败，请重试。</p>
+            <Button variant="outline" size="sm" onClick={() => data.refetch()}>
+              重试
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-end gap-2 text-[13px] text-muted-foreground">

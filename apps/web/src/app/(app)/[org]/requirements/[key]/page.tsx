@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
 import { ApiError, api } from '@/lib/api';
 import { requirementKeys, useApiMutation, useRequirement } from '@/lib/queries';
 import { CheckItems } from './check-items';
@@ -107,14 +108,14 @@ export default function RequirementPage() {
                   patch.mutate({ description }, { onSuccess: () => setEditingDesc(false) });
                 }}
               >
-                <textarea aria-label="描述" className="min-h-48 rounded border bg-background p-2 text-[13px]" value={description} onChange={(e) => setDescription(e.target.value)} />
+                <Textarea aria-label="描述" className="min-h-48 text-[13px]" value={description} onChange={(e) => setDescription(e.target.value)} />
                 <div className="flex justify-end gap-2">
-                  <button type="button" className="text-[13px]" onClick={() => setEditingDesc(false)}>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setEditingDesc(false)}>
                     取消
-                  </button>
-                  <button type="submit" className="rounded bg-primary px-3 py-1 text-[13px] text-primary-foreground">
+                  </Button>
+                  <Button type="submit" size="sm" disabled={patch.isPending}>
                     保存
-                  </button>
+                  </Button>
                 </div>
               </form>
             ) : (
