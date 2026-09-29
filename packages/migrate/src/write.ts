@@ -38,7 +38,12 @@ const CHUNK = 500;
 /** 删除一个组织的全部租户数据（以 flower_admin 执行，不受 RLS 与 domain_events 只追加的限制）。 */
 export async function deleteOrgData(tx: Tx, orgId: string): Promise<void> {
   await tx.update(core.products).set({ workflowVersionId: null }).where(eq(core.products.orgId, orgId));
-  await tx.update(core.workflowDefinitions).set({ currentVersionId: null, forkedFromVersionId: null }).where(eq(core.workflowDefinitions.orgId, orgId));
+  await tx
+    .update(core.workflowDefinitions)
+    .set({ productId: null, currentVersionId: null, forkedFromVersionId: null })
+    .where(eq(core.workflowDefinitions.orgId, orgId));
+  // 导入不写、但正常使用会写的租户表：迭代快照在需求/迭代之前删，Token 与邀请在成员之前删
+  await tx.execute(sql`delete from ${core.iterationScopeSnapshots} where org_id = ${orgId}`);
   const tenantTables = [...INSERT_ORDER].reverse().filter((k) => k !== 'organizations').map((k) => TABLES[k]);
   for (const table of [...tenantTables.slice(0, -1), core.invitations, core.apiTokens, tenantTables.at(-1)!]) {
     await tx.execute(sql`delete from ${table} where org_id = ${orgId}`);
