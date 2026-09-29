@@ -26,7 +26,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 
 - **数据库**：PostgreSQL 17，镜像 `pgvector/pgvector:pg17`；ORM 用 drizzle。
 - **存储策略**：业务实体用关系表加外键；流程配置存为带版本的 JSON 定义（zod 校验）；运行时取值用关系表。
-- **主键**：UUIDv7。人可读编号按产品自增（如 `PAN-123`、`PRD-12`），由 `product_counters` 原子分配。旧编号存 `legacy_key`。
+- **主键**：新建数据用 UUIDv7；迁移导入的行使用由来源键 SHA-1 派生的确定性 UUID（v5 位布局），重复导入得到相同 ID。人可读编号按产品自增（如 `PAN-123`、`PRD-12`）：需求编号由 `products.requirement_seq` 以 `update … returning` 分配；P2 文档编号届时另加列或引入计数表。旧编号存 `legacy_key`。
 - **租户隔离**：所有租户数据表带 `org_id`。应用层在每个事务开头设置当前组织并强制过滤；Postgres 行级安全（RLS）策略用同一个值再校验一次。
 - **软删除**：业务实体带 `deleted_at`。字典选项只停用不删除。
 - **审计**：领域事件表即审计日志（见 §6.1），不另建日志表。
@@ -45,8 +45,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 | `accounts` | email（citext 唯一）、name、password_hash（argon2id）、is_instance_admin、preferences（jsonb：语言、时区、主题） | 全局账号，一人一条 |
 | `sessions` | account_id、expires_at、ip、user_agent | 服务端会话，cookie 只存不透明 id，可立即吊销 |
 | `organizations` | slug（URL 用）、name、settings（jsonb：时区、结构树层级叫法等） | |
-| `products` | org_id、key（组织内唯一，如 `PAN`）、name、status（启用 / 归档）、workflow_version_id、structure_level_names（可空，覆盖组织设置） | |
-| `product_counters` | product_id、kind（requirement / document）、next_number | 编号分配 |
+| `products` | org_id、key（组织内唯一，如 `PAN`）、name、status（启用 / 归档）、workflow_version_id、structure_level_names（可空，覆盖组织设置）、requirement_seq | requirement_seq 为已分配的最大需求编号 |
 | `members` | org_id、account_id（可空）、kind（human / agent）、display_name、email（可空）、department（文本）、org_role（owner / admin / member / guest）、status（active / left） | 组织成员；无账号的成员也是成员。唯一约束（org_id, account_id） |
 | `product_members` | product_id、member_id、role（admin / editor / viewer） | 产品级角色覆盖 |
 | `function_tags` / `member_function_tags` | org_id、name、color / member_id、tag_id | 职能标签，一人多个，不影响权限 |
@@ -59,7 +58,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 - **组织级**：owner / admin 在所有产品上等同产品 admin，并管理成员、配置和产品；member 默认在所有产品上是 editor，可按产品下调；guest 默认看不到任何产品，需按产品单独授权。
 - **产品级**：admin 可修改产品配置（流程覆盖、结构树、字段覆盖、通知规则）；editor 可增删改需求、文档、迭代、任务；viewer 只读。
 - **强制流转**：条件不满足时，产品 admin 可以强制流转，必须填写原因，记入 `state_transitions` 和领域事件。
-- **资源级规则不属于本层**，在各模块设计时逐条决定。已知待定项：成员能否修改他人创建的 PRD、viewer 能否评论。
+- **资源级规则不属于本层**，在各模块设计时逐条决定。已知待定项：成员能否修改他人创建的 PRD。已决定：产品只读成员（viewer）可以评论（见 P1-A 计划「设计决定」表「评论权限」行：提出人多为只读成员或访客，需要能跟进）。
 
 ### 2.3 Agent 与 API Token
 
@@ -67,6 +66,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 - 个人 Token 的 member_id 为本人；Agent Token 由管理员为 Agent 成员签发。
 - 每次请求的实际权限 = 身份当前权限 ∩ Token 范围。身份权限被下调时 Token 随之收窄。
 - 领域事件同时记录操作成员和所用 Token。
+- 只读 Token 不能签字、评论或标记已读：这三项只要求产品 viewer 角色，因此另外显式拒绝只读 Token。
 
 ### 2.4 自托管初始化
 
@@ -130,7 +130,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 
 ### 4.1 结构树
 
-`structure_nodes`：org_id、product_id、parent_id、depth（1–3）、name、description、status（active / deprecated）、sort_key（fractional index）、legacy_key。唯一约束：（product_id, parent_id, name）。
+`structure_nodes`：org_id、product_id、parent_id、depth（1–3）、name、description、status（active / deprecated）、sort（integer）、legacy_key。唯一约束：（product_id, parent_id, name）。
 
 结构树按产品各建一棵。业务域即第一层节点，不再作为字典。
 
@@ -189,7 +189,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 |---|---|
 | org_id、product_id、requirement_id（可空）、iteration_id（可空） | |
 | title、alias、assignee_member_id、status（todo / doing / done） | |
-| plan_start、plan_days、delay_days、phase、flag、starred（可空） | 排期字段，仅甘特类任务使用 |
+| plan_start、plan_days、delay_days、phase、flag、starred（可空） | 排期字段，仅甘特类任务使用；plan_days、delay_days 为实数，允许半天 |
 | meta（jsonb） | 迁移时保存 push 概览看板的手动覆盖值 |
 
 "某人在忙什么"按 assignee 跨所有迭代汇总查询。
