@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ApiError, api } from './api';
 import type {
@@ -8,6 +8,7 @@ import type {
   Field,
   FunctionTag,
   InstanceStatus,
+  IterationBrief,
   Invitation,
   LevelNames,
   Member,
@@ -16,6 +17,10 @@ import type {
   OrgMe,
   Product,
   ProductRole,
+  RequirementComment,
+  RequirementDetail,
+  RequirementList,
+  StructureNode,
   Token,
   WorkflowDefinition,
   WorkflowVersion,
@@ -38,6 +43,11 @@ export const qk = {
   fields: (o: string, productId?: string) => ['org', o, 'fields', productId ?? 'org'] as const,
   levels: (o: string, productId?: string) => ['org', o, 'levels', productId ?? 'org'] as const,
   tokens: (o: string) => ['org', o, 'tokens'] as const,
+  requirements: (o: string, productId: string, query: string) => ['org', o, 'requirements', 'list', productId, query] as const,
+  requirement: (o: string, key: string) => ['org', o, 'requirements', 'detail', key] as const,
+  requirementComments: (o: string, id: string) => ['org', o, 'requirements', 'comments', id] as const,
+  nodes: (o: string, productId: string) => ['org', o, 'product', productId, 'nodes'] as const,
+  iterations: (o: string, productId: string) => ['org', o, 'product', productId, 'iterations'] as const,
 };
 
 export const useSetupStatus = () => useQuery({ queryKey: qk.setup, queryFn: () => api<InstanceStatus>('/setup/status') });
@@ -45,8 +55,8 @@ export const useMe = () => useQuery({ queryKey: qk.me, queryFn: () => api<{ acco
 export const useInstanceSettings = () => useQuery({ queryKey: qk.instance, queryFn: () => api<InstanceStatus>('/instance/settings') });
 export const useOrg = (o: string) =>
   useQuery({ queryKey: qk.org(o), queryFn: () => api<{ org: Org; me: OrgMe }>(`/orgs/${o}`) });
-export const useMembers = (o: string) =>
-  useQuery({ queryKey: qk.members(o), queryFn: () => api<{ members: Member[] }>(`/orgs/${o}/members`), select: (d) => d.members });
+export const useMembers = (o: string, enabled = true) =>
+  useQuery({ queryKey: qk.members(o), queryFn: () => api<{ members: Member[] }>(`/orgs/${o}/members`), select: (d) => d.members, enabled });
 export const useInvitations = (o: string, enabled = true) =>
   useQuery({
     queryKey: qk.invitations(o),
@@ -71,6 +81,7 @@ export const useProductWorkflow = (o: string, id: string) =>
   useQuery({
     queryKey: qk.productWorkflow(o, id),
     queryFn: () => api<{ definition: WorkflowDefinition; version: WorkflowVersion }>(`/orgs/${o}/products/${id}/workflow`),
+    enabled: !!id,
   });
 export const useWorkflows = (o: string, enabled = true) =>
   useQuery({
@@ -97,6 +108,44 @@ export const useLevelNames = (o: string, productId?: string) =>
   });
 export const useTokens = (o: string) =>
   useQuery({ queryKey: qk.tokens(o), queryFn: () => api<{ tokens: Token[] }>(`/orgs/${o}/tokens`), select: (d) => d.tokens });
+
+/** 需求相关查询的公共前缀：任何需求修改后统一失效。 */
+export const requirementKeys = (o: string) => ['org', o, 'requirements'] as const;
+
+export const useRequirements = (o: string, productId: string | undefined, query: string) =>
+  useQuery({
+    queryKey: qk.requirements(o, productId ?? '', query),
+    queryFn: () => api<RequirementList>(`/orgs/${o}/products/${productId}/requirements?${query}`),
+    enabled: !!productId,
+    placeholderData: keepPreviousData,
+  });
+export const useRequirement = (o: string, key: string) =>
+  useQuery({
+    queryKey: qk.requirement(o, key),
+    queryFn: () => api<{ requirement: RequirementDetail }>(`/orgs/${o}/requirements/${encodeURIComponent(key)}`),
+    select: (d) => d.requirement,
+  });
+export const useRequirementComments = (o: string, id: string | undefined) =>
+  useQuery({
+    queryKey: qk.requirementComments(o, id ?? ''),
+    queryFn: () => api<{ comments: RequirementComment[] }>(`/orgs/${o}/requirements/${id}/comments`),
+    select: (d) => d.comments,
+    enabled: !!id,
+  });
+export const useNodes = (o: string, productId: string | undefined) =>
+  useQuery({
+    queryKey: qk.nodes(o, productId ?? ''),
+    queryFn: () => api<{ nodes: StructureNode[] }>(`/orgs/${o}/products/${productId}/nodes`),
+    select: (d) => d.nodes,
+    enabled: !!productId,
+  });
+export const useProductIterations = (o: string, productId: string | undefined) =>
+  useQuery({
+    queryKey: qk.iterations(o, productId ?? ''),
+    queryFn: () => api<{ iterations: IterationBrief[] }>(`/orgs/${o}/products/${productId}/iterations`),
+    select: (d) => d.iterations,
+    enabled: !!productId,
+  });
 
 type MutationOptions<TData, TVars> = {
   invalidate?: ReadonlyArray<readonly unknown[]>;

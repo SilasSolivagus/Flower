@@ -6,7 +6,7 @@ describe('buildNav', () => {
     const nav = buildNav('acme', 'admin');
     expect(nav.main.map((i) => [i.label, i.phase ?? null, i.href ?? null])).toEqual([
       ['概览', null, '/acme'],
-      ['需求', 'P1', null],
+      ['需求', null, '/acme/requirements'],
       ['迭代', 'P1', null],
       ['文档', 'P2', null],
     ]);
@@ -33,5 +33,7 @@ describe('buildNav', () => {
     expect(activeNavKey('/acme/settings/members', 'acme')).toBe('members');
     expect(activeNavKey('/acme/settings/workflows/abc', 'acme')).toBe('workflows');
     expect(activeNavKey('/acme/settings/products/1', 'acme')).toBe('products');
+    expect(activeNavKey('/acme/requirements', 'acme')).toBe('requirements');
+    expect(activeNavKey('/acme/requirements/PAN-12', 'acme')).toBe('requirements');
   });
 });

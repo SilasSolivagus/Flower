@@ -25,3 +25,7 @@ export const CHECK_STATE_LABEL = {
   not_needed: '不需要',
 } as const;
 export const SWATCHES = ['#1f6f54', '#0f766e', '#2f6fd6', '#7c3aed', '#db2777', '#b42318', '#b7791f', '#1e8a5a', '#5c6570', '#8a9199'];
+export const ITERATION_STATUS_LABEL = { planning: '规划中', active: '进行中', done: '已完成', canceled: '已取消' } as const;
+export const TASK_STATUS_LABEL = { todo: '待开始', doing: '进行中', done: '已完成' } as const;
+export const RELATION_LABEL: Record<string, string> = { duplicate_of: '重复于', merged_into: '合并到', derived_from: '派生自', blocks: '阻塞', related: '相关' };
+export const SORT_LABEL = { updated: '最近更新', number: '编号', created: '创建时间' } as const;
