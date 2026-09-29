@@ -17,7 +17,7 @@ export function registerInvitationRoutes(app: App, deps: ApiDeps): void {
   app.post('/orgs/:org/invitations', async (c) => {
     const body = await readJson(
       c,
-      z.object({ email: z.string(), orgRole: z.enum(['admin', 'member', 'guest']), memberId: z.string().optional() }),
+      z.object({ email: z.string().max(254), orgRole: z.enum(['admin', 'member', 'guest']), memberId: z.string().optional() }),
     );
     const { invitation, token } = await createInvitation(deps.db, c.get('actor'), body);
     return c.json({ invitation, token, link: `${deps.publicUrl}/invite/${token}` }, 201);
@@ -36,7 +36,7 @@ export function registerInvitationRoutes(app: App, deps: ApiDeps): void {
 
   app.post('/invitations/:token/accept', async (c) => {
     const account = c.get('account');
-    const body = await readJson(c, z.object({ name: z.string().optional(), password: z.string().optional() }));
+    const body = await readJson(c, z.object({ name: z.string().optional(), password: z.string().max(256).optional() }));
     let who: Parameters<typeof acceptInvitation>[2];
     if (account) {
       who = { accountId: account.id };

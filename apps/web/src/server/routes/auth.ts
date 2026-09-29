@@ -16,7 +16,7 @@ import { clearSessionCookie, readJson, sessionMeta, setSessionCookie } from '../
 
 export function registerAuthRoutes(app: App, deps: ApiDeps): void {
   app.post('/auth/login', async (c) => {
-    const body = await readJson(c, z.object({ email: z.string(), password: z.string() }));
+    const body = await readJson(c, z.object({ email: z.string().max(254), password: z.string().max(256) }));
     const r = await login(deps.db, body, sessionMeta(c));
     setSessionCookie(c, r.token, r.expiresAt, deps.secureCookies);
     return c.json({ account: r.account });
@@ -30,7 +30,7 @@ export function registerAuthRoutes(app: App, deps: ApiDeps): void {
   });
 
   app.post('/auth/register', async (c) => {
-    const body = await readJson(c, z.object({ email: z.string(), name: z.string(), password: z.string() }));
+    const body = await readJson(c, z.object({ email: z.string().max(254), name: z.string(), password: z.string().max(256) }));
     const account = await signUp(deps.db, body);
     const s = await createSession(deps.db, account.id, sessionMeta(c));
     setSessionCookie(c, s.token, s.expiresAt, deps.secureCookies);
@@ -58,7 +58,7 @@ export function registerAuthRoutes(app: App, deps: ApiDeps): void {
 
   app.post('/me/password', async (c) => {
     const account = requireAccount(c);
-    const body = await readJson(c, z.object({ currentPassword: z.string(), newPassword: z.string() }));
+    const body = await readJson(c, z.object({ currentPassword: z.string().max(256), newPassword: z.string().max(256) }));
     const keepSessionToken = getCookie(c, SESSION_COOKIE);
     await changePassword(deps.db, account.id, { ...body, keepSessionToken });
     return c.body(null, 204);

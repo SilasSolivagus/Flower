@@ -4,7 +4,7 @@ import type { ApiDeps, App } from '../api';
 import { readJson, sessionMeta, setSessionCookie } from '../http';
 
 const setupSchema = z.object({
-  admin: z.object({ email: z.string(), name: z.string(), password: z.string() }),
+  admin: z.object({ email: z.string().max(254), name: z.string(), password: z.string().max(256) }),
   org: z.object({ name: z.string(), slug: z.string() }),
 });
 

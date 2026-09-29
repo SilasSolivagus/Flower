@@ -75,6 +75,11 @@ describe('初始化与登录', () => {
     expect(r.body.error.code).toBe('not_found');
   });
 
+  it('登录邮箱过长返回 400 而非 500', async () => {
+    const r = await call(app, 'POST', '/auth/login', { body: { email: `${'a'.repeat(3000)}@example.com`, password: 'password123' } });
+    expect(r.status).toBe(400);
+  });
+
   it('登录被限流时返回 429', async () => {
     for (let i = 0; i < 5; i++) {
       await call(app, 'POST', '/auth/login', { body: { email: 'owner@example.com', password: 'bad-password' } });
