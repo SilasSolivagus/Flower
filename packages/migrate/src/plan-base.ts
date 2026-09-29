@@ -36,7 +36,9 @@ export function buildBase(ctx: PlanContext): void {
   for (const p of mapping.people.people) {
     const id = ctx.id('member', p.key);
     ctx.memberIdByKey.set(p.key, id);
-    const isOwner = !!ownerEmail && p.email?.toLowerCase() === ownerEmail;
+    const emailMatches = !!ownerEmail && p.email?.toLowerCase() === ownerEmail;
+    const isOwner: boolean = emailMatches && !ownerLinked;
+    if (emailMatches && ownerLinked) ctx.problem(`人员对照表中有多个人使用所有者邮箱 ${ownerEmail}`);
     ownerLinked ||= isOwner;
     rows.members.push({
       id,
@@ -100,7 +102,10 @@ export function buildBase(ctx: PlanContext): void {
       ctx.problem(`迭代「${e.name}」缺少开始或发布日期`);
       continue;
     }
-    if (w.start > w.end) ctx.problem(`迭代「${e.name}」开始日期晚于结束日期`);
+    if (w.start > w.end) {
+      ctx.problem(`迭代「${e.name}」开始日期晚于结束日期`);
+      continue;
+    }
     const plane = data.plane.iterations.find((i) => e.planeIds.includes(i.id));
     const push = data.push.versions.find((v) => e.pushIds.includes(v.id));
     let status = (plane?.status && PLANE_ITERATION_STATUS[plane.status]) || (push?.status && PUSH_VERSION_STATUS[push.status]) || 'planning';

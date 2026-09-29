@@ -86,4 +86,22 @@ describe('导入计划：阻止写入的问题', () => {
     m.iterations.iterations.find((i) => i.name === '专项')!.type = 'regular';
     expect(buildImportPlan(makeLegacyData(), m, OPTS).report.problems.join('\n')).toMatch(/常规迭代「.+」与「.+」时间重叠/);
   });
+
+  it('迭代开始日期晚于结束日期：记录问题且跳过该行', () => {
+    const data = makeLegacyData();
+    const v2 = data.plane.iterations.find((i) => i.id === 'V2')!;
+    v2.kickoff_date = '2026-04-01';
+    const plan = buildImportPlan(data, reviewedMapping(), OPTS);
+    expect(plan.report.problems.join('\n')).toMatch(/迭代「it0330」开始日期晚于结束日期/);
+    expect(plan.rows.iterations.find((i) => i.name === 'it0330')).toBeUndefined();
+  });
+
+  it('对照表中多个人共享所有者邮箱：只有第一个绑定账号，其余记为问题', () => {
+    const m = reviewedMapping();
+    const zs = m.people.people.find((p) => p.displayName === '张三')!;
+    m.people.people.push({ ...zs, key: 'p_zhangsan_dup', displayName: '张三（重复）' });
+    const plan = buildImportPlan(makeLegacyData(), m, OPTS);
+    expect(plan.rows.members.filter((mm) => mm.accountId)).toHaveLength(1);
+    expect(plan.report.problems).toContain(`人员对照表中有多个人使用所有者邮箱 ${OPTS.owner!.email.toLowerCase()}`);
+  });
 });
