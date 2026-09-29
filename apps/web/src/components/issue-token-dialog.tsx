@@ -58,6 +58,7 @@ export function IssueTokenDialog({
     <Dialog open={open} onOpenChange={close}>
       <DialogContent
         className="max-w-lg"
+        showCloseButton={!token}
         onEscapeKeyDown={(e) => {
           if (token) e.preventDefault();
         }}
