@@ -1,6 +1,7 @@
-import { createRequirement, getRequirementByKey, listProducts, listRequirements, resolveActor } from '@flower/core';
+import { createRequirement, getRequirementByKey, listProducts, listRequirements, resolveActor, tasks } from '@flower/core';
 import { createTestDb } from '@flower/core/testing';
 import { seedInstance } from '@flower/core/testing/factories';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildImportPlan } from '../src/plan';
 import type { ImportOptions } from '../src/plan-types';
@@ -46,5 +47,17 @@ describe('写入数据库', () => {
     const data = makeLegacyData();
     data.plane.requirements[0]!.requester = '新面孔';
     await expect(writeImport(t.adminDb, buildImportPlan(data, reviewedMapping(), { ...opts, orgSlug: 'other' }), { replace: false })).rejects.toThrow('拒绝写入');
+  });
+
+  it('甘特任务的半天计划/延期天数写入数据库后原样保留', async () => {
+    const data = makeLegacyData();
+    data.push.ganttTasks.push({
+      id: 4, requirement_id: 1, version_id: null, title: '半天任务', assignee: null, phase: null, plan_start: '2026-03-02',
+      plan_days: 0.5, delay_days: 1.5, actual_status: '', note: '', flag: '', created_at: null, alias: null,
+      starred: null, ov_assignee: null, ov_status: null, ov_progress: null, manual: null,
+    });
+    await writeImport(t.adminDb, buildImportPlan(data, reviewedMapping(), opts), { replace: true });
+    const [row] = await t.adminDb.select({ planDays: tasks.planDays, delayDays: tasks.delayDays }).from(tasks).where(eq(tasks.title, '半天任务'));
+    expect(row).toMatchObject({ planDays: 0.5, delayDays: 1.5 });
   });
 });

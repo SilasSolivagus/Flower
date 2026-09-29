@@ -170,6 +170,17 @@ describe('导入计划：需求（修复回归）', () => {
     expect(event.subjectId).toBe(target.id);
   });
 
+  it('甘特任务的半天计划/延期天数原样保留，不做四舍五入', () => {
+    const data = makeLegacyData();
+    data.push.ganttTasks.push({
+      id: 4, requirement_id: 1, version_id: null, title: '半天任务', assignee: null, phase: null, plan_start: '2026-03-02',
+      plan_days: 0.5, delay_days: 1.5, actual_status: '', note: '', flag: '', created_at: null, alias: null,
+      starred: null, ov_assignee: null, ov_status: null, ov_progress: null, manual: null,
+    });
+    const p = buildImportPlan(data, reviewedMapping(), OPTS);
+    expect(p.rows.tasks.find((t) => t.title === '半天任务')).toMatchObject({ planDays: 0.5, delayDays: 1.5 });
+  });
+
   it('需求排序按解析后的时间而非原始字符串比较', () => {
     const data = makeLegacyData();
     data.plane.requirements.push(
