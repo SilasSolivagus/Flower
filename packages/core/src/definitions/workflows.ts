@@ -77,6 +77,12 @@ async function loadDefinition(tx: Tx, id: string): Promise<DefRow> {
   return d;
 }
 
+function assertWorkflowName(name: string): string {
+  const n = name.trim();
+  if (!n || n.length > 30) throw new AppError('invalid', '流程名称不能为空，且不超过 30 个字符');
+  return n;
+}
+
 /** 模板由组织管理员管理；产品覆盖由产品管理员管理。 */
 async function requireManage(tx: Tx, actor: Actor, d: DefRow): Promise<void> {
   if (d.productId) await requireProductRole(tx, actor, d.productId, 'admin');
@@ -142,13 +148,60 @@ export async function createWorkflowTemplate(
   input: { name: string; body: unknown; note?: string },
 ): Promise<{ definition: WorkflowDefinitionView; version: WorkflowVersionView }> {
   requireOrgAdmin(actor);
-  const name = input.name.trim();
-  if (!name || name.length > 30) throw new AppError('invalid', '流程名称不能为空，且不超过 30 个字符');
+  const name = assertWorkflowName(input.name);
   return withOrg(db, actor.orgId, async (tx) => {
     const body = await validateOrThrow(tx, input.body, null);
     const [d] = await tx.insert(workflowDefinitions).values({ orgId: actor.orgId, name }).returning();
     const v = await insertVersion(tx, actor, d!, body, input.note ?? null);
     return { definition: await definitionView(tx, await loadDefinition(tx, d!.id)), version: versionView(v) };
+  });
+}
+
+export async function updateWorkflowDefinition(
+  db: Db,
+  actor: Actor,
+  definitionId: string,
+  input: { name?: string; archived?: boolean },
+): Promise<WorkflowDefinitionView> {
+  return withOrg(db, actor.orgId, async (tx) => {
+    const d = await loadDefinition(tx, definitionId);
+    await requireManage(tx, actor, d);
+    if (input.archived !== undefined && d.productId !== null) {
+      throw new AppError('invalid', '只有组织流程模板可以归档');
+    }
+    const name = input.name === undefined ? d.name : assertWorkflowName(input.name);
+    let archivedAt = d.archivedAt;
+    if (input.archived === true && !d.archivedAt) {
+      const others = await tx
+        .select({ id: workflowDefinitions.id })
+        .from(workflowDefinitions)
+        .where(and(isNull(workflowDefinitions.productId), isNull(workflowDefinitions.archivedAt)));
+      if (others.filter((o) => o.id !== d.id).length === 0) {
+        throw new AppError('invalid', '至少需要保留一个启用中的流程模板');
+      }
+      archivedAt = new Date();
+    }
+    if (input.archived === false) archivedAt = null;
+    const [row] = await tx
+      .update(workflowDefinitions)
+      .set({ name, archivedAt })
+      .where(eq(workflowDefinitions.id, definitionId))
+      .returning();
+    await recordEvent(tx, {
+      orgId: actor.orgId,
+      productId: d.productId,
+      type: 'workflow.updated',
+      subjectType: 'workflow_definition',
+      subjectId: definitionId,
+      actor,
+      payload: {
+        changes: [
+          { field: 'name', old: d.name, new: name },
+          { field: 'archivedAt', old: d.archivedAt?.toISOString() ?? null, new: archivedAt?.toISOString() ?? null },
+        ].filter((c) => c.old !== c.new),
+      },
+    });
+    return definitionView(tx, row!);
   });
 }
 

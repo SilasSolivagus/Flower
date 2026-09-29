@@ -75,4 +75,11 @@ describe('组织', () => {
     );
     expect(event?.payload).toMatchObject({ changes: [{ field: 'timezone', old: null, new: 'Asia/Tokyo' }] });
   });
+
+  it('系统保留的标识不能用作组织标识', async () => {
+    const admin = await createAccount(t.db, { email: 'rsv@example.com', name: 'Rsv', password: 'password123', isInstanceAdmin: true });
+    for (const slug of ['settings', 'admin', 'login', 'api', 'setup', 'register', 'invite']) {
+      await expect(createOrganization(t.db, admin, { name: '保留', slug })).rejects.toMatchObject({ code: 'invalid', message: '该标识为系统保留，请换一个' });
+    }
+  });
 });

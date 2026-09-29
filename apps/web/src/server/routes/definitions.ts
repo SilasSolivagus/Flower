@@ -14,6 +14,7 @@ import {
   setProductLevelNames,
   setProductWorkflowVersion,
   updateFieldOption,
+  updateWorkflowDefinition,
 } from '@flower/core';
 import { z } from 'zod';
 import type { ApiDeps, App } from '../api';
@@ -31,6 +32,11 @@ export function registerDefinitionRoutes(app: App, deps: ApiDeps): void {
   app.get('/orgs/:org/workflows/:id', async (c) =>
     c.json(await getWorkflowDefinition(deps.db, c.get('actor'), c.req.param('id'))),
   );
+
+  app.patch('/orgs/:org/workflows/:id', async (c) => {
+    const body = await readJson(c, z.object({ name: z.string().optional(), archived: z.boolean().optional() }));
+    return c.json({ workflow: await updateWorkflowDefinition(deps.db, c.get('actor'), c.req.param('id'), body) });
+  });
 
   app.post('/orgs/:org/workflows/:id/versions', async (c) => {
     const body = await readJson(c, z.object({ body: z.unknown(), note: z.string().optional() }));

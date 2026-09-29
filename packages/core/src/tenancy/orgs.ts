@@ -11,6 +11,7 @@ import { recordEvent } from '../events';
 import { newId } from '../ids';
 
 export const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
+export const RESERVED_SLUGS: readonly string[] = ['api', 'admin', 'settings', 'setup', 'login', 'register', 'invite'];
 
 export type OrgView = { id: string; slug: string; name: string; settings: OrgSettings };
 
@@ -21,6 +22,7 @@ function assertOrgInput(input: { name: string; slug: string }) {
   if (!name || name.length > 50) throw new AppError('invalid', '组织名称不能为空，且不超过 50 个字符');
   const slug = input.slug.trim();
   if (!SLUG_RE.test(slug)) throw new AppError('invalid', '组织标识只能包含小写字母、数字和连字符，长度 1–40');
+  if (RESERVED_SLUGS.includes(slug)) throw new AppError('invalid', '该标识为系统保留，请换一个');
   return { name, slug };
 }
 
