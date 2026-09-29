@@ -1,12 +1,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { accounts, createDb } from '@flower/core';
+import { accounts, createDb, listProducts, resolveActor } from '@flower/core';
 import { eq } from 'drizzle-orm';
 import type { LegacyData } from './legacy-types';
 import { loadPlane, loadPrd, loadPush } from './load';
 import { readMapping, writeMapping } from './mapping';
 import { buildImportPlan } from './plan';
+import { buildPerfCases, measure } from './perf';
 import { renderReport } from './report';
 import { suggestMapping } from './suggest';
 import { writeImport } from './write';
@@ -15,6 +16,7 @@ const USAGE = `用法：
   suggest --plane <123plane.db> --push <push.db> --prd-url <postgres url> --mapping <目录>
   import  --plane … --push … --prd-url … --mapping <目录> --out <报告目录> [--org-slug pan123] [--org-name 123云盘]
           [--product-key PAN] [--product-name 123云盘] [--as-of YYYY-MM-DD] [--owner-email 邮箱] [--replace] [--dry-run]
+  perf --org-slug pan123 --owner-email 邮箱 [--product-key PAN] [--runs 20]（读取 DATABASE_URL）
 import 写库时读取环境变量 DATABASE_ADMIN_URL。`;
 
 function fail(msg: string): never {
@@ -40,9 +42,30 @@ async function main(): Promise<void> {
       'owner-email': { type: 'string' },
       replace: { type: 'boolean', default: false },
       'dry-run': { type: 'boolean', default: false },
+      runs: { type: 'string', default: '20' },
     },
   });
   const need = (k: 'plane' | 'push' | 'prd-url' | 'mapping' | 'out') => v[k] ?? fail(`缺少参数 --${k}`);
+
+  if (cmd === 'perf') {
+    const url = process.env.DATABASE_URL ?? fail('perf 需要 DATABASE_URL（运行时角色）');
+    const email = v['owner-email'] ?? fail('缺少参数 --owner-email');
+    const { db, close } = createDb(url, { max: 2 });
+    try {
+      const [a] = await db.select().from(accounts).where(eq(accounts.email, email.trim().toLowerCase()));
+      if (!a) fail(`找不到账号 ${email}`);
+      const actor = (await resolveActor(db, a.id, v['org-slug']!)) ?? fail(`账号 ${email} 不是组织 ${v['org-slug']} 的成员`);
+      const products = await listProducts(db, actor);
+      const product = products.find((p) => p.key === v['product-key']) ?? fail(`找不到产品 ${v['product-key']}`);
+      const result = await measure(await buildPerfCases(db, actor, product.id), Number(v.runs));
+      console.log('| 用例 | p50 (ms) | p95 (ms) | 最大 (ms) |\n|---|---|---|---|');
+      for (const r of result) console.log(`| ${r.name} | ${r.p50} | ${r.p95} | ${r.max} |`);
+    } finally {
+      await close();
+    }
+    return;
+  }
+
   const data: LegacyData = { plane: loadPlane(need('plane')), push: loadPush(need('push')), prd: await loadPrd(need('prd-url')) };
   const mappingDir = need('mapping');
 
