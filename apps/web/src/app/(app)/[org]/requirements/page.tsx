@@ -59,7 +59,12 @@ function RequirementsPage() {
     router.replace(qs ? `?${qs}` : '?', { scroll: false });
   };
 
-  useEffect(() => setQ(filter.q), [filter.q]);
+  // 地址栏里的 q 变化时（前进后退、清空筛选）同步到输入框；在渲染期间调整，避免 effect 里 setState 多渲染一轮
+  const [syncedQ, setSyncedQ] = useState(filter.q);
+  if (filter.q !== syncedQ) {
+    setSyncedQ(filter.q);
+    setQ(filter.q);
+  }
   useEffect(() => {
     if (q === filter.q) return;
     debounceRef.current = setTimeout(() => setFilter({ q }), 300);

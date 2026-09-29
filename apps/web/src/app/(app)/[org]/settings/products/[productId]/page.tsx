@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { NoAccess } from '@/components/no-access';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,12 @@ export default function ProductDetailPage() {
   const orgQ = useOrg(org);
   const product = useProduct(org, productId);
   const [name, setName] = useState('');
-  useEffect(() => setName(product.data?.name ?? ''), [product.data?.name]);
+  const serverName = product.data?.name ?? '';
+  const [syncedName, setSyncedName] = useState('');
+  if (serverName !== syncedName) {
+    setSyncedName(serverName);
+    setName(serverName);
+  }
   const update = useApiMutation(
     (body: { name?: string; status?: 'active' | 'archived' }) => api(`/orgs/${org}/products/${productId}`, { method: 'PATCH', body }),
     { invalidate: [qk.product(org, productId), qk.products(org), qk.me], success: '已保存' },

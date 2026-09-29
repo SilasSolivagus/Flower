@@ -18,6 +18,8 @@ export async function call(
   method: string,
   path: string,
   opts: { session?: string; token?: string; body?: unknown } = {},
+  // 测试直接读取任意响应字段，逐个声明类型不划算
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<{ status: number; body: any; res: Response }> {
   const headers: Record<string, string> = {};
   if (opts.body !== undefined) headers['content-type'] = 'application/json';

@@ -2,7 +2,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { Link2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { FormError } from '@/components/form-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -41,13 +41,14 @@ export function MemberDrawer({
   const [error, setError] = useState<ApiError | null>(null);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (!member) return;
+  const [synced, setSynced] = useState<Member | null>(null);
+  if (member && member !== synced) {
+    setSynced(member);
     setForm({ displayName: member.displayName, department: member.department ?? '', orgRole: member.orgRole, status: member.status });
     setTagIds(member.functionTagIds);
     setRoles(Object.fromEntries(member.productRoles.map((r) => [r.productId, r.role])));
     setError(null);
-  }, [member]);
+  }
 
   if (!member) return <Sheet open={false} onOpenChange={onOpenChange} />;
   const kind = memberKind(member);
