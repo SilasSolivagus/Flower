@@ -10,6 +10,8 @@ import type {
   InstanceStatus,
   Iteration,
   IterationBrief,
+  IterationDetail,
+  IterationScope,
   Invitation,
   LevelNames,
   Member,
@@ -50,6 +52,8 @@ export const qk = {
   nodes: (o: string, productId: string) => ['org', o, 'product', productId, 'nodes'] as const,
   iterations: (o: string, productId: string) => ['org', o, 'iterations', 'product', productId] as const,
   iterationList: (o: string) => ['org', o, 'iterations', 'list'] as const,
+  iteration: (o: string, id: string) => ['org', o, 'iterations', 'detail', id] as const,
+  iterationScope: (o: string, id: string) => ['org', o, 'iterations', 'scope', id] as const,
 };
 
 export const useSetupStatus = () => useQuery({ queryKey: qk.setup, queryFn: () => api<InstanceStatus>('/setup/status') });
@@ -119,6 +123,11 @@ export const iterationKeys = (o: string) => ['org', o, 'iterations'] as const;
 
 export const useIterations = (o: string) =>
   useQuery({ queryKey: qk.iterationList(o), queryFn: () => api<{ iterations: Iteration[] }>(`/orgs/${o}/iterations`), select: (d) => d.iterations });
+
+export const useIteration = (o: string, id: string) =>
+  useQuery({ queryKey: qk.iteration(o, id), queryFn: () => api<{ iteration: IterationDetail }>(`/orgs/${o}/iterations/${id}`), select: (d) => d.iteration });
+export const useIterationScope = (o: string, id: string) =>
+  useQuery({ queryKey: qk.iterationScope(o, id), queryFn: () => api<{ scope: IterationScope }>(`/orgs/${o}/iterations/${id}/scope`), select: (d) => d.scope });
 
 export const useRequirements = (o: string, productId: string | undefined, query: string) =>
   useQuery({

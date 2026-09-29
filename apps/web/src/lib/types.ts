@@ -9,7 +9,9 @@ import type {
   InvitationPreview as CoreInvitationPreview,
   InvitationView,
   IterationBrief as CoreIterationBrief,
+  IterationDetail as CoreIterationDetail,
   IterationMilestone as CoreIterationMilestone,
+  IterationScope as CoreIterationScope,
   IterationView,
   MemberView,
   MyOrg as CoreMyOrg,
@@ -66,3 +68,5 @@ export type IterationBrief = CoreIterationBrief;
 export type CheckState = CoreCheckState;
 export type Iteration = Jsonify<IterationView>;
 export type IterationMilestone = CoreIterationMilestone;
+export type IterationDetail = Jsonify<CoreIterationDetail>;
+export type IterationScope = Jsonify<CoreIterationScope>;

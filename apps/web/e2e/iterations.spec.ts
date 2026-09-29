@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { type APIRequestContext, expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
 import { createProduct, login, ok, OWNER, setupInstance } from './helpers';
 
@@ -95,4 +95,120 @@ test('迭代列表：加载失败显示重试', async ({ page }) => {
   await page.unroute('**/api/v1/orgs/acme/iterations');
   await page.getByRole('button', { name: '重试' }).click();
   await expect(page.getByText('还没有迭代')).toBeVisible();
+});
+
+const GATED_WORKFLOW = {
+  name: '准入流程',
+  body: {
+    states: [
+      { key: 'backlog', label: '收集', color: '#94a3b8', order: 1, group: '', category: 'backlog' },
+      { key: 'done', label: '已上线', color: '#10b981', order: 2, group: '', category: 'completed' },
+    ],
+    initial: 'backlog',
+    transitions: [
+      { from: '*', to: 'backlog', conditions: [] },
+      { from: '*', to: 'done', conditions: [] },
+    ],
+    actionGates: [{ action: 'join_iteration', conditions: [{ type: 'check_item', item: 'feasibility', in: ['passed'] }] }],
+    checkItems: [{ key: 'feasibility', label: '可行性', scope: 'requirement', type: 'single' }],
+  },
+};
+
+/** 产品使用带「加入迭代需可行性通过」准入条件的流程；返回产品 id。 */
+async function gatedProduct(request: APIRequestContext): Promise<string> {
+  const productId = await createProduct(request);
+  const wf = await ok(request.post('/api/v1/orgs/acme/workflows', { data: GATED_WORKFLOW }));
+  await ok(request.put(`/api/v1/orgs/acme/products/${productId}/workflow`, { data: { versionId: (await wf.json()).version.id } }));
+  return productId;
+}
+
+async function createRequirement(request: APIRequestContext, productId: string, title: string, feasible: boolean) {
+  const r = (await (await ok(request.post(`/api/v1/orgs/acme/products/${productId}/requirements`, { data: { title } }))).json()).requirement;
+  if (feasible) await ok(request.put(`/api/v1/orgs/acme/requirements/${r.id}/checks/feasibility`, { data: { state: 'passed' } }));
+  return r as { id: string; displayKey: string };
+}
+
+test('迭代详情：添加需求、准入条件不满足时强制加入、开始迭代、移出、范围对比', async ({ page, request }) => {
+  const productId = await gatedProduct(request);
+  await createRequirement(request, productId, '文件夹加密', true);
+  await createRequirement(request, productId, '回收站自动清理', false);
+  await createRequirement(request, productId, '分享统计', true);
+  const iteration = (
+    await (
+      await ok(
+        request.post('/api/v1/orgs/acme/iterations', {
+          data: {
+            type: 'regular',
+            productId,
+            name: '迭代0801',
+            startDate: '2026-08-01',
+            endDate: '2026-08-14',
+            milestones: [
+              { label: '开发开始', date: '2020-01-01' },
+              { label: '发布', date: '2099-12-31' },
+            ],
+          },
+        }),
+      )
+    ).json()
+  ).iteration;
+
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/iterations/${iteration.id}`);
+  await expect(page.getByRole('heading', { name: '迭代0801' })).toBeVisible();
+  const milestones = page.getByRole('list', { name: '里程碑' });
+  await expect(milestones.getByRole('listitem').filter({ hasText: '开发开始' })).toContainText('已过');
+  await expect(milestones.getByRole('listitem').filter({ hasText: '发布' })).toContainText('未到');
+
+  const add = page.getByRole('textbox', { name: '添加需求' });
+  await add.fill('PAN-1');
+  await page.getByRole('button', { name: '加入 PAN-1' }).click();
+  await expect(page.getByText('已加入迭代')).toBeVisible();
+  await expect(page.getByRole('link', { name: '文件夹加密' })).toBeVisible();
+
+  await add.fill('PAN-2');
+  await page.getByRole('button', { name: '加入 PAN-2' }).click();
+  const alert = page.getByRole('alert').filter({ hasText: '加入迭代的条件未满足' });
+  await expect(alert).toContainText('「可行性」需为通过（当前：未开始）');
+  await page.getByRole('button', { name: '强制加入 PAN-2' }).click();
+  await page.getByLabel('原因').fill('线上问题必须本迭代处理');
+  await page.getByRole('button', { name: '确认加入' }).click();
+  await expect(page.getByText('已强制加入迭代')).toBeVisible();
+  await expect(page.getByRole('link', { name: '回收站自动清理' })).toBeVisible();
+
+  await page.getByRole('button', { name: '开始迭代' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: '开始迭代' }).click();
+  await expect(page.getByTestId('iteration-status')).toHaveText('进行中');
+
+  await page.getByRole('button', { name: '移出 PAN-2' }).click();
+  await expect(page.getByText('已移出迭代')).toBeVisible();
+  await add.fill('PAN-3');
+  await page.getByRole('button', { name: '加入 PAN-3' }).click();
+  await expect(page.getByRole('link', { name: '分享统计' })).toBeVisible();
+
+  await page.getByRole('tab', { name: '范围对比' }).click();
+  await expect(page.getByRole('region', { name: '承诺内未完成' })).toContainText('文件夹加密');
+  await expect(page.getByRole('region', { name: '中途加入' })).toContainText('分享统计');
+  const removed = page.getByRole('region', { name: '中途移出' });
+  await expect(removed).toContainText('回收站自动清理');
+  await expect(removed).toContainText('未排期');
+});
+
+test('迭代详情：不存在时显示无权访问；加载失败（非 404）显示重试', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const iteration = (
+    await (await ok(request.post('/api/v1/orgs/acme/iterations', { data: { type: 'regular', productId, name: '迭代0901', startDate: '2026-09-01', endDate: '2026-09-14' } }))).json()
+  ).iteration;
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto('/acme/iterations/00000000-0000-0000-0000-000000000000');
+  await expect(page.getByRole('heading', { name: '无权访问' })).toBeVisible();
+
+  await page.route(`**/api/v1/orgs/acme/iterations/${iteration.id}`, (route) =>
+    route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'internal', message: '服务器错误' } }) }),
+  );
+  await page.goto(`/acme/iterations/${iteration.id}`);
+  await expect(page.getByText('加载迭代失败，请重试。')).toBeVisible({ timeout: 15_000 });
+  await page.unroute(`**/api/v1/orgs/acme/iterations/${iteration.id}`);
+  await page.getByRole('button', { name: '重试' }).click();
+  await expect(page.getByRole('heading', { name: '迭代0901' })).toBeVisible();
 });

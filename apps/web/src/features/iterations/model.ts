@@ -34,3 +34,24 @@ export function iterationFormError(f: IterationForm): string | null {
   if (f.milestones.some((m) => !m.label.trim() || !m.date)) return '里程碑需要填写名称和日期';
   return null;
 }
+
+const CANCEL_CONFIRM = '取消后不能恢复，也不能再加入需求。';
+
+export const STATUS_ACTIONS: Record<Iteration['status'], Array<{ to: Iteration['status']; label: string; confirm: string }>> = {
+  planning: [
+    { to: 'active', label: '开始迭代', confirm: '开始后会锁定基线结束日期，并把当前迭代中的需求记为承诺范围。' },
+    { to: 'canceled', label: '取消迭代', confirm: CANCEL_CONFIRM },
+  ],
+  active: [
+    { to: 'done', label: '完成迭代', confirm: '完成后不能再修改迭代，也不能再加入需求。' },
+    { to: 'canceled', label: '取消迭代', confirm: CANCEL_CONFIRM },
+  ],
+  done: [],
+  canceled: [],
+};
+
+/** 承诺完成率（%）：承诺内已完成 ÷ 承诺总数；中途移出的也算在承诺总数里。 */
+export function commitmentRate(scope: { committedDone: unknown[]; committedOpen: unknown[]; removed: unknown[] }): number | null {
+  const total = scope.committedDone.length + scope.committedOpen.length + scope.removed.length;
+  return total === 0 ? null : Math.round((scope.committedDone.length / total) * 100);
+}

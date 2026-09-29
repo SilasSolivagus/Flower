@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Iteration } from '@/lib/types';
-import { groupIterations, iterationFormError, localToday, milestoneTimeline } from './model';
+import { commitmentRate, groupIterations, iterationFormError, localToday, milestoneTimeline, STATUS_ACTIONS } from './model';
 
 const it0 = (over: Partial<Iteration>): Iteration => ({
   id: 'i',
@@ -61,5 +61,23 @@ describe('迭代列表模型', () => {
     expect(iterationFormError({ ...ok, endDate: '' })).toBe('请填写开始和结束日期');
     expect(iterationFormError({ ...ok, endDate: '2026-06-30' })).toBe('结束日期不能早于开始日期');
     expect(iterationFormError({ ...ok, milestones: [{ label: '发布', date: '' }] })).toBe('里程碑需要填写名称和日期');
+  });
+});
+
+describe('迭代状态操作与承诺完成率', () => {
+  it('只有规划中和进行中有状态操作', () => {
+    expect(STATUS_ACTIONS.planning.map((a) => [a.to, a.label])).toEqual([
+      ['active', '开始迭代'],
+      ['canceled', '取消迭代'],
+    ]);
+    expect(STATUS_ACTIONS.active.map((a) => a.to)).toEqual(['done', 'canceled']);
+    expect(STATUS_ACTIONS.done).toEqual([]);
+    expect(STATUS_ACTIONS.canceled).toEqual([]);
+  });
+
+  it('承诺完成率 = 承诺内已完成 / 承诺总数（含中途移出）', () => {
+    expect(commitmentRate({ committedDone: [1, 2], committedOpen: [3], removed: [4] })).toBe(50);
+    expect(commitmentRate({ committedDone: [1], committedOpen: [2, 3], removed: [] })).toBe(33);
+    expect(commitmentRate({ committedDone: [], committedOpen: [], removed: [] })).toBeNull();
   });
 });

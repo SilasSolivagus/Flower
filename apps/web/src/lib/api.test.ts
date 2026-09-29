@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, api } from './api';
+import { ApiError, api, unmetFrom } from './api';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -39,5 +39,13 @@ describe('api', () => {
   it('非 JSON 的错误响应也有中文提示', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('oops', { status: 502 })));
     await expect(api('/x')).rejects.toMatchObject({ status: 502, code: 'internal', message: '服务暂时不可用，请稍后重试' });
+  });
+});
+
+describe('unmetFrom', () => {
+  it('从错误详情中取出未满足的条件，其他形状返回空数组', () => {
+    expect(unmetFrom({ unmet: ['「可行性」需为通过（当前：未开始）', 1] })).toEqual(['「可行性」需为通过（当前：未开始）']);
+    expect(unmetFrom([{ path: 'x', message: 'y' }])).toEqual([]);
+    expect(unmetFrom(null)).toEqual([]);
   });
 });
