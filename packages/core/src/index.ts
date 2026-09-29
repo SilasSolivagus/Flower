@@ -25,3 +25,5 @@ export * from './tenancy/members';
 export * from './tenancy/invitations';
 export * from './tenancy/function-tags';
 export * from './setup/instance';
+export * from './requirements/labels';
+export * from './requirements/workflow-runtime';
