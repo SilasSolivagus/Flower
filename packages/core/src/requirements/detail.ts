@@ -60,7 +60,7 @@ export type RequirementDetail = RequirementListItem & {
   history: Array<{ from: string | null; to: string; actor: MemberRef | null; forced: boolean; reason: string | null; at: Date }>;
   assignments: Array<{ member: MemberRef; functionTag: { id: string; name: string } | null; platform: OptionRef | null }>;
   blockers: Array<{ id: string; description: string; status: 'active' | 'resolved'; owner: MemberRef | null; createdAt: Date; resolvedAt: Date | null }>;
-  relations: Array<{ type: string; direction: 'out' | 'in'; other: { id: string; displayKey: string; title: string } }>;
+  relations: Array<{ id: string; type: string; direction: 'out' | 'in'; other: { id: string; displayKey: string; title: string } }>;
   releases: Array<{ id: string; versionName: string; platform: OptionRef | null; status: 'planned' | 'released'; releasedAt: Date | null }>;
   tasks: Array<{ id: string; title: string; assignee: MemberRef | null; status: 'todo' | 'doing' | 'done'; planStart: string | null; planDays: number | null }>;
   aliases: string[];
@@ -250,7 +250,7 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
           const otherId = r.fromId === row.id ? r.toId : r.fromId;
           const o = others.find((x) => x.id === otherId);
           if (!o) return null;
-          return { type: r.type, direction: r.fromId === row.id ? ('out' as const) : ('in' as const), other: { id: otherId, displayKey: displayKey(o.productKey, o.number), title: o.title } };
+          return { id: r.id, type: r.type, direction: r.fromId === row.id ? ('out' as const) : ('in' as const), other: { id: otherId, displayKey: displayKey(o.productKey, o.number), title: o.title } };
         })
         .filter((x): x is NonNullable<typeof x> => x !== null),
       releases: releaseRows.map(({ r }) => ({ id: r.id, versionName: r.versionName, platform: optionRef(r.platformOptionId), status: r.status, releasedAt: r.releasedAt })),

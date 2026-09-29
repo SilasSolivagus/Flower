@@ -204,7 +204,7 @@ describe('跨产品关联', () => {
     await withOrg(t.db, owner.orgId, (tx) => tx.insert(requirementRelations).values({ orgId: owner.orgId, fromId: reqId, toId: req2, type: 'related' }));
 
     const asOwner = await getRequirementByKey(t.db, owner, 'PAN-1');
-    expect(asOwner.relations).toContainEqual({ type: 'related', direction: 'out', other: { id: req2, displayKey: 'PAN2-1', title: '另一个产品的需求' } });
+    expect(asOwner.relations).toContainEqual(expect.objectContaining({ type: 'related', direction: 'out', other: { id: req2, displayKey: 'PAN2-1', title: '另一个产品的需求' } }));
 
     const asViewerGuest = await getRequirementByKey(t.db, viewerGuest, 'PAN-1');
     expect(asViewerGuest.relations).toEqual([]);
