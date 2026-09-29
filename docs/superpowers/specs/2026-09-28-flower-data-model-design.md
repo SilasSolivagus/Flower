@@ -159,7 +159,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 | `state_transitions` | requirement_id、from_state、to_state、actor_member_id、token_id、forced、reason、at。取代 123plane 的阶段时间戳 |
 | `blockers` | requirement_id、description、status、owner_member_id |
 | `check_item_results` | org_id、target_type（requirement / document）、target_id、item_key、state、note、meta（jsonb）、updated_by、updated_at |
-| `check_item_signoffs` | result_id、signer_member_id、signer_rule_index、decision（passed / rejected）、note、evidence_link_id（可空，引用 `external_links`）、at |
+| `check_item_signoffs` | result_id、signer_member_id、acted_by_member_id（可空，代签时的实际操作人）、signer_rule_index、decision（passed / rejected）、note、evidence_link_id（可空，引用 `external_links`）、at |
 
 ### 4.3 迭代与发布版本
 
@@ -402,12 +402,32 @@ push 主状态映射到检查项与迭代：评审中 → 检查项 in_progress�
 | prd_domains 23 + 123plane business_domain 取值 | structure_nodes 第一层（名称合并去重）；未填业务域的 194 条需求 node_id 为空 |
 | 通知队列、同步收件箱和发件箱 | 不迁 |
 
+### 7.3 按 2026-09-29 生产数据核实后的补充
+
+以生产库只读副本核实 §7.2，补充以下规则：
+
+- 数据量以迁移时的实际记录为准，对账报告按记录数核对，不写死数量。当时的数量为：123plane 需求 688 条，push 需求 335 条（其中 8 条已在 push 内标记合并），甘特任务 363 条，设计签字 320 条。
+- 需求合并：push 有 249 条按 plane_id 匹配，2 条按标题匹配，约 76 条为 push 独有需求，迁移后约 764 条。
+- push 主状态"待排期"：背景、可行性、行业三个检查项保持 not_started。主状态以 123plane 为准；push 独有需求的主状态为"待评估"。
+- 123plane 历史上物理删除的需求（activity_log 中 83 条 deleted）不恢复为需求，只随 activity_log 迁入 domain_events。
+- 迭代：迭代0624 与 V2026.06.2（发布日期相差一天）合并，名称用"迭代0624"。"专业空间优化"与"专业空间版本发布"一样，导入为组织级专项。其余没有对应的迭代单独导入。
+- 会签代签：`check_item_signoffs` 增加 `acted_by_member_id`（可空），记录实际操作人。`signer_member_id` 记被代签的人。"代饶总 by ×××"按此迁移。
+- 平台、业务域、人员去重、迭代配对由迁移脚本根据数据生成建议对照表，用户审阅修改后重新执行迁移，不在代码中写死：
+  - 平台是 42 种逗号拼接组合，含鸿蒙、TV端、H5、管理后台、全端等值。
+  - 业务域存在同义词，prd_domains 中有 8 个在 123plane 未出现。
+  - 同一字段中写了多名负责人的情况，也在人员对照表中处理。
+- 123plane 优先级"绿色通道"作为优先级字典的新增选项。
+- push 需求的 `line`（功能 / 商业）写入内置字段 line。push 独有字段 `alias` 存入需求的 legacy 元数据。
+- push AI 预审结果（22 条）存入"AI 预审"检查项结果的 meta。
+- 123plane 发布版本没有计划发布日期，历史版本的"按期达成率"不可计算，只对迁移后新建的版本生效。
+- 迁移脚本的状态映射按源码定义的完整取值编写，不只覆盖数据中出现过的值。
+
 ## 8. 分阶段
 
 | 阶段 | 内容 |
 |---|---|
 | P0 | monorepo（`apps/web`、`packages/core`、`packages/mcp`）；§2 租户与身份、§3 可配置定义；RLS；领域事件表；docker compose（app + postgres）；初始化向导 |
-| P1 | §4 需求、迭代、任务；迁移脚本与对账报告 |
+| P1 | §4 需求、迭代、任务；迁移脚本与对账报告。分两段：P1-A 数据模型、服务、接口、迁移与对账，加需求列表与详情界面；P1-B 迭代、发布版本、甘特、工作台、评审会签界面。P1 用生产数据副本验证：迁移对账、日常操作新旧对比、真实数据量下的界面、用户试用 |
 | P2 | §5 文档 |
 | P3 | §6.2 通知中心（先接测试群 webhook 联调，正式环境切换另行安排）；基础数据看板（§6.6 中已可计算的指标） |
 | P4 | OpenAPI + MCP server |
