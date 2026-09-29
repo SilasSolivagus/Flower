@@ -9,5 +9,9 @@ export function safeNext(next: string | null): string {
   }
   if (u.origin !== 'http://x') return '/';
   if (!next.startsWith('/')) return '/';
-  return u.pathname + u.search + u.hash;
+  const path = u.pathname + u.search + u.hash;
+  // 相对路径中的 `.`/`..` 段归一化后可能把 pathname 折叠成 `//evil.com`
+  // （浏览器会当作协议相对地址处理），或残留反斜杠，一律拒绝。
+  if (path.startsWith('//') || path.includes('\\')) return '/';
+  return path;
 }

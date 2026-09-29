@@ -34,4 +34,28 @@ describe('safeNext', () => {
     // searchParams.get() 已经完成一次解码，%09 会变成真正的 tab 字符
     expect(safeNext(decodeURIComponent('/%09/evil.com'))).toBe('/');
   });
+
+  it('拒绝以单个 . 段归一化折叠成 // 开头的路径', () => {
+    expect(safeNext('/.//evil.com')).toBe('/');
+  });
+
+  it('拒绝以 .. 段归一化折叠成 // 开头的路径', () => {
+    expect(safeNext('/..//evil.com')).toBe('/');
+  });
+
+  it('拒绝多段路径中 .. 归一化折叠成 // 开头的路径', () => {
+    expect(safeNext('/a/..//evil.com')).toBe('/');
+  });
+
+  it('拒绝 URL 编码的 . 段归一化折叠成 // 开头的路径', () => {
+    expect(safeNext('/%2e//evil.com')).toBe('/');
+  });
+
+  it('拒绝 . 段与反斜杠组合归一化折叠成 // 开头的路径', () => {
+    expect(safeNext('/./\\evil.com')).toBe('/');
+  });
+
+  it('拒绝 .. 段与制表符组合归一化折叠成 // 开头的路径', () => {
+    expect(safeNext('/x/../\t/evil.com')).toBe('/');
+  });
 });
