@@ -15,7 +15,7 @@ import {
 import { createRequirement } from '../src/requirements/requirements';
 import { setProductRole, createProduct } from '../src/tenancy/products';
 import { createTestDb } from './db';
-import { asMember, seedInstance } from './factories';
+import { asMember, readOnlyToken, regularIteration, seedInstance } from './factories';
 
 let t: Awaited<ReturnType<typeof createTestDb>>;
 let owner: Actor;
@@ -33,8 +33,7 @@ const setState = (requirementId: string, stateKey: string) =>
 const eventsOf = (subjectId: string) => withOrg(t.db, owner.orgId, (tx) => tx.select().from(domainEvents).where(eq(domainEvents.subjectId, subjectId)));
 const snapshotsOf = (iterationId: string) =>
   withOrg(t.db, owner.orgId, (tx) => tx.select().from(iterationScopeSnapshots).where(eq(iterationScopeSnapshots.iterationId, iterationId)));
-const regular = (productId: string, name: string, startDate: string, endDate: string) =>
-  ({ type: 'regular' as const, productId, name, startDate, endDate });
+const regular = regularIteration;
 
 beforeAll(async () => {
   t = await createTestDb();
@@ -46,7 +45,7 @@ beforeAll(async () => {
   editor = await asMember(t.db, owner, '开发乙');
   viewer = await asMember(t.db, owner, '只读丙');
   await setProductRole(t.db, owner, pan, viewer.memberId, 'viewer');
-  readToken = { ...owner, tokenId: '00000000-0000-0000-0000-0000000000f1', tokenScope: { products: 'all', access: 'read' } };
+  readToken = readOnlyToken(owner);
 });
 afterAll(() => t.cleanup());
 

@@ -24,3 +24,12 @@ export async function asMember(db: Db, owner: Actor, displayName: string, orgRol
   const m = await createPlaceholderMember(db, owner, { displayName });
   return { ...owner, memberId: m.id, orgRole, accountId: null };
 }
+
+/** 新建常规迭代的输入构造。 */
+export const regularIteration = (productId: string, name: string, startDate: string, endDate: string) =>
+  ({ type: 'regular' as const, productId, name, startDate, endDate });
+
+/** 只读范围（全部产品）的 API Token Actor。 */
+export function readOnlyToken(owner: Actor): Actor {
+  return { ...owner, tokenId: '00000000-0000-0000-0000-0000000000f1', tokenScope: { products: 'all', access: 'read' } };
+}
