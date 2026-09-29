@@ -45,8 +45,9 @@ export function parseLegacyDate(s: S | undefined): string | null {
   return m ? m[1]! : null;
 }
 
+/** 日期加天数；天数可为小数（半天），结束落在某天中途时取次日，即该天仍未结束。 */
 export function addDays(date: string, days: number): string {
   const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
+  d.setUTCDate(d.getUTCDate() + Math.ceil(days));
   return d.toISOString().slice(0, 10);
 }

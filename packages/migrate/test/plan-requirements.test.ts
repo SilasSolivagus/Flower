@@ -181,6 +181,19 @@ describe('导入计划：需求（修复回归）', () => {
     expect(p.rows.tasks.find((t) => t.title === '半天任务')).toMatchObject({ planDays: 0.5, delayDays: 1.5 });
   });
 
+  it('半天甘特任务在开始当天仍是进行中，次日才算完成', () => {
+    const data = makeLegacyData();
+    data.push.ganttTasks.push({
+      id: 4, requirement_id: 1, version_id: null, title: '半天任务', assignee: null, phase: null, plan_start: '2026-03-02',
+      plan_days: 0.5, delay_days: null, actual_status: '', note: '', flag: '', created_at: null, alias: null,
+      starred: null, ov_assignee: null, ov_status: null, ov_progress: null, manual: null,
+    });
+    const statusAt = (asOf: string) => buildImportPlan(data, reviewedMapping(), { ...OPTS, asOf }).rows.tasks.find((t) => t.title === '半天任务')!.status;
+    expect(statusAt('2026-03-01')).toBe('todo');
+    expect(statusAt('2026-03-02')).toBe('doing');
+    expect(statusAt('2026-03-03')).toBe('done');
+  });
+
   it('需求排序按解析后的时间而非原始字符串比较', () => {
     const data = makeLegacyData();
     data.plane.requirements.push(

@@ -40,5 +40,9 @@ describe('归一化', () => {
     expect(parseLegacyDate('2026-04-14T10:00:00Z')).toBe('2026-04-14');
     expect(parseLegacyDate('')).toBeNull();
     expect(addDays('2026-03-30', 3)).toBe('2026-04-02');
+    // 半天不截断：结束落在当天中午，按结束日的次日计
+    expect(addDays('2026-03-02', 0.5)).toBe('2026-03-03');
+    expect(addDays('2026-03-02', 2)).toBe('2026-03-04');
+    expect(addDays('2026-03-02', 1.5)).toBe('2026-03-04');
   });
 });
