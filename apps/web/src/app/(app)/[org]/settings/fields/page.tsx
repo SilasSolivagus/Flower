@@ -76,10 +76,17 @@ function FieldCard({ org, field, editable, productId }: { org: string; field: Fi
               const v = label.trim();
               if (!v) return;
               setLabel('');
-              add.mutate(v);
+              add.mutate(v, { onError: () => setLabel(v) });
             }}
           >
-            <Input aria-label="新选项" placeholder="新选项名称" className="h-8 w-56" value={label} onChange={(e) => setLabel(e.target.value)} />
+            <Input
+              aria-label="新选项"
+              placeholder="新选项名称"
+              className="h-8 w-56"
+              maxLength={20}
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+            />
             <Button type="submit" size="sm" variant="outline" disabled={add.isPending}>
               添加
             </Button>
