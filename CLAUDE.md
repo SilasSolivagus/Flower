@@ -2,6 +2,12 @@
 
 多组织、多产品的产品研发管理平台。设计文档：`docs/superpowers/specs/2026-09-28-flower-data-model-design.md`。
 
+## 协作
+
+本地开发 agent 和云端 agent（GitHub 直连）共用 `docs/agent-log.md`：开工前读最上面几条，完成一项工作后在最上面追加一条，与代码放在同一个提交或 PR 里。格式见该文件开头。
+
+PR 会跑 GitHub Actions CI（`.github/workflows/ci.yml`）：类型检查 + 单元测试、端到端测试、镜像冒烟测试。
+
 ## 命令
 
 | 用途 | 命令 |

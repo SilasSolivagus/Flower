@@ -1,6 +1,6 @@
 # Flower 交接文档
 
-更新：2026-09-29。新会话接手时先读这份，再读下面列出的 spec 和计划。
+更新：2026-09-29。新会话接手时先读这份，再读下面列出的 spec 和计划。最近谁做了什么，看 `docs/agent-log.md`。
 
 ## 项目是什么
 
@@ -23,6 +23,7 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
 | 视觉样稿 | https://claude.ai/artifact/DgxTagCVRUGsKbvZSm9XPL （最上面一行"定稿"：A 配色 + C 密度） |
 | `docs/diagrams/` | 服务器现状图、目标架构草案 |
 | `CLAUDE.md` | 项目命令与约定 |
+| `docs/agent-log.md` | 本地 agent 与云端 agent 的协作日志（每次完成工作后追加） |
 
 ## 当前进度
 
