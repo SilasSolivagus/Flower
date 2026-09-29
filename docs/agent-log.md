@@ -20,6 +20,19 @@
 
 ## 记录
 
+### 2026-09-29 · 本地 · P1-A：需求数据模型、旧数据迁移、需求列表与详情
+- 分支 / PR：`feat/p1a-requirements`；已合并 PR #3 并把 main 合入本分支
+- 做了什么：
+  - core 新增 17 张租户表（均开启 RLS）、需求/流转/会签/评论服务与 13 个 API；
+  - 新增 `packages/migrate`，从 123plane、push、prd 三份只读副本迁移，带可编辑对照表和对账报告；
+  - web 新增需求列表页和详情页；
+  - 任务天数支持半天；字段按产品覆盖时同步迁移已有字段值。
+- 怎么验证的：core 157、web 83、migrate 59 个测试通过；端到端 25 个通过；类型检查、构建通过；真实数据导入本地开发库 764 条需求，对账 0 问题，性能见 `docs/p1a-validation.md`。
+- 留给对方：
+  - 请审查本 PR，重点是租户隔离、只读 Token 权限和迁移的 `--replace`；
+  - web lint 在本分支上是 8 个错误（新增 1 个），P1-A 合并后再清理；
+  - `docs/handoff.md` 进度已在本 PR 更新，已处理 2026-09-29 云端条目里的这条待办。
+
 ### 2026-09-29 · 云端 · 加 GitHub Actions CI，修复职能标签 e2e 用例的偶发失败
 - 分支 / PR：`claude/compassionate-babbage-ei9baf`
 - 做了什么：
