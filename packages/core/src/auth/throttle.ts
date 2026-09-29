@@ -6,6 +6,7 @@ import { normalizeEmail } from './accounts';
 
 export type ThrottleRule = { max: number; windowMs: number; lockMs: number };
 
+// 不变量：lockMs >= windowMs。锁定到期后能否恢复计数，依赖窗口本身也已经过期（见 recordLoginAttempt）。
 export const LOGIN_LIMITS = {
   email: { max: 5, windowMs: 15 * 60_000, lockMs: 15 * 60_000 },
   ip: { max: 20, windowMs: 15 * 60_000, lockMs: 15 * 60_000 },
@@ -85,4 +86,17 @@ export function assertAttemptsWithinLimit(
 
 export async function clearLoginFailures(q: Queryable, key: string): Promise<void> {
   await q.delete(authThrottle).where(eq(authThrottle.key, key));
+}
+
+/**
+ * 登录成功时，把这次成功尝试从某个 key 的计数里退回去（失败数减一，不低于 0），不清空整条记录。
+ * 用于 IP key：一次成功登录不该消耗同一出口（如公司 NAT）其他用户的限流预算；
+ * 该 key 不存在时这条 UPDATE 自然是空操作。
+ */
+export async function creditSuccessfulLogin(q: Queryable, key: string | undefined): Promise<void> {
+  if (!key) return;
+  await q
+    .update(authThrottle)
+    .set({ failures: sql`greatest(${authThrottle.failures} - 1, 0)` })
+    .where(eq(authThrottle.key, key));
 }

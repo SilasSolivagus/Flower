@@ -5,7 +5,14 @@ import type { Queryable } from '../db/tx';
 import { AppError } from '../errors';
 import { type AccountView, normalizeEmail, toAccountView } from './accounts';
 import { hashPassword, verifyPassword } from './password';
-import { assertAttemptsWithinLimit, assertNotThrottled, clearLoginFailures, recordLoginAttempt, throttleKeys } from './throttle';
+import {
+  assertAttemptsWithinLimit,
+  assertNotThrottled,
+  clearLoginFailures,
+  creditSuccessfulLogin,
+  recordLoginAttempt,
+  throttleKeys,
+} from './throttle';
 
 export const SESSION_COOKIE = 'flower_session';
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -74,6 +81,7 @@ export async function login(
     throw new AppError('unauthenticated', '邮箱或密码错误');
   }
   await clearLoginFailures(q, keys[0]!.key);
+  await creditSuccessfulLogin(q, keys[1]?.key);
   await purgeExpiredSessions(q);
   await q.update(accounts).set({ lastLoginAt: new Date() }).where(eq(accounts.id, row.id));
   const session = await createSession(q, row.id, meta);

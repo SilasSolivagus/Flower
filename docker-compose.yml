@@ -29,6 +29,7 @@ services:
       FLOWER_APP_DB_PASSWORD: ${FLOWER_APP_DB_PASSWORD}
       FLOWER_SECRET_KEY: ${FLOWER_SECRET_KEY:?请在 .env 中设置 FLOWER_SECRET_KEY（openssl rand -base64 48）}
       FLOWER_PUBLIC_URL: ${FLOWER_PUBLIC_URL:-http://localhost:3000}
+      FLOWER_TRUSTED_PROXY_HOPS: ${FLOWER_TRUSTED_PROXY_HOPS:-0}
     ports:
       - "${FLOWER_PORT:-3000}:3000"
     healthcheck:

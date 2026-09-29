@@ -62,6 +62,16 @@ describe('限流计数的原子性', () => {
   });
 });
 
+describe('成功登录不消耗 IP 限流预算', () => {
+  it('同一 IP 连续 25 次成功登录不会被限流（IP 上限是 20）', async () => {
+    const acc = await createAccount(t.db, { email: 'nat@example.com', name: 'Nat', password: 'password123' });
+    for (let i = 0; i < 25; i++) {
+      const ok = await login(t.db, { email: 'nat@example.com', password: 'password123' }, { ip: '10.2.2.2' });
+      expect(ok.account.id).toBe(acc.id);
+    }
+  });
+});
+
 describe('过期会话清理', () => {
   it('删除已过期的会话，保留有效会话', async () => {
     const acc = await createAccount(t.db, { email: 'purge@example.com', name: 'P', password: 'password123' });
