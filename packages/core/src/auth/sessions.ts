@@ -5,7 +5,7 @@ import type { Queryable } from '../db/tx';
 import { AppError } from '../errors';
 import { type AccountView, normalizeEmail, toAccountView } from './accounts';
 import { hashPassword, verifyPassword } from './password';
-import { assertNotThrottled, clearLoginFailures, recordLoginFailure, throttleKeys } from './throttle';
+import { assertAttemptsWithinLimit, assertNotThrottled, clearLoginFailures, recordLoginAttempt, throttleKeys } from './throttle';
 
 export const SESSION_COOKIE = 'flower_session';
 export const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -61,13 +61,16 @@ export async function login(
   input: { email: string; password: string },
   meta: SessionMeta = {},
 ): Promise<{ token: string; expiresAt: Date; account: AccountView }> {
+  const now = new Date();
   const keys = throttleKeys(input.email, meta.ip);
-  await assertNotThrottled(q, keys);
+  await assertNotThrottled(q, keys, now);
+  // 计数发生在校验密码之前，且是一条原子 upsert：并发请求不会因为先查后写而漏计或撞主键。
+  const attempts = await recordLoginAttempt(q, keys, now);
+  assertAttemptsWithinLimit(attempts, keys, now);
   const [row] = await q.select().from(accounts).where(eq(accounts.email, normalizeEmail(input.email)));
   const passwordHash = row?.passwordHash ?? (await getDummyPasswordHash());
   const passwordValid = await verifyPassword(passwordHash, input.password);
   if (!row || !passwordValid) {
-    await recordLoginFailure(q, keys);
     throw new AppError('unauthenticated', '邮箱或密码错误');
   }
   await clearLoginFailures(q, keys[0]!.key);

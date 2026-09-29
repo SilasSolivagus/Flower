@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { authThrottle } from '../db/schema';
 import type { Queryable } from '../db/tx';
 import { AppError } from '../errors';
@@ -17,31 +17,69 @@ export function throttleKeys(email: string, ip?: string | null): Array<{ key: st
   return keys;
 }
 
+function rateLimitedError(lockedUntil: Date, now: Date): AppError {
+  const minutes = Math.max(1, Math.ceil((lockedUntil.getTime() - now.getTime()) / 60_000));
+  return new AppError('rate_limited', `登录失败次数过多，请在 ${minutes} 分钟后再试`);
+}
+
 export async function assertNotThrottled(q: Queryable, keys: Array<{ key: string }>, now: Date = new Date()): Promise<void> {
   const rows = await q.select().from(authThrottle).where(inArray(authThrottle.key, keys.map((k) => k.key)));
   const lockedUntil = rows
     .map((r) => r.lockedUntil)
     .filter((d): d is Date => d !== null && d.getTime() > now.getTime())
     .sort((a, b) => b.getTime() - a.getTime())[0];
-  if (lockedUntil) {
-    const minutes = Math.max(1, Math.ceil((lockedUntil.getTime() - now.getTime()) / 60_000));
-    throw new AppError('rate_limited', `登录失败次数过多，请在 ${minutes} 分钟后再试`);
-  }
+  if (lockedUntil) throw rateLimitedError(lockedUntil, now);
 }
 
-export async function recordLoginFailure(
+export type ThrottleAttempt = { key: string; failures: number; lockedUntil: Date | null };
+
+/**
+ * 原子地为每个 key 记一次登录尝试（在校验密码之前调用，无论密码是否正确）。
+ * 用一条 INSERT ... ON CONFLICT DO UPDATE 语句完成「读当前计数 → 判断窗口是否过期 → 计数或重置 → 达到上限则锁定」，
+ * 避免并发请求之间先查后写的竞态（丢失更新、或对同一新 key 并发插入导致主键冲突）。
+ */
+export async function recordLoginAttempt(
   q: Queryable,
   keys: Array<{ key: string; rule: ThrottleRule }>,
   now: Date = new Date(),
-): Promise<void> {
+): Promise<ThrottleAttempt[]> {
+  const results: ThrottleAttempt[] = [];
   for (const { key, rule } of keys) {
-    const [row] = await q.select().from(authThrottle).where(eq(authThrottle.key, key));
-    const windowExpired = !row || row.windowStart.getTime() + rule.windowMs <= now.getTime();
-    const failures = windowExpired ? 1 : row.failures + 1;
-    const lockedUntil = failures >= rule.max ? new Date(now.getTime() + rule.lockMs) : null;
-    const values = { failures, windowStart: windowExpired ? now : row.windowStart, lockedUntil };
-    if (row) await q.update(authThrottle).set(values).where(eq(authThrottle.key, key));
-    else await q.insert(authThrottle).values({ key, ...values });
+    const windowExpired = sql`auth_throttle.window_start + (${rule.windowMs} * interval '1 millisecond') <= ${now.toISOString()}::timestamptz`;
+    const failuresExpr = sql`(case when ${windowExpired} then 1 else auth_throttle.failures + 1 end)`;
+    const initialLockedUntil = 1 >= rule.max ? new Date(now.getTime() + rule.lockMs) : null;
+    const rows = await q.execute<{ failures: number; locked_until: string | null }>(sql`
+      insert into auth_throttle (key, failures, window_start, locked_until)
+      values (${key}, 1, ${now.toISOString()}::timestamptz, ${initialLockedUntil?.toISOString() ?? null}::timestamptz)
+      on conflict (key) do update set
+        failures = ${failuresExpr},
+        window_start = case when ${windowExpired} then ${now.toISOString()}::timestamptz else auth_throttle.window_start end,
+        locked_until = case
+          when ${failuresExpr} >= ${rule.max}
+          then ${now.toISOString()}::timestamptz + (${rule.lockMs} * interval '1 millisecond')
+          else auth_throttle.locked_until
+        end
+      returning failures, locked_until
+    `);
+    const row = rows[0]!;
+    // 原始 SQL 的 RETURNING 结果不像 drizzle 查询构造器那样自动把 timestamptz 转成 Date，这里手动转换。
+    const lockedUntil = row.locked_until === null ? null : new Date(row.locked_until);
+    results.push({ key, failures: row.failures, lockedUntil });
+  }
+  return results;
+}
+
+/** 检查 recordLoginAttempt 的返回结果：某个 key 的失败次数超过其上限，说明这次尝试本身已越限，应直接拒绝、不再校验密码。 */
+export function assertAttemptsWithinLimit(
+  attempts: ThrottleAttempt[],
+  keys: Array<{ key: string; rule: ThrottleRule }>,
+  now: Date = new Date(),
+): void {
+  for (const attempt of attempts) {
+    const rule = keys.find((k) => k.key === attempt.key)?.rule;
+    if (rule && attempt.failures > rule.max) {
+      throw rateLimitedError(attempt.lockedUntil ?? new Date(now.getTime() + rule.lockMs), now);
+    }
   }
 }
 

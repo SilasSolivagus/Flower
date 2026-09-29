@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createAccount } from '../src/auth/accounts';
 import { createSession, login, purgeExpiredSessions, resolveSession } from '../src/auth/sessions';
-import { throttleKeys } from '../src/auth/throttle';
+import { LOGIN_LIMITS, recordLoginAttempt, throttleKeys } from '../src/auth/throttle';
 import { createTestDb } from './db';
 
 let t: Awaited<ReturnType<typeof createTestDb>>;
@@ -20,7 +20,8 @@ describe('登录限流', () => {
     await expect(login(t.db, { email: 'TH@example.com', password: 'password123' }, { ip: '10.0.0.2' })).rejects.toMatchObject({
       code: 'rate_limited',
     });
-    await t.db.execute(sql`update auth_throttle set locked_until = now() - interval '1 second'`);
+    // 模拟锁定窗口已经过期：锁定与计数窗口都要往前拨，否则新的一次尝试仍会把陈旧的失败计数继续累加。
+    await t.db.execute(sql`update auth_throttle set locked_until = now() - interval '1 second', window_start = now() - interval '20 minutes'`);
     const ok = await login(t.db, { email: 'th@example.com', password: 'password123' }, { ip: '10.0.0.2' });
     expect(ok.account.email).toBe('th@example.com');
     const rows = await t.db.execute(sql`select key from auth_throttle where key = ${throttleKeys('th@example.com')[0]!.key}`);
@@ -32,6 +33,32 @@ describe('登录限流', () => {
       await expect(login(t.db, { email: `nobody${i}@example.com`, password: 'x' }, { ip: '10.9.9.9' })).rejects.toMatchObject({ code: 'unauthenticated' });
     }
     await expect(login(t.db, { email: 'th@example.com', password: 'password123' }, { ip: '10.9.9.9' })).rejects.toMatchObject({ code: 'rate_limited' });
+  });
+});
+
+describe('限流计数的原子性', () => {
+  it('同一邮箱并发失败尝试不会 500，且校验密码的次数不超过上限', async () => {
+    const results = await Promise.allSettled(
+      Array.from({ length: 10 }, () =>
+        login(t.db, { email: 'concurrent@example.com', password: 'wrong-pass' }, { ip: '10.1.1.1' }),
+      ),
+    );
+    expect(results.every((r) => r.status === 'rejected')).toBe(true);
+    const codes = results.map((r) => (r as PromiseRejectedResult).reason?.code);
+    expect(codes.every((c) => c === 'unauthenticated' || c === 'rate_limited')).toBe(true);
+    expect(codes.filter((c) => c === 'unauthenticated').length).toBeLessThanOrEqual(LOGIN_LIMITS.email.max);
+  });
+
+  it('限流窗口过期后失败计数从 1 重新开始', async () => {
+    const keys = throttleKeys('window@example.com');
+    const t0 = new Date('2026-01-01T00:00:00Z');
+    const first = await recordLoginAttempt(t.db, keys, t0);
+    expect(first[0]!.failures).toBe(1);
+    const second = await recordLoginAttempt(t.db, keys, new Date(t0.getTime() + 1000));
+    expect(second[0]!.failures).toBe(2);
+    const afterWindow = new Date(t0.getTime() + LOGIN_LIMITS.email.windowMs + 1000);
+    const third = await recordLoginAttempt(t.db, keys, afterWindow);
+    expect(third[0]!.failures).toBe(1);
   });
 });
 
