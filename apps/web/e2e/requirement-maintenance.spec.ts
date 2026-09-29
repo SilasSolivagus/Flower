@@ -1,24 +1,14 @@
 import { type APIRequestContext, type APIResponse, expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { login, OWNER, setupInstance } from './helpers';
+import { createProduct, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
   await setupInstance(request);
 });
 
-async function ok(pending: Promise<APIResponse>): Promise<APIResponse> {
-  const res = await pending;
-  expect(res.ok(), `${res.url()} → ${res.status()}`).toBeTruthy();
-  return res;
-}
-
 async function json<T>(pending: Promise<APIResponse>): Promise<T> {
   return (await (await ok(pending)).json()) as T;
-}
-
-async function createProduct(request: APIRequestContext, name = '网盘', key = 'PAN'): Promise<string> {
-  return (await json<{ product: { id: string } }>(request.post('/api/v1/orgs/acme/products', { data: { name, key } }))).product.id;
 }
 
 async function createRequirement(request: APIRequestContext, productId: string, title: string) {
@@ -64,6 +54,7 @@ test('需求详情：加入迭代的条件未满足时显示原因，管理员�
   await expect(page.getByRole('combobox', { name: '迭代' })).toHaveText('迭代0801');
 
   await page.getByRole('combobox', { name: '结构节点' }).click();
+  await expect(page.getByRole('option', { name: '续费' })).toBeVisible();
   await expect(page.getByRole('option', { name: '旧业务' })).toHaveCount(0);
   await page.getByRole('option', { name: '续费' }).click();
   await expect(page.getByRole('combobox', { name: '结构节点' })).toHaveText('续费');
