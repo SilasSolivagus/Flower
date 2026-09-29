@@ -1,0 +1,122 @@
+'use client';
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { ApiError, api } from './api';
+import type {
+  Account,
+  Field,
+  FunctionTag,
+  InstanceStatus,
+  Invitation,
+  LevelNames,
+  Member,
+  MyOrg,
+  Org,
+  OrgMe,
+  Product,
+  ProductRole,
+  Token,
+  WorkflowDefinition,
+  WorkflowVersion,
+} from './types';
+
+export const qk = {
+  setup: ['setup'] as const,
+  me: ['me'] as const,
+  instance: ['instance'] as const,
+  org: (o: string) => ['org', o] as const,
+  members: (o: string) => ['org', o, 'members'] as const,
+  invitations: (o: string) => ['org', o, 'invitations'] as const,
+  tags: (o: string) => ['org', o, 'tags'] as const,
+  products: (o: string) => ['org', o, 'products'] as const,
+  product: (o: string, id: string) => ['org', o, 'product', id] as const,
+  productRoles: (o: string, id: string) => ['org', o, 'product', id, 'roles'] as const,
+  productWorkflow: (o: string, id: string) => ['org', o, 'product', id, 'workflow'] as const,
+  workflows: (o: string) => ['org', o, 'workflows'] as const,
+  workflow: (o: string, id: string) => ['org', o, 'workflow', id] as const,
+  fields: (o: string, productId?: string) => ['org', o, 'fields', productId ?? 'org'] as const,
+  levels: (o: string, productId?: string) => ['org', o, 'levels', productId ?? 'org'] as const,
+  tokens: (o: string) => ['org', o, 'tokens'] as const,
+};
+
+export const useSetupStatus = () => useQuery({ queryKey: qk.setup, queryFn: () => api<InstanceStatus>('/setup/status') });
+export const useMe = () => useQuery({ queryKey: qk.me, queryFn: () => api<{ account: Account; orgs: MyOrg[] }>('/me') });
+export const useInstanceSettings = () => useQuery({ queryKey: qk.instance, queryFn: () => api<InstanceStatus>('/instance/settings') });
+export const useOrg = (o: string) =>
+  useQuery({ queryKey: qk.org(o), queryFn: () => api<{ org: Org; me: OrgMe }>(`/orgs/${o}`) });
+export const useMembers = (o: string) =>
+  useQuery({ queryKey: qk.members(o), queryFn: () => api<{ members: Member[] }>(`/orgs/${o}/members`), select: (d) => d.members });
+export const useInvitations = (o: string, enabled = true) =>
+  useQuery({
+    queryKey: qk.invitations(o),
+    queryFn: () => api<{ invitations: Invitation[] }>(`/orgs/${o}/invitations`),
+    select: (d) => d.invitations,
+    enabled,
+  });
+export const useFunctionTags = (o: string) =>
+  useQuery({ queryKey: qk.tags(o), queryFn: () => api<{ tags: FunctionTag[] }>(`/orgs/${o}/function-tags`), select: (d) => d.tags });
+export const useProducts = (o: string) =>
+  useQuery({ queryKey: qk.products(o), queryFn: () => api<{ products: Product[] }>(`/orgs/${o}/products`), select: (d) => d.products });
+export const useProduct = (o: string, id: string) =>
+  useQuery({ queryKey: qk.product(o, id), queryFn: () => api<{ product: Product }>(`/orgs/${o}/products/${id}`), select: (d) => d.product });
+export const useProductRoles = (o: string, id: string, enabled = true) =>
+  useQuery({
+    queryKey: qk.productRoles(o, id),
+    queryFn: () => api<{ roles: Array<{ memberId: string; role: ProductRole }> }>(`/orgs/${o}/products/${id}/roles`),
+    select: (d) => d.roles,
+    enabled,
+  });
+export const useProductWorkflow = (o: string, id: string) =>
+  useQuery({
+    queryKey: qk.productWorkflow(o, id),
+    queryFn: () => api<{ definition: WorkflowDefinition; version: WorkflowVersion }>(`/orgs/${o}/products/${id}/workflow`),
+  });
+export const useWorkflows = (o: string, enabled = true) =>
+  useQuery({
+    queryKey: qk.workflows(o),
+    queryFn: () => api<{ workflows: WorkflowDefinition[] }>(`/orgs/${o}/workflows`),
+    select: (d) => d.workflows,
+    enabled,
+  });
+export const useWorkflow = (o: string, id: string) =>
+  useQuery({
+    queryKey: qk.workflow(o, id),
+    queryFn: () => api<{ definition: WorkflowDefinition; versions: WorkflowVersion[] }>(`/orgs/${o}/workflows/${id}`),
+  });
+export const useFields = (o: string, productId?: string) =>
+  useQuery({
+    queryKey: qk.fields(o, productId),
+    queryFn: () => api<{ fields: Field[] }>(`/orgs/${o}/fields${productId ? `?product=${productId}` : ''}`),
+    select: (d) => d.fields,
+  });
+export const useLevelNames = (o: string, productId?: string) =>
+  useQuery({
+    queryKey: qk.levels(o, productId),
+    queryFn: () => api<LevelNames>(productId ? `/orgs/${o}/products/${productId}/level-names` : `/orgs/${o}/level-names`),
+  });
+export const useTokens = (o: string) =>
+  useQuery({ queryKey: qk.tokens(o), queryFn: () => api<{ tokens: Token[] }>(`/orgs/${o}/tokens`), select: (d) => d.tokens });
+
+type MutationOptions<TData, TVars> = {
+  invalidate?: ReadonlyArray<readonly unknown[]>;
+  success?: string;
+  /** 为 true 时不弹出错误提示，由表单自己展示 mutation.error。 */
+  silentError?: boolean;
+  onSuccess?: (data: TData, vars: TVars) => void;
+};
+
+export function useApiMutation<TVars, TData = unknown>(fn: (vars: TVars) => Promise<TData>, opts: MutationOptions<TData, TVars> = {}) {
+  const qc = useQueryClient();
+  return useMutation<TData, ApiError, TVars>({
+    mutationFn: fn,
+    onSuccess: async (data, vars) => {
+      await Promise.all((opts.invalidate ?? []).map((queryKey) => qc.invalidateQueries({ queryKey })));
+      if (opts.success) toast.success(opts.success);
+      opts.onSuccess?.(data, vars);
+    },
+    onError: (e) => {
+      if (!opts.silentError) toast.error(e.message || '操作失败，请稍后重试');
+    },
+  });
+}
