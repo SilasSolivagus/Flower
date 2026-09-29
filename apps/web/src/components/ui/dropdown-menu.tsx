@@ -33,10 +33,14 @@ function DropdownMenuTrigger({
 function DropdownMenuContent({
   className,
   sideOffset = 4,
+  container,
   ...props
-}: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
+  /** 门户挂载点；默认挂到 body。放在 Dialog/Sheet 内的菜单需要传入该容器内的节点，否则菜单项不是对话框的 DOM 子孙。 */
+  container?: React.ComponentProps<typeof DropdownMenuPrimitive.Portal>["container"]
+}) {
   return (
-    <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPrimitive.Portal container={container}>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
