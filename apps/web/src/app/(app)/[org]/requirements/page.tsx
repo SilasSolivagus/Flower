@@ -3,7 +3,7 @@
 import { ListTodo, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '@/components/empty-state';
 import { OptionMultiSelect } from '@/components/option-multi-select';
 import { PageHeader } from '@/components/page-header';
@@ -47,9 +47,14 @@ function RequirementsPage() {
   const data = useRequirements(org, product?.id, filterToApiQuery(filter));
   const [q, setQ] = useState(filter.q);
   const [creating, setCreating] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const setFilter = (patch: Partial<ListFilter>) => {
-    const next = patchFilter({ ...filter, product: product?.key ?? filter.product }, patch);
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    const next = patchFilter({ ...filter, product: product?.key ?? filter.product, q }, patch);
     const qs = filterToSearch(next);
     router.replace(qs ? `?${qs}` : '?', { scroll: false });
   };
@@ -57,8 +62,10 @@ function RequirementsPage() {
   useEffect(() => setQ(filter.q), [filter.q]);
   useEffect(() => {
     if (q === filter.q) return;
-    const t = setTimeout(() => setFilter({ q }), 300);
-    return () => clearTimeout(t);
+    debounceRef.current = setTimeout(() => setFilter({ q }), 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 

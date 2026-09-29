@@ -49,6 +49,24 @@ test('需求列表：新建、按状态和优先级筛选、搜索编号', async
   await expect(page.getByText('没有符合条件的需求')).toBeVisible();
 });
 
+test('搜索框防抖期间切换其他筛选不丢失已输入的文字', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const fields = (await (await request.get('/api/v1/orgs/acme/fields')).json()).fields;
+  const p0 = fields.find((f: { key: string }) => f.key === 'priority').options.find((o: { key: string }) => o.key === 'p0').id;
+  await request.post(`/api/v1/orgs/acme/products/${productId}/requirements`, { data: { title: '回收站保留 30 天', fields: { priority: [p0] } } });
+
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto('/acme/requirements');
+  await page.getByLabel('搜索需求').fill('回收站');
+  await page.getByRole('button', { name: /^优先级/ }).click();
+  await page.getByRole('checkbox', { name: 'P0' }).click();
+  await page.keyboard.press('Escape');
+
+  await expect(page).toHaveURL(/q=/);
+  await expect(page).toHaveURL(/priority=/);
+  await expect(page.getByLabel('搜索需求')).toHaveValue('回收站');
+});
+
 test('导航中的"需求"可以点击', async ({ page, request }) => {
   await createProduct(request);
   await login(page, OWNER.email, OWNER.password);
