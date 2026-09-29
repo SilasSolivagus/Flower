@@ -74,7 +74,7 @@ export default function OrgOverviewPage() {
             {products.data?.map((p) => (
               <li key={p.id}>
                 <Link
-                  href={p.myRole === 'admin' ? `/${org}/settings/products/${p.id}` : `/${org}`}
+                  href={`/${org}/requirements?product=${p.key}`}
                   className="flex items-center justify-between rounded-lg border bg-card px-4 py-3 hover:border-primary"
                 >
                   <span>

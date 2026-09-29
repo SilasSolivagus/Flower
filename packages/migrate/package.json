@@ -1,0 +1,23 @@
+{
+  "name": "@flower/migrate",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --target=node22 --outfile=dist/cli.mjs --external:node:sqlite --external:@node-rs/argon2 --banner:js=\"import{createRequire}from'module';const require=createRequire(import.meta.url);\"",
+    "legacy": "pnpm build && node --disable-warning=ExperimentalWarning --env-file=../../apps/web/.env.local dist/cli.mjs"
+  },
+  "dependencies": {
+    "@flower/core": "workspace:*",
+    "@node-rs/argon2": "^2.2.1",
+    "drizzle-orm": "^0.45.3",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  }
+}

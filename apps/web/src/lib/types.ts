@@ -1,17 +1,24 @@
 import type {
   AccountView,
+  CheckState as CoreCheckState,
+  CommentView,
   FieldOptionView,
   FieldView,
   FunctionTagView,
   InstanceStatus as CoreInstanceStatus,
   InvitationPreview as CoreInvitationPreview,
   InvitationView,
+  IterationBrief as CoreIterationBrief,
   MemberView,
   MyOrg as CoreMyOrg,
   OrgRole as CoreOrgRole,
   OrgView,
   ProductRole as CoreProductRole,
   ProductView,
+  RequirementDetail as CoreRequirementDetail,
+  RequirementList as CoreRequirementList,
+  RequirementListItem as CoreRequirementListItem,
+  StructureNodeView,
   TokenScope as CoreTokenScope,
   TokenView,
   WorkflowBody as CoreWorkflowBody,
@@ -48,3 +55,10 @@ export type WorkflowVersion = Jsonify<WorkflowVersionView>;
 export type Field = Jsonify<FieldView>;
 export type FieldOption = Jsonify<FieldOptionView>;
 export type LevelNames = { names: string[]; source: 'default' | 'org' | 'product' };
+export type RequirementListItem = Jsonify<CoreRequirementListItem>;
+export type RequirementList = Jsonify<CoreRequirementList>;
+export type RequirementDetail = Jsonify<CoreRequirementDetail>;
+export type RequirementComment = Jsonify<CommentView>;
+export type StructureNode = StructureNodeView;
+export type IterationBrief = CoreIterationBrief;
+export type CheckState = CoreCheckState;

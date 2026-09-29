@@ -26,7 +26,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 
 - **数据库**：PostgreSQL 17，镜像 `pgvector/pgvector:pg17`；ORM 用 drizzle。
 - **存储策略**：业务实体用关系表加外键；流程配置存为带版本的 JSON 定义（zod 校验）；运行时取值用关系表。
-- **主键**：UUIDv7。人可读编号按产品自增（如 `PAN-123`、`PRD-12`），由 `product_counters` 原子分配。旧编号存 `legacy_key`。
+- **主键**：新建数据用 UUIDv7；迁移导入的行使用由来源键 SHA-1 派生的确定性 UUID（v5 位布局），重复导入得到相同 ID。人可读编号按产品自增（如 `PAN-123`、`PRD-12`）：需求编号由 `products.requirement_seq` 以 `update … returning` 分配；P2 文档编号届时另加列或引入计数表。旧编号存 `legacy_key`。
 - **租户隔离**：所有租户数据表带 `org_id`。应用层在每个事务开头设置当前组织并强制过滤；Postgres 行级安全（RLS）策略用同一个值再校验一次。
 - **软删除**：业务实体带 `deleted_at`。字典选项只停用不删除。
 - **审计**：领域事件表即审计日志（见 §6.1），不另建日志表。
@@ -45,8 +45,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 | `accounts` | email（citext 唯一）、name、password_hash（argon2id）、is_instance_admin、preferences（jsonb：语言、时区、主题） | 全局账号，一人一条 |
 | `sessions` | account_id、expires_at、ip、user_agent | 服务端会话，cookie 只存不透明 id，可立即吊销 |
 | `organizations` | slug（URL 用）、name、settings（jsonb：时区、结构树层级叫法等） | |
-| `products` | org_id、key（组织内唯一，如 `PAN`）、name、status（启用 / 归档）、workflow_version_id、structure_level_names（可空，覆盖组织设置） | |
-| `product_counters` | product_id、kind（requirement / document）、next_number | 编号分配 |
+| `products` | org_id、key（组织内唯一，如 `PAN`）、name、status（启用 / 归档）、workflow_version_id、structure_level_names（可空，覆盖组织设置）、requirement_seq | requirement_seq 为已分配的最大需求编号 |
 | `members` | org_id、account_id（可空）、kind（human / agent）、display_name、email（可空）、department（文本）、org_role（owner / admin / member / guest）、status（active / left） | 组织成员；无账号的成员也是成员。唯一约束（org_id, account_id） |
 | `product_members` | product_id、member_id、role（admin / editor / viewer） | 产品级角色覆盖 |
 | `function_tags` / `member_function_tags` | org_id、name、color / member_id、tag_id | 职能标签，一人多个，不影响权限 |
@@ -59,7 +58,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 - **组织级**：owner / admin 在所有产品上等同产品 admin，并管理成员、配置和产品；member 默认在所有产品上是 editor，可按产品下调；guest 默认看不到任何产品，需按产品单独授权。
 - **产品级**：admin 可修改产品配置（流程覆盖、结构树、字段覆盖、通知规则）；editor 可增删改需求、文档、迭代、任务；viewer 只读。
 - **强制流转**：条件不满足时，产品 admin 可以强制流转，必须填写原因，记入 `state_transitions` 和领域事件。
-- **资源级规则不属于本层**，在各模块设计时逐条决定。已知待定项：成员能否修改他人创建的 PRD、viewer 能否评论。
+- **资源级规则不属于本层**，在各模块设计时逐条决定。已知待定项：成员能否修改他人创建的 PRD。已决定：产品只读成员（viewer）可以评论（见 P1-A 计划「设计决定」表「评论权限」行：提出人多为只读成员或访客，需要能跟进）。
 
 ### 2.3 Agent 与 API Token
 
@@ -67,6 +66,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 - 个人 Token 的 member_id 为本人；Agent Token 由管理员为 Agent 成员签发。
 - 每次请求的实际权限 = 身份当前权限 ∩ Token 范围。身份权限被下调时 Token 随之收窄。
 - 领域事件同时记录操作成员和所用 Token。
+- 只读 Token 不能签字、评论或标记已读：这三项只要求产品 viewer 角色，因此另外显式拒绝只读 Token。
 
 ### 2.4 自托管初始化
 
@@ -130,7 +130,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 
 ### 4.1 结构树
 
-`structure_nodes`：org_id、product_id、parent_id、depth（1–3）、name、description、status（active / deprecated）、sort_key（fractional index）、legacy_key。唯一约束：（product_id, parent_id, name）。
+`structure_nodes`：org_id、product_id、parent_id、depth（1–3）、name、description、status（active / deprecated）、sort（integer）、legacy_key。唯一约束：（product_id, parent_id, name）。
 
 结构树按产品各建一棵。业务域即第一层节点，不再作为字典。
 
@@ -159,7 +159,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 | `state_transitions` | requirement_id、from_state、to_state、actor_member_id、token_id、forced、reason、at。取代 123plane 的阶段时间戳 |
 | `blockers` | requirement_id、description、status、owner_member_id |
 | `check_item_results` | org_id、target_type（requirement / document）、target_id、item_key、state、note、meta（jsonb）、updated_by、updated_at |
-| `check_item_signoffs` | result_id、signer_member_id、signer_rule_index、decision（passed / rejected）、note、evidence_link_id（可空，引用 `external_links`）、at |
+| `check_item_signoffs` | result_id、signer_member_id、acted_by_member_id（可空，代签时的实际操作人）、signer_rule_index、decision（passed / rejected）、note、evidence_link_id（可空，引用 `external_links`）、at |
 
 ### 4.3 迭代与发布版本
 
@@ -173,7 +173,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 | status（planning / active / done / canceled） | 固定四种 |
 | milestones（jsonb：`[{label, date}]`） | 容纳"启动 / 开发开始 / 开发结束 / 发布"等节点 |
 
-约束：同一产品的常规迭代时间不得重叠，用 Postgres 排他约束实现：`EXCLUDE USING gist (product_id WITH =, daterange(start_date, end_date, '[]') WITH &&) WHERE (type = 'regular' AND deleted_at IS NULL)`。专项不受限制。
+约束：同一产品的常规迭代时间不得重叠，用 Postgres 排他约束实现：`EXCLUDE USING gist (product_id WITH =, daterange(start_date, end_date, '[)') WITH &&) WHERE (type = 'regular' AND deleted_at IS NULL)`。结束日与下一迭代的开始日可以是同一天（生产数据中发布日即下一迭代开始日）。专项不受限制。
 
 `iteration_scope_snapshots`：iteration_id、requirement_id、snapshot_kind（committed）、at。迭代开始时记录承诺范围，用于区分承诺后完成、中途加入、中途移出。
 
@@ -189,7 +189,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 |---|---|
 | org_id、product_id、requirement_id（可空）、iteration_id（可空） | |
 | title、alias、assignee_member_id、status（todo / doing / done） | |
-| plan_start、plan_days、delay_days、phase、flag、starred（可空） | 排期字段，仅甘特类任务使用 |
+| plan_start、plan_days、delay_days、phase、flag、starred（可空） | 排期字段，仅甘特类任务使用；plan_days、delay_days 为实数，允许半天 |
 | meta（jsonb） | 迁移时保存 push 概览看板的手动覆盖值 |
 
 "某人在忙什么"按 assignee 跨所有迭代汇总查询。
@@ -402,12 +402,32 @@ push 主状态映射到检查项与迭代：评审中 → 检查项 in_progress�
 | prd_domains 23 + 123plane business_domain 取值 | structure_nodes 第一层（名称合并去重）；未填业务域的 194 条需求 node_id 为空 |
 | 通知队列、同步收件箱和发件箱 | 不迁 |
 
+### 7.3 按 2026-09-29 生产数据核实后的补充
+
+以生产库只读副本核实 §7.2，补充以下规则：
+
+- 数据量以迁移时的实际记录为准，对账报告按记录数核对，不写死数量。当时的数量为：123plane 需求 688 条，push 需求 335 条（其中 8 条已在 push 内标记合并），甘特任务 363 条，设计签字 320 条。
+- 需求合并：push 有 249 条按 plane_id 匹配，2 条按标题匹配，约 76 条为 push 独有需求，迁移后约 764 条。
+- push 主状态"待排期"：背景、可行性、行业三个检查项保持 not_started。主状态以 123plane 为准；push 独有需求的主状态为"待评估"。
+- 123plane 历史上物理删除的需求（activity_log 中 83 条 deleted）不恢复为需求，只随 activity_log 迁入 domain_events。
+- 迭代：迭代0624 与 V2026.06.2（发布日期相差一天）合并，名称用"迭代0624"。"专业空间优化"与"专业空间版本发布"一样，导入为组织级专项。其余没有对应的迭代单独导入。
+- 会签代签：`check_item_signoffs` 增加 `acted_by_member_id`（可空），记录实际操作人。`signer_member_id` 记被代签的人。"代饶总 by ×××"按此迁移。
+- 平台、业务域、人员去重、迭代配对由迁移脚本根据数据生成建议对照表，用户审阅修改后重新执行迁移，不在代码中写死：
+  - 平台是 42 种逗号拼接组合，含鸿蒙、TV端、H5、管理后台、全端等值。
+  - 业务域存在同义词，prd_domains 中有 8 个在 123plane 未出现。
+  - 同一字段中写了多名负责人的情况，也在人员对照表中处理。
+- 123plane 优先级"绿色通道"作为优先级字典的新增选项。
+- push 需求的 `line`（功能 / 商业）写入内置字段 line。push 独有字段 `alias` 存入需求的 legacy 元数据。
+- push AI 预审结果（22 条）存入"AI 预审"检查项结果的 meta。
+- 123plane 发布版本没有计划发布日期，历史版本的"按期达成率"不可计算，只对迁移后新建的版本生效。
+- 迁移脚本的状态映射按源码定义的完整取值编写，不只覆盖数据中出现过的值。
+
 ## 8. 分阶段
 
 | 阶段 | 内容 |
 |---|---|
 | P0 | monorepo（`apps/web`、`packages/core`、`packages/mcp`）；§2 租户与身份、§3 可配置定义；RLS；领域事件表；docker compose（app + postgres）；初始化向导 |
-| P1 | §4 需求、迭代、任务；迁移脚本与对账报告 |
+| P1 | §4 需求、迭代、任务；迁移脚本与对账报告。分两段：P1-A 数据模型、服务、接口、迁移与对账，加需求列表与详情界面；P1-B 迭代、发布版本、甘特、工作台、评审会签界面。P1 用生产数据副本验证：迁移对账、日常操作新旧对比、真实数据量下的界面、用户试用 |
 | P2 | §5 文档 |
 | P3 | §6.2 通知中心（先接测试群 webhook 联调，正式环境切换另行安排）；基础数据看板（§6.6 中已可计算的指标） |
 | P4 | OpenAPI + MCP server |

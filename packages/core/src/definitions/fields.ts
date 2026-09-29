@@ -1,8 +1,8 @@
-import { and, asc, eq, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { requireNonGuest, requireOrgAdmin, requireProductRole } from '../access/permissions';
 import { randomToken } from '../crypto';
 import type { Db } from '../db/client';
-import { fieldDefinitions, fieldOptions } from '../db/schema';
+import { fieldDefinitions, fieldOptions, fieldValues, requirements } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
@@ -186,12 +186,34 @@ export async function forkFieldForProduct(db: Db, actor: Actor, productId: strin
       throw e;
     }
     const opts = await tx.select().from(fieldOptions).where(eq(fieldOptions.fieldId, src.id));
-    if (opts.length > 0) {
-      await tx.insert(fieldOptions).values(
-        opts.map((o) => ({ orgId: actor.orgId, fieldId: copy.id, key: o.key, label: o.label, color: o.color, sort: o.sort, active: o.active })),
-      );
+    const copies =
+      opts.length > 0
+        ? await tx
+            .insert(fieldOptions)
+            .values(opts.map((o) => ({ orgId: actor.orgId, fieldId: copy.id, key: o.key, label: o.label, color: o.color, sort: o.sort, active: o.active })))
+            .returning({ id: fieldOptions.id, key: fieldOptions.key })
+        : [];
+    // 本产品需求上已有的字段值按选项 key 改指向产品级字段，否则产品级字段看不到旧值
+    const copyIdByKey = new Map(copies.map((o) => [o.key, o.id]));
+    const productRequirements = tx.select({ id: requirements.id }).from(requirements).where(eq(requirements.productId, productId));
+    let movedValues = 0;
+    for (const o of opts) {
+      const moved = await tx
+        .update(fieldValues)
+        .set({ fieldId: copy.id, optionId: copyIdByKey.get(o.key)! })
+        .where(and(eq(fieldValues.fieldId, src.id), eq(fieldValues.optionId, o.id), inArray(fieldValues.entityId, productRequirements)))
+        .returning({ id: fieldValues.id });
+      movedValues += moved.length;
     }
-    await recordEvent(tx, { orgId: actor.orgId, productId, type: 'field.forked', subjectType: 'field', subjectId: copy.id, actor, payload: { from: src.id, key: src.key } });
+    await recordEvent(tx, {
+      orgId: actor.orgId,
+      productId,
+      type: 'field.forked',
+      subjectType: 'field',
+      subjectId: copy.id,
+      actor,
+      payload: { from: src.id, key: src.key, movedValues },
+    });
     const [v] = await withOptions(tx, [copy]);
     return v!;
   });

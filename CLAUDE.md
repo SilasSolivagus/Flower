@@ -20,6 +20,9 @@ PR 会跑 GitHub Actions CI（`.github/workflows/ci.yml`）：类型检查 + 单
 | 修改 schema 后生成迁移 | `pnpm --filter @flower/core db:generate` |
 | 镜像冒烟测试 | `./scripts/smoke.sh` |
 | 端到端测试（需要 db:up；会占用 3100 端口，不要与 pnpm dev 同时运行） | `pnpm --filter @flower/web e2e` |
+| 生成旧数据对照表（只读副本放在 .local-data/） | `pnpm --filter @flower/migrate legacy suggest --plane "$PWD/.local-data/123plane.db" --push "$PWD/.local-data/push.db" --prd-url postgres://flower_admin:flower_admin@localhost:54329/prd_src --mapping "$PWD/.local-data/mapping"` |
+| 迁移旧数据（先加 --dry-run 看对账报告；--as-of 决定迭代与任务状态，重导沿用 docs/p1a-validation.md 记录的日期） | `pnpm --filter @flower/migrate legacy import …同上参数… --out "$PWD/.local-data/reports" --owner-email <你的账号邮箱> --as-of YYYY-MM-DD [--replace] [--dry-run]` |
+| 真实数据性能测量（需先导入 pan123） | `pnpm --filter @flower/migrate build && node --disable-warning=ExperimentalWarning --env-file=apps/web/.env.local packages/migrate/dist/cli.mjs perf --org-slug pan123 --owner-email <邮箱>` |
 
 首次开发：`cp .env.example apps/web/.env.local`，填入 `FLOWER_SECRET_KEY`（`openssl rand -base64 48`）。
 
@@ -37,3 +40,4 @@ PR 会跑 GitHub Actions CI（`.github/workflows/ci.yml`）：类型检查 + 单
 - 面向用户的错误信息用中文，通过 `AppError(code, message, details?)` 抛出。
 - 页面是客户端组件，通过 `/api/v1` 取数；只允许 `import type` 引用 `@flower/core`，以及浏览器安全的 `@flower/core/workflow-schema`。
 - 纯逻辑放在 `apps/web/src/features/**/model.ts` 并写 Vitest 单测；页面行为用 Playwright 覆盖，每个 spec 自己调用 `resetDatabase()`。
+- `.local-data/` 存放生产数据副本、对照表和对账报告，含员工个人信息，只在本地，不提交。迁移写入需要 `DATABASE_ADMIN_URL`；同一组织再次导入必须加 `--replace`，会先删除该组织的全部数据。
