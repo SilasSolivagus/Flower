@@ -8,6 +8,7 @@ import type {
   Field,
   FunctionTag,
   InstanceStatus,
+  Iteration,
   IterationBrief,
   Invitation,
   LevelNames,
@@ -47,7 +48,8 @@ export const qk = {
   requirement: (o: string, key: string) => ['org', o, 'requirements', 'detail', key] as const,
   requirementComments: (o: string, id: string) => ['org', o, 'requirements', 'comments', id] as const,
   nodes: (o: string, productId: string) => ['org', o, 'product', productId, 'nodes'] as const,
-  iterations: (o: string, productId: string) => ['org', o, 'product', productId, 'iterations'] as const,
+  iterations: (o: string, productId: string) => ['org', o, 'iterations', 'product', productId] as const,
+  iterationList: (o: string) => ['org', o, 'iterations', 'list'] as const,
 };
 
 export const useSetupStatus = () => useQuery({ queryKey: qk.setup, queryFn: () => api<InstanceStatus>('/setup/status') });
@@ -111,6 +113,12 @@ export const useTokens = (o: string) =>
 
 /** 需求相关查询的公共前缀：任何需求修改后统一失效。 */
 export const requirementKeys = (o: string) => ['org', o, 'requirements'] as const;
+
+/** 迭代相关查询的公共前缀：迭代或需求所属迭代变化后统一失效。 */
+export const iterationKeys = (o: string) => ['org', o, 'iterations'] as const;
+
+export const useIterations = (o: string) =>
+  useQuery({ queryKey: qk.iterationList(o), queryFn: () => api<{ iterations: Iteration[] }>(`/orgs/${o}/iterations`), select: (d) => d.iterations });
 
 export const useRequirements = (o: string, productId: string | undefined, query: string) =>
   useQuery({

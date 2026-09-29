@@ -9,6 +9,8 @@ import type {
   InvitationPreview as CoreInvitationPreview,
   InvitationView,
   IterationBrief as CoreIterationBrief,
+  IterationMilestone as CoreIterationMilestone,
+  IterationView,
   MemberView,
   MyOrg as CoreMyOrg,
   OrgRole as CoreOrgRole,
@@ -62,3 +64,5 @@ export type RequirementComment = Jsonify<CommentView>;
 export type StructureNode = StructureNodeView;
 export type IterationBrief = CoreIterationBrief;
 export type CheckState = CoreCheckState;
+export type Iteration = Jsonify<IterationView>;
+export type IterationMilestone = CoreIterationMilestone;

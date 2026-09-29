@@ -7,7 +7,7 @@ describe('buildNav', () => {
     expect(nav.main.map((i) => [i.label, i.phase ?? null, i.href ?? null])).toEqual([
       ['概览', null, '/acme'],
       ['需求', null, '/acme/requirements'],
-      ['迭代', 'P1', null],
+      ['迭代', null, '/acme/iterations'],
       ['文档', 'P2', null],
     ]);
     expect(nav.settings.map((i) => i.href)).toEqual([
@@ -35,5 +35,7 @@ describe('buildNav', () => {
     expect(activeNavKey('/acme/settings/products/1', 'acme')).toBe('products');
     expect(activeNavKey('/acme/requirements', 'acme')).toBe('requirements');
     expect(activeNavKey('/acme/requirements/PAN-12', 'acme')).toBe('requirements');
+    expect(activeNavKey('/acme/iterations', 'acme')).toBe('iterations');
+    expect(activeNavKey('/acme/iterations/abc', 'acme')).toBe('iterations');
   });
 });

@@ -20,7 +20,7 @@ export function buildNav(org: string, orgRole: OrgRole): { main: NavItem[]; sett
     main: [
       { key: 'home', label: '概览', href: `/${org}`, icon: 'home' },
       { key: 'requirements', label: '需求', href: `/${org}/requirements`, icon: 'list' },
-      { key: 'iterations', label: '迭代', icon: 'cycle', phase: 'P1' },
+      { key: 'iterations', label: '迭代', href: `/${org}/iterations`, icon: 'cycle' },
       { key: 'documents', label: '文档', icon: 'doc', phase: 'P2' },
     ],
     settings: isOrgAdminRole(orgRole)
@@ -32,6 +32,7 @@ export function buildNav(org: string, orgRole: OrgRole): { main: NavItem[]; sett
 export function activeNavKey(pathname: string, org: string): string {
   const rest = pathname.replace(new RegExp(`^/${org}`), '');
   if (/^\/requirements(\/|$)/.test(rest)) return 'requirements';
+  if (/^\/iterations(\/|$)/.test(rest)) return 'iterations';
   const m = /^\/settings\/([^/]+)/.exec(rest);
   return m ? m[1]! : 'home';
 }
