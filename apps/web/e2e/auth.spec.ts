@@ -41,7 +41,7 @@ test.describe('初始化与登录', () => {
     await expect(page.getByRole('link', { name: '注册' })).toHaveCount(0);
   });
 
-  test.fixme('新用户通过邀请链接注册加入，普通成员看不到组织设置', async ({ page, request, browser }) => {
+  test('新用户通过邀请链接注册加入，普通成员看不到组织设置', async ({ page, request, browser }) => {
     await setupInstance(request);
     const inv = await request.post('/api/v1/orgs/acme/invitations', { data: { email: 'new@example.com', orgRole: 'member' } });
     const { token } = (await inv.json()) as { token: string };
