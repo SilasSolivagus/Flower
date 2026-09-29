@@ -173,7 +173,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 | status（planning / active / done / canceled） | 固定四种 |
 | milestones（jsonb：`[{label, date}]`） | 容纳"启动 / 开发开始 / 开发结束 / 发布"等节点 |
 
-约束：同一产品的常规迭代时间不得重叠，用 Postgres 排他约束实现：`EXCLUDE USING gist (product_id WITH =, daterange(start_date, end_date, '[]') WITH &&) WHERE (type = 'regular' AND deleted_at IS NULL)`。专项不受限制。
+约束：同一产品的常规迭代时间不得重叠，用 Postgres 排他约束实现：`EXCLUDE USING gist (product_id WITH =, daterange(start_date, end_date, '[)') WITH &&) WHERE (type = 'regular' AND deleted_at IS NULL)`。结束日与下一迭代的开始日可以是同一天（生产数据中发布日即下一迭代开始日）。专项不受限制。
 
 `iteration_scope_snapshots`：iteration_id、requirement_id、snapshot_kind（committed）、at。迭代开始时记录承诺范围，用于区分承诺后完成、中途加入、中途移出。
 
