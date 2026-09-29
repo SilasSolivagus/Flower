@@ -36,3 +36,4 @@ export * from './requirements/transitions';
 export * from './requirements/comments';
 export * from './iterations/iterations';
 export * from './iterations/membership';
+export * from './releases/releases';

@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { requireNonGuest, requireOrgAdmin, requireProductRole } from '../access/permissions';
 import { randomToken } from '../crypto';
 import type { Db } from '../db/client';
-import { fieldDefinitions, fieldOptions, fieldValues, requirements } from '../db/schema';
+import { fieldDefinitions, fieldOptions, fieldValues, releases, requirementAssignments, requirements } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
@@ -193,17 +193,28 @@ export async function forkFieldForProduct(db: Db, actor: Actor, productId: strin
             .values(opts.map((o) => ({ orgId: actor.orgId, fieldId: copy.id, key: o.key, label: o.label, color: o.color, sort: o.sort, active: o.active })))
             .returning({ id: fieldOptions.id, key: fieldOptions.key })
         : [];
-    // 本产品需求上已有的字段值按选项 key 改指向产品级字段，否则产品级字段看不到旧值
+    // 本产品需求上已有的字段值，以及本产品发布版本、开发分配上的平台选项，按选项 key 改指向产品级选项，否则产品级字段看不到旧值
     const copyIdByKey = new Map(copies.map((o) => [o.key, o.id]));
     const productRequirements = tx.select({ id: requirements.id }).from(requirements).where(eq(requirements.productId, productId));
     let movedValues = 0;
     for (const o of opts) {
+      const target = copyIdByKey.get(o.key)!;
       const moved = await tx
         .update(fieldValues)
-        .set({ fieldId: copy.id, optionId: copyIdByKey.get(o.key)! })
+        .set({ fieldId: copy.id, optionId: target })
         .where(and(eq(fieldValues.fieldId, src.id), eq(fieldValues.optionId, o.id), inArray(fieldValues.entityId, productRequirements)))
         .returning({ id: fieldValues.id });
-      movedValues += moved.length;
+      const movedReleases = await tx
+        .update(releases)
+        .set({ platformOptionId: target })
+        .where(and(eq(releases.productId, productId), eq(releases.platformOptionId, o.id)))
+        .returning({ id: releases.id });
+      const movedAssignments = await tx
+        .update(requirementAssignments)
+        .set({ platformOptionId: target })
+        .where(and(eq(requirementAssignments.platformOptionId, o.id), inArray(requirementAssignments.requirementId, productRequirements)))
+        .returning({ id: requirementAssignments.id });
+      movedValues += moved.length + movedReleases.length + movedAssignments.length;
     }
     await recordEvent(tx, {
       orgId: actor.orgId,
