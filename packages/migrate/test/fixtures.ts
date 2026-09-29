@@ -1,3 +1,5 @@
+import type { Mapping } from '../src/mapping';
+import { suggestMapping } from '../src/suggest';
 import type { LegacyData, PlaneRequirement, PushRequirement } from '../src/legacy-types';
 
 const planeReq = (r: Partial<PlaneRequirement> & { id: string; title: string }): PlaneRequirement => ({
@@ -95,4 +97,18 @@ export function makeLegacyData(): LegacyData {
       counts: { pages: 2, pageVersions: 5, attachments: 3, comments: 1 },
     },
   };
+}
+
+/** 模拟用户审阅后的对照表：会签角色"饶总"指向王老板，业务域"会员"并入"会员与支付"。 */
+export function reviewedMapping(): Mapping {
+  const data = makeLegacyData();
+  const m = suggestMapping(data, null);
+  const boss = m.people.people.find((p) => p.displayName === '王老板')!;
+  m.people.signoffRoles['饶总'] = boss.key;
+  m.people.people = m.people.people.filter((p) => p.displayName !== '饶总');
+  m.domains.nodes = [
+    { name: '会员与支付', description: '产品域 · 增长组', aliases: ['会员与支付', '会员'] },
+    { name: '跨盘迁移', description: '产品域 · 基础组', aliases: ['跨盘迁移'] },
+  ];
+  return m;
 }
