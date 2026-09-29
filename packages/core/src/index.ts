@@ -32,3 +32,4 @@ export * from './requirements/requirements';
 export * from './requirements/lookups';
 export * from './requirements/detail';
 export * from './requirements/transitions';
+export * from './requirements/comments';
