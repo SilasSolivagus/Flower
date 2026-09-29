@@ -16,14 +16,11 @@ export function ConditionEditor({
   fields,
   value,
   onChange,
-  portalContainer,
 }: {
   body: WorkflowBody;
   fields: Field[];
   value: Condition[];
   onChange: (next: Condition[]) => void;
-  /** “添加条件”菜单的门户挂载点。在 Sheet/Dialog 内使用时需传入该容器内的节点，否则菜单不是对话框的 DOM 子孙，测试和读屏器都定位不到。 */
-  portalContainer?: HTMLElement | null;
 }) {
   const set = (i: number, c: Condition) => onChange(value.map((x, j) => (j === i ? c : x)));
   return (
@@ -86,14 +83,14 @@ export function ConditionEditor({
           )}
         </div>
       ))}
-      <DropdownMenu modal={false}>
+      <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className="self-start">
             <Plus className="size-4" aria-hidden="true" />
             添加条件
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" container={portalContainer}>
+        <DropdownMenuContent align="start">
           <DropdownMenuItem
             disabled={body.checkItems.length === 0}
             onSelect={() => onChange([...value, { type: 'check_item', item: body.checkItems[0]?.key ?? '', in: [] }])}

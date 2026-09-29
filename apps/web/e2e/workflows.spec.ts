@@ -28,7 +28,8 @@ test('编辑默认流程：加状态、加检查项、给流转加条件、发�
   await page.getByRole('button', { name: '待开始 到 进行中：允许' }).click();
   const sheet = page.getByRole('dialog', { name: '待开始 → 进行中' });
   await sheet.getByRole('button', { name: '添加条件' }).click();
-  await sheet.getByRole('menuitem', { name: '检查项处于指定状态' }).click();
+  // 菜单内容 portal 到 body，不在 sheet 的 DOM 子树内，所以用 page 定位而不是 sheet
+  await page.getByRole('menuitem', { name: '检查项处于指定状态' }).click();
   await sheet.getByLabel('检查项').click();
   await page.getByRole('option', { name: '可行性评估' }).click();
   await sheet.getByRole('checkbox', { name: '通过' }).check();

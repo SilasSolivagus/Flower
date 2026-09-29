@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import type { Field, WorkflowBody } from '@/lib/types';
@@ -20,7 +19,6 @@ export function ConditionSheet({
   onChange: (b: WorkflowBody) => void;
   onClose: () => void;
 }) {
-  const [container, setContainer] = useState<HTMLDivElement | null>(null);
   if (!selected) return null;
   const label = (k: string) => (k === ANY ? '任意状态' : (body.states.find((s) => s.key === k)?.label ?? k));
   const title = `${label(selected.from)} → ${label(selected.to)}`;
@@ -31,13 +29,12 @@ export function ConditionSheet({
           <SheetTitle>{title}</SheetTitle>
           <SheetDescription>满足全部条件才能流转。</SheetDescription>
         </SheetHeader>
-        <div className="px-4" ref={setContainer}>
+        <div className="px-4">
           <ConditionEditor
             body={body}
             fields={fields}
             value={getConditions(body, selected.from, selected.to)}
             onChange={(c) => onChange(setConditions(body, selected.from, selected.to, c))}
-            portalContainer={container}
           />
         </div>
         <SheetFooter className="mt-auto flex-row justify-between">
