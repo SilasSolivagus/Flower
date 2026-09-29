@@ -11,7 +11,10 @@ import { registerOrgRoutes } from './routes/orgs';
 import { registerProductRoutes } from './routes/products';
 import { registerTokenRoutes } from './routes/tokens';
 import { registerDefinitionRoutes } from './routes/definitions';
+import { registerIterationRoutes } from './routes/iterations';
+import { registerReleaseRoutes } from './routes/releases';
 import { registerRequirementRoutes } from './routes/requirements';
+import { registerStructureRoutes } from './routes/structure';
 
 export type ApiDeps = { db: Db; secureCookies: boolean; publicUrl: string };
 export type ApiEnv = {
@@ -41,5 +44,8 @@ export function createApi(deps: ApiDeps): App {
   registerProductRoutes(app, deps);
   registerDefinitionRoutes(app, deps);
   registerRequirementRoutes(app, deps);
+  registerIterationRoutes(app, deps);
+  registerReleaseRoutes(app, deps);
+  registerStructureRoutes(app, deps);
   return app;
 }
