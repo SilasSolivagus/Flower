@@ -74,3 +74,54 @@ test('导航中的"需求"可以点击', async ({ page, request }) => {
   await page.getByRole('link', { name: '需求' }).click();
   await expect(page).toHaveURL(/\/acme\/requirements/);
 });
+
+test('需求详情：看到卡在哪、设置检查项后流转、强制流转、评论', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const wf = await request.post('/api/v1/orgs/acme/workflows', {
+    data: {
+      name: '评审流程',
+      body: {
+        states: [
+          { key: 'backlog', label: '收集', color: '#94a3b8', order: 1, group: '', category: 'backlog' },
+          { key: 'todo', label: '待开发', color: '#60a5fa', order: 2, group: '', category: 'unstarted' },
+          { key: 'doing', label: '开发中', color: '#f59e0b', order: 3, group: '', category: 'started' },
+        ],
+        initial: 'backlog',
+        transitions: [
+          { from: '*', to: 'todo', conditions: [{ type: 'check_item', item: 'feasibility', in: ['passed'] }] },
+          { from: '*', to: 'doing', conditions: [{ type: 'has_iteration' }] },
+          { from: '*', to: 'backlog', conditions: [] },
+        ],
+        checkItems: [{ key: 'feasibility', label: '可行性', scope: 'requirement', type: 'single' }],
+      },
+    },
+  });
+  const versionId = (await wf.json()).version.id;
+  await request.put(`/api/v1/orgs/acme/products/${productId}/workflow`, { data: { versionId } });
+  await request.post(`/api/v1/orgs/acme/products/${productId}/requirements`, { data: { title: '文件夹支持拖拽排序' } });
+
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto('/acme/requirements/PAN-1');
+  await expect(page.getByTestId('current-state')).toHaveText('收集');
+  await expect(page.getByRole('button', { name: '待开发' })).toBeDisabled();
+  await expect(page.getByText('「可行性」需为通过（当前：未开始）')).toBeVisible();
+
+  await page.getByRole('combobox', { name: '可行性状态' }).click();
+  await page.getByRole('option', { name: '通过' }).click();
+  await expect(page.getByRole('button', { name: '待开发' })).toBeEnabled();
+  await page.getByRole('button', { name: '待开发' }).click();
+  await expect(page.getByTestId('current-state')).toHaveText('待开发');
+
+  await expect(page.getByText('需要先加入迭代')).toBeVisible();
+  await page.getByRole('button', { name: '强制流转' }).click();
+  await page.getByLabel('原因').fill('线上问题紧急修复');
+  await page.getByRole('button', { name: '确认流转' }).click();
+  await expect(page.getByTestId('current-state')).toHaveText('开发中');
+  const history = page.getByRole('region', { name: '状态历史' });
+  await expect(history.getByText('强制')).toBeVisible();
+  await expect(history.getByText('原因：线上问题紧急修复')).toBeVisible();
+
+  await page.getByLabel('写评论').fill('已和设计确认交互');
+  await page.getByRole('button', { name: '发表' }).click();
+  await expect(page.getByRole('region', { name: /评论/ }).getByText('已和设计确认交互')).toBeVisible();
+});
