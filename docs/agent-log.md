@@ -20,6 +20,20 @@
 
 ## 记录
 
+### 2026-09-29 · 云端 · 清零 web lint 并加进 CI
+- 分支 / PR：`claude/compassionate-babbage-ei9baf`
+- 做了什么：
+  - 8 个错误里有 7 个是 `react-hooks/set-state-in-effect`：在 `useEffect` 里把接口数据拷进表单状态。改成 React 文档推荐的「渲染期间调整状态」：记住上次同步的来源值，变了就在渲染时更新。行为不变，只是少一轮渲染。涉及需求列表的搜索框、组织信息、成员抽屉、产品详情、流程编辑器、个人设置、层级名称编辑器。
+    - 注意：这类写法里「上次同步值」的初始值要设为空，不能设为当前数据。否则 React Query 已有缓存时首屏不会填充表单。
+  - `test/api/helpers.ts` 的 `body: any` 是有意的（测试直接读任意响应字段），改为带说明的单行禁用。
+  - 顺手清掉 3 个警告：首页 `useEffect` 依赖每次渲染都是新数组，改为依赖唯一组织的 slug；`api.test.ts` 未使用的参数。
+  - CI 的 test 任务在类型检查之后加一步 `pnpm --filter @flower/web lint --max-warnings 0`（零错误、零警告）；`CLAUDE.md` 命令表同步。
+  - `docs/handoff.md`：P1-A 改为「已合并（PR #4）」。
+- 怎么验证的：lint 0 错误 0 警告，同一条命令在 main 上失败、在本分支通过；类型检查通过；core 159、web 83、migrate 60、e2e 25 全部通过（e2e 覆盖了上面改到的每个表单）。
+- 留给对方：
+  - 以后 web 代码也要过 lint，本地提交前跑一次 `pnpm --filter @flower/web lint`。
+  - 新写「接口数据 → 表单初值」时不要再用 `useEffect` + `setState`，参照上面的写法。
+
 ### 2026-09-29 · 云端 · 审查 P1-A（PR #4）：修复 --replace 覆盖后无人能登录，补跨产品/跨组织权限测试
 - 分支 / PR：`feat/p1a-requirements`（PR #4）
 - 做了什么：

@@ -2,7 +2,7 @@
 
 import { validateWorkflowBody } from '@flower/core/workflow-schema';
 import { useParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { NoAccess } from '@/components/no-access';
 import { PageHeader } from '@/components/page-header';
@@ -32,9 +32,7 @@ export default function WorkflowEditorPage() {
   const [selected, setSelected] = useState<{ from: string; to: string } | null>(null);
   const current = wf.data?.versions[0];
 
-  useEffect(() => {
-    if (current && !draft) setDraft(current.body);
-  }, [current, draft]);
+  if (current && !draft) setDraft(current.body);
 
   const issues = useMemo(() => {
     if (!draft || !fields.data) return [];

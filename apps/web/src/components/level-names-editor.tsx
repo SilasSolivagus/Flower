@@ -1,7 +1,7 @@
 'use client';
 
 import { Minus, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,7 +18,11 @@ export function LevelNamesEditor({
   saving: boolean;
 }) {
   const [names, setNames] = useState(value);
-  useEffect(() => setNames(value), [value]);
+  const [synced, setSynced] = useState(value);
+  if (value !== synced) {
+    setSynced(value);
+    setNames(value);
+  }
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-end gap-2">

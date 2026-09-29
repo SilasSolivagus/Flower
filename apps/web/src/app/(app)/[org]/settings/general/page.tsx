@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { RequireOrgAdmin } from '@/components/require-org-admin';
 import { Button } from '@/components/ui/button';
@@ -18,12 +18,12 @@ function GeneralPage() {
   const q = useOrg(org);
   const [name, setName] = useState('');
   const [tz, setTz] = useState('Asia/Shanghai');
-  useEffect(() => {
-    if (q.data) {
-      setName(q.data.org.name);
-      setTz(q.data.org.settings.timezone ?? 'Asia/Shanghai');
-    }
-  }, [q.data]);
+  const [synced, setSynced] = useState<typeof q.data>(undefined);
+  if (q.data && q.data !== synced) {
+    setSynced(q.data);
+    setName(q.data.org.name);
+    setTz(q.data.org.settings.timezone ?? 'Asia/Shanghai');
+  }
   const save = useApiMutation(() => api(`/orgs/${org}`, { method: 'PATCH', body: { name, timezone: tz } }), {
     invalidate: [qk.org(org), qk.me],
     success: '已保存',

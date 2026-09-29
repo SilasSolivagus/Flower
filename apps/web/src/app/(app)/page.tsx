@@ -17,9 +17,10 @@ export default function HomePage() {
   const orgs = me.data?.orgs ?? [];
   const canCreate = Boolean(me.data?.account.isInstanceAdmin || setup.data?.allowOrgCreation);
 
+  const onlySlug = orgs.length === 1 ? orgs[0]!.slug : null;
   useEffect(() => {
-    if (orgs.length === 1) router.replace(`/${orgs[0]!.slug}`);
-  }, [orgs, router]);
+    if (onlySlug) router.replace(`/${onlySlug}`);
+  }, [onlySlug, router]);
 
   return (
     <PlainShell>

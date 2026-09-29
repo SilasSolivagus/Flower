@@ -6,7 +6,7 @@
 
 本地开发 agent 和云端 agent（GitHub 直连）共用 `docs/agent-log.md`：开工前读最上面几条，完成一项工作后在最上面追加一条，与代码放在同一个提交或 PR 里。格式见该文件开头。
 
-PR 会跑 GitHub Actions CI（`.github/workflows/ci.yml`）：类型检查 + 单元测试、端到端测试、镜像冒烟测试。
+PR 会跑 GitHub Actions CI（`.github/workflows/ci.yml`）：类型检查 + web lint + 单元测试、端到端测试、镜像冒烟测试。
 
 ## 命令
 
@@ -17,6 +17,7 @@ PR 会跑 GitHub Actions CI（`.github/workflows/ci.yml`）：类型检查 + 单
 | 开发服务器 | `pnpm dev` |
 | 全部测试（需要先 db:up） | `pnpm test` |
 | 类型检查 | `pnpm typecheck` |
+| web lint（CI 会跑，需零错误零警告） | `pnpm --filter @flower/web lint` |
 | 修改 schema 后生成迁移 | `pnpm --filter @flower/core db:generate` |
 | 镜像冒烟测试 | `./scripts/smoke.sh` |
 | 端到端测试（需要 db:up；会占用 3100 端口，不要与 pnpm dev 同时运行） | `pnpm --filter @flower/web e2e` |

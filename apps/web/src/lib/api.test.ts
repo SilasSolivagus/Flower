@@ -4,7 +4,7 @@ import { ApiError, api } from './api';
 afterEach(() => vi.unstubAllGlobals());
 
 function mockFetch(status: number, body: unknown) {
-  const fn = vi.fn(async (_url: string, _init?: RequestInit) => new Response(body === undefined ? null : JSON.stringify(body), { status }));
+  const fn = vi.fn<typeof fetch>(async () => new Response(body === undefined ? null : JSON.stringify(body), { status }));
   vi.stubGlobal('fetch', fn);
   return fn;
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ConfirmAction } from '@/components/confirm-action';
 import { FormError } from '@/components/form-error';
 import { IssueTokenDialog } from '@/components/issue-token-dialog';
@@ -81,12 +81,12 @@ export default function PersonalSettingsPage() {
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
   const [pwError, setPwError] = useState<string | null>(null);
   const [org, setOrg] = useState<string>('');
-  useEffect(() => {
-    if (me.data) {
-      setName(me.data.account.name);
-      setOrg((o) => o || me.data!.orgs[0]?.slug || '');
-    }
-  }, [me.data]);
+  const [synced, setSynced] = useState<typeof me.data>(undefined);
+  if (me.data && me.data !== synced) {
+    setSynced(me.data);
+    setName(me.data.account.name);
+    setOrg(org || me.data.orgs[0]?.slug || '');
+  }
   const profile = useApiMutation((body: { name?: string; preferences?: { theme: 'light' | 'dark' | 'system' } }) => api('/me', { method: 'PATCH', body }), {
     invalidate: [qk.me],
     success: '已保存',
