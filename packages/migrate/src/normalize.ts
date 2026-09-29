@@ -19,13 +19,23 @@ export function parseJsonArray(s: S | undefined): string[] {
   }
 }
 
-/** 旧系统的时间有三种写法：`YYYY-MM-DD`、`YYYY-MM-DD HH:MM:SS`（SQLite，UTC）、ISO 8601。 */
+const LEGACY_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const LEGACY_NAIVE_DATETIME = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+const LEGACY_ZONED_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2}|[+-]\d{2})$/;
+
+/**
+ * 旧系统的时间有三种写法：`YYYY-MM-DD`、无时区的 `YYYY-MM-DD HH:MM[:SS]`/`YYYY-MM-DDTHH:MM[:SS]`（按 UTC 处理）、
+ * 带 `Z` 或显式偏移量的 ISO 8601。用允许列表逐一匹配，其余一律视为无效返回 null，不把裸字符串交给
+ * `new Date()`（会按本地时区解释）。
+ */
 export function parseLegacyTime(s: S | undefined): Date | null {
   const t = s?.trim();
   if (!t) return null;
-  let iso = t;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) iso = `${t}T00:00:00Z`;
-  else if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(t)) iso = `${t.replace(' ', 'T')}Z`;
+  let iso: string;
+  if (LEGACY_DATE_ONLY.test(t)) iso = `${t}T00:00:00Z`;
+  else if (LEGACY_NAIVE_DATETIME.test(t)) iso = `${t.replace(' ', 'T')}Z`;
+  else if (LEGACY_ZONED_DATETIME.test(t)) iso = t;
+  else return null;
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? null : d;
 }

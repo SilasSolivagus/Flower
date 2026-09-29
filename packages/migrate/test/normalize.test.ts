@@ -31,6 +31,10 @@ describe('归一化', () => {
     expect(parseLegacyTime('2026-03-12T07:32:56.636567+00:00')?.toISOString()).toBe('2026-03-12T07:32:56.636Z');
     expect(parseLegacyTime('2026-06-09T03:17:10.073Z')?.toISOString()).toBe('2026-06-09T03:17:10.073Z');
     expect(parseLegacyTime('2026-04-14')?.toISOString()).toBe('2026-04-14T00:00:00.000Z');
+    expect(parseLegacyTime('2026-03-30T06:00:56')?.toISOString()).toBe('2026-03-30T06:00:56.000Z');
+    expect(parseLegacyTime('2026-03-30T06:00:56+08:00')?.toISOString()).toBe('2026-03-29T22:00:56.000Z');
+    expect(parseLegacyTime('2026-3-5 06:00')).toBeNull();
+    expect(parseLegacyTime('2026-03-30  06:00:56')).toBeNull();
     expect(parseLegacyTime('')).toBeNull();
     expect(parseLegacyTime('坏数据')).toBeNull();
     expect(parseLegacyDate('2026-04-14T10:00:00Z')).toBe('2026-04-14');
