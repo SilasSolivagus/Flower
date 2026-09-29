@@ -21,4 +21,17 @@ describe('safeNext', () => {
   it('defaults to / when null', () => {
     expect(safeNext(null)).toBe('/');
   });
+
+  it('rejects a tab character that URL parsing strips into an external origin', () => {
+    expect(safeNext('/\t/evil.com')).toBe('/');
+  });
+
+  it('rejects a newline character that URL parsing strips into an external origin', () => {
+    expect(safeNext('/\n/evil.com')).toBe('/');
+  });
+
+  it('rejects a URL-encoded tab as decoded from searchParams', () => {
+    // searchParams.get() 已经完成一次解码，%09 会变成真正的 tab 字符
+    expect(safeNext(decodeURIComponent('/%09/evil.com'))).toBe('/');
+  });
 });
