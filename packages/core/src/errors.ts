@@ -4,6 +4,7 @@ export type ErrorCode =
   | 'forbidden'
   | 'not_found'
   | 'conflict'
+  | 'precondition_failed'
   | 'already_initialized'
   | 'rate_limited';
 

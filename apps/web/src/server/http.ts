@@ -10,6 +10,7 @@ const STATUS = {
   forbidden: 403,
   not_found: 404,
   conflict: 409,
+  precondition_failed: 412,
   already_initialized: 409,
   rate_limited: 429,
 } as const;
