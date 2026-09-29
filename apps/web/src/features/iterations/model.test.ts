@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Iteration } from '@/lib/types';
-import { commitmentRate, groupIterations, iterationFormError, localToday, milestoneTimeline, STATUS_ACTIONS } from './model';
+import type { Iteration, Product } from '@/lib/types';
+import { commitmentRate, editableIterationProducts, groupIterations, iterationFormError, localToday, milestoneTimeline, STATUS_ACTIONS } from './model';
 
 const it0 = (over: Partial<Iteration>): Iteration => ({
   id: 'i',
@@ -61,6 +61,37 @@ describe('迭代列表模型', () => {
     expect(iterationFormError({ ...ok, endDate: '' })).toBe('请填写开始和结束日期');
     expect(iterationFormError({ ...ok, endDate: '2026-06-30' })).toBe('结束日期不能早于开始日期');
     expect(iterationFormError({ ...ok, milestones: [{ label: '发布', date: '' }] })).toBe('里程碑需要填写名称和日期');
+  });
+});
+
+describe('迭代内可管理的产品', () => {
+  const product = (over: Partial<Product>): Product => ({
+    id: 'p',
+    key: 'PAN',
+    name: '网盘',
+    status: 'active',
+    workflowVersionId: null,
+    structureLevelNames: null,
+    myRole: 'editor',
+    ...over,
+  });
+
+  it('只读成员的产品被排除', () => {
+    const pan = product({ id: 'p1', myRole: 'editor' });
+    const doc = product({ id: 'p2', myRole: 'viewer' });
+    expect(editableIterationProducts([pan, doc], { product: null })).toEqual([pan]);
+  });
+
+  it('常规迭代（有所属产品）只保留该产品', () => {
+    const pan = product({ id: 'p1', key: 'PAN' });
+    const doc = product({ id: 'p2', key: 'DOC' });
+    expect(editableIterationProducts([pan, doc], { product: { id: 'p1' } })).toEqual([pan]);
+  });
+
+  it('专项迭代（无所属产品）保留所有可编辑产品', () => {
+    const pan = product({ id: 'p1', key: 'PAN' });
+    const doc = product({ id: 'p2', key: 'DOC' });
+    expect(editableIterationProducts([pan, doc], { product: null })).toEqual([pan, doc]);
   });
 });
 
