@@ -6,6 +6,10 @@ export type PersonEntry = {
   key: string;
   displayName: string;
   email: string | null;
+  /** 缺省为 human；工具、同步程序等建为 agent（成员 kind = agent）。 */
+  kind?: 'human' | 'agent';
+  /** 为 true 时 suggest 不拆分、不合并这一条（例如用户确认某个多人写法是一个小组）。 */
+  keep?: boolean;
   orgRole: 'admin' | 'member' | 'guest';
   productRole: 'admin' | 'editor' | 'viewer' | null;
   functionTags: string[];
