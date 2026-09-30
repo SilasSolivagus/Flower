@@ -6,10 +6,13 @@ test.beforeEach(async () => {
   await resetDatabase();
 });
 
-test('只有一个组织时首页直接进入该组织；管理员看到配置清单', async ({ page, request }) => {
+test('只有一个组织时登录后进入该组织的工作台；概览页显示产品与管理员的配置清单', async ({ page, request }) => {
   await setupInstance(request);
   await login(page, OWNER.email, OWNER.password);
   await page.waitForURL('**/acme');
+  await expect(page.getByRole('heading', { name: '工作台', level: 1 })).toBeVisible();
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '概览' }).click();
+  await expect(page).toHaveURL(/\/acme\/overview$/);
   await expect(page.getByRole('heading', { name: '测试组织' })).toBeVisible();
   const list = page.getByRole('list', { name: '组织配置清单' });
   await expect(list.getByRole('listitem')).toHaveCount(6);

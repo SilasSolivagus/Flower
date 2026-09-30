@@ -19,6 +19,8 @@ test('P0 验收：从初始化到签发 Agent Token 的完整路线', async ({ p
   await page.getByRole('button', { name: '完成初始化' }).click();
   await page.getByRole('link', { name: '进入组织' }).click();
   await page.waitForURL('**/pan');
+  await expect(page.getByRole('heading', { name: '工作台', level: 1 })).toBeVisible();
+  await page.goto('/pan/overview');
   await expect(page.getByText('已完成 0 / 6')).toBeVisible();
 
   // 2. 邀请成员 + 登记无账号成员
@@ -77,7 +79,7 @@ test('P0 验收：从初始化到签发 Agent Token 的完整路线', async ({ p
   await page.getByRole('button', { name: '我已保存' }).click();
 
   // 8. 配置清单全部完成
-  await page.goto('/pan');
+  await page.goto('/pan/overview');
   await expect(page.getByText('已完成 6 / 6')).toBeVisible();
 
   // 9. 受邀成员加入后看不到设置入口

@@ -34,6 +34,7 @@ import type {
   TaskView,
   TokenScope as CoreTokenScope,
   TokenView,
+  Workbench as CoreWorkbench,
   WorkflowBody as CoreWorkflowBody,
   WorkflowDefinitionView,
   WorkflowVersionView,
@@ -88,3 +89,4 @@ export type MemberTasks = Jsonify<CoreMemberTasks>;
 export type ReviewQueue = Jsonify<CoreReviewQueue>;
 export type ReviewState = CoreReviewState;
 export type ReviewFilterState = CoreReviewFilterState;
+export type Workbench = Jsonify<CoreWorkbench>;

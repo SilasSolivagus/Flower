@@ -45,7 +45,7 @@ export default function ProductDetailPage() {
         crumbs={
           orgAdmin
             ? [{ label: '组织设置' }, { label: '产品', href: `/${org}/settings/products` }, { label: p.name }]
-            : [{ label: '概览', href: `/${org}` }, { label: '产品设置' }, { label: p.name }]
+            : [{ label: '概览', href: `/${org}/overview` }, { label: '产品设置' }, { label: p.name }]
         }
         title={p.name}
         description={

@@ -17,7 +17,7 @@ test('访客产品管理员：从概览进入产品设置，角色页签列出�
   const res = await request.put(`/api/v1/orgs/acme/products/${productId}/roles/${guestId}`, { data: { role: 'admin' } });
   expect(res.status()).toBe(204);
 
-  await page.reload();
+  await page.goto('/acme/overview');
   await page.getByRole('link', { name: '网盘 产品设置' }).click();
   await expect(page.getByRole('heading', { name: '网盘' })).toBeVisible();
 
@@ -33,7 +33,7 @@ test('访客产品管理员：从概览进入产品设置，角色页签列出�
   await expect(priority.getByRole('textbox', { name: '选项名称' })).toHaveCount(5);
 
   await page.getByRole('navigation', { name: '面包屑' }).getByRole('link', { name: '概览' }).click();
-  await expect(page).toHaveURL(/\/acme$/);
+  await expect(page).toHaveURL(/\/acme\/overview$/);
   await expect(page.getByRole('heading', { name: '测试组织' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '无权访问' })).toHaveCount(0);
   await ctx.close();

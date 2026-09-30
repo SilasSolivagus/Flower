@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   FileText,
   Home,
+  LayoutGrid,
   List,
   RefreshCw,
   SlidersHorizontal,
@@ -28,6 +29,7 @@ import { UserMenu } from './user-menu';
 
 const ICONS: Record<NavIcon, typeof Home> = {
   home: Home,
+  grid: LayoutGrid,
   list: List,
   cycle: RefreshCw,
   review: ClipboardCheck,
