@@ -49,3 +49,42 @@ export const GATED_WORKFLOW: WorkflowBody = {
   actionGates: [{ action: 'join_iteration', conditions: [{ type: 'check_item', item: 'feasibility', in: ['passed'] }] }],
   checkItems: [{ key: 'feasibility', label: '可行性', scope: 'requirement', type: 'single', defaultState: 'not_started' }],
 };
+
+/**
+ * 带「可行性」「设计签字」「PRD」三个需求检查项的流程；设计签字由设计标签与一位指定成员会签。
+ * 状态含进行中、已上线（已完成类）、已搁置（已取消类）。评审队列与工作台测试共用。
+ */
+export function reviewWorkflow(designTagId: string, bossMemberId: string): WorkflowBody {
+  return {
+    states: [
+      { key: 'backlog', label: '收集', color: '#94a3b8', order: 1, group: '', category: 'backlog' },
+      { key: 'doing', label: '开发中', color: '#f59e0b', order: 2, group: '', category: 'started' },
+      { key: 'done', label: '已上线', color: '#10b981', order: 3, group: '', category: 'completed' },
+      { key: 'dropped', label: '已搁置', color: '#9ca3af', order: 4, group: '', category: 'canceled' },
+    ],
+    initial: 'backlog',
+    transitions: [
+      { from: '*', to: 'backlog', conditions: [] },
+      { from: '*', to: 'doing', conditions: [] },
+      { from: '*', to: 'done', conditions: [] },
+      { from: '*', to: 'dropped', conditions: [] },
+    ],
+    actionGates: [],
+    checkItems: [
+      { key: 'feasibility', label: '可行性', scope: 'requirement', type: 'single', defaultState: 'not_started' },
+      {
+        key: 'design',
+        label: '设计签字',
+        scope: 'requirement',
+        type: 'signoff',
+        signers: [
+          { by: 'function_tag', ref: designTagId },
+          { by: 'member', ref: bossMemberId },
+        ],
+        signoffRule: 'all',
+        defaultState: 'not_started',
+      },
+      { key: 'prd', label: 'PRD', scope: 'requirement', type: 'single', defaultState: 'not_started' },
+    ],
+  };
+}

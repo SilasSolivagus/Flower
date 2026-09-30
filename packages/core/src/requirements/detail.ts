@@ -10,7 +10,6 @@ import {
   fieldOptions,
   fieldValues,
   functionTags,
-  memberFunctionTags,
   products,
   releases,
   requirementAssignments,
@@ -24,6 +23,7 @@ import { type Tx, withOrg } from '../db/tx';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { joinIterationUnmet } from '../iterations/membership';
+import { signerIdentity } from '../reviews/snapshot';
 import { effectiveFields, memberNames, productWorkflowBody } from './context';
 import type { CheckState } from './labels';
 import { displayKey, hydrateList, type MemberRef, type OptionRef, type RequirementListItem } from './requirements';
@@ -85,11 +85,6 @@ async function resolveKey(tx: Tx, key: string): Promise<typeof requirements.$inf
   }
   if (!row) throw new AppError('not_found', '需求不存在');
   return row;
-}
-
-async function signerIdentity(tx: Tx, actor: Actor, role: ProductRole) {
-  const tags = await tx.select({ tagId: memberFunctionTags.tagId }).from(memberFunctionTags).where(eq(memberFunctionTags.memberId, actor.memberId));
-  return { memberId: actor.memberId, functionTagIds: tags.map((x) => x.tagId), productRole: role };
 }
 
 export async function getRequirementByKey(db: Db, actor: Actor, key: string): Promise<RequirementDetail> {
