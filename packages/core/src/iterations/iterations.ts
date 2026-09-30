@@ -77,7 +77,7 @@ function overlapToConflict(e: unknown): never {
   throw e;
 }
 
-async function stateInfoByProduct(tx: Tx, productIds: Iterable<string>): Promise<Map<string, Map<string, StateInfo>>> {
+export async function stateInfoByProduct(tx: Tx, productIds: Iterable<string>): Promise<Map<string, Map<string, StateInfo>>> {
   const out = new Map<string, Map<string, StateInfo>>();
   for (const pid of new Set(productIds)) {
     const body = await productWorkflowBody(tx, pid);
@@ -86,7 +86,7 @@ async function stateInfoByProduct(tx: Tx, productIds: Iterable<string>): Promise
   return out;
 }
 
-function stateOf(info: Map<string, Map<string, StateInfo>>, productId: string, key: string): StateInfo {
+export function stateOf(info: Map<string, Map<string, StateInfo>>, productId: string, key: string): StateInfo {
   return info.get(productId)?.get(key) ?? { label: key, color: '#8a9199', category: 'backlog' };
 }
 
@@ -103,7 +103,7 @@ export async function loadIteration(tx: Tx, id: string, lock?: 'share' | 'update
 }
 
 /** 读取并确认操作者能看到该迭代；看不到时与不存在一样返回 404。 */
-async function loadVisibleIteration(tx: Tx, id: string, visible: Set<string>, lock?: 'share' | 'update'): Promise<IterRow> {
+export async function loadVisibleIteration(tx: Tx, id: string, visible: Set<string>, lock?: 'share' | 'update'): Promise<IterRow> {
   const row = await loadIteration(tx, id, lock);
   if (!isVisible(row, visible)) throw new AppError('not_found', '迭代不存在');
   return row;

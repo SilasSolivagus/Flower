@@ -1,0 +1,134 @@
+import { and, asc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { atLeast, productRoleOf, visibleProductIds } from '../access/permissions';
+import type { Db } from '../db/client';
+import { iterations, members, products, tasks } from '../db/schema';
+import { withOrg } from '../db/tx';
+import type { Actor } from '../domain-types';
+import { AppError } from '../errors';
+import { type IterationStatus, loadVisibleIteration } from '../iterations/iterations';
+import { loadRequirement } from '../requirements/context';
+import type { MemberRef } from '../requirements/requirements';
+import { type IterationOverview, iterationOverview, workdaysBetween } from './schedule';
+import { hydrateTasks, orgToday, type TaskView } from './tasks';
+
+export type IterationGantt = {
+  iteration: {
+    id: string;
+    name: string;
+    type: 'regular' | 'special';
+    product: { id: string; key: string; name: string } | null;
+    startDate: string;
+    endDate: string;
+    status: IterationStatus;
+  };
+  today: string;
+  workdays: string[];
+  tasks: TaskView[];
+  overview: IterationOverview;
+  starredCount: number;
+  canAddTask: boolean;
+  /** 操作者可以在本迭代里新建任务的产品（专项有多个时由界面选择）。 */
+  editableProductIds: string[];
+};
+export type MemberTask = TaskView & { iteration: { id: string; name: string; startDate: string; endDate: string; status: IterationStatus } | null };
+export type MemberTasks = { member: MemberRef; today: string; tasks: MemberTask[] };
+
+const byPlanStart = [sql`${tasks.planStart} asc nulls last`, asc(tasks.createdAt)] as const;
+
+export async function getIterationGantt(db: Db, actor: Actor, iterationId: string, opts: { today?: string } = {}): Promise<IterationGantt> {
+  return withOrg(db, actor.orgId, async (tx) => {
+    const visible = await visibleProductIds(tx, actor);
+    const it = await loadVisibleIteration(tx, iterationId, visible);
+    const today = opts.today ?? (await orgToday(tx, actor.orgId));
+    const rows =
+      visible.size > 0
+        ? await tx
+            .select()
+            .from(tasks)
+            .where(and(eq(tasks.iterationId, iterationId), inArray(tasks.productId, [...visible])))
+            .orderBy(...byPlanStart)
+        : [];
+    // 重点任务排在前面；sort 是稳定排序，其余保持开始日期顺序
+    const views = (await hydrateTasks(tx, actor, rows, today)).sort((a, b) => Number(b.starred) - Number(a.starred));
+    const [product] = it.productId
+      ? await tx.select({ id: products.id, key: products.key, name: products.name }).from(products).where(eq(products.id, it.productId))
+      : [];
+    const open = it.status === 'planning' || it.status === 'active';
+    const editableProductIds: string[] = [];
+    if (open) {
+      for (const pid of it.type === 'regular' ? [it.productId!] : [...visible]) {
+        if (atLeast(await productRoleOf(tx, actor, pid), 'editor')) editableProductIds.push(pid);
+      }
+    }
+    const overview = iterationOverview(
+      views.map((v) => ({
+        status: v.status,
+        planStart: v.planStart,
+        planDays: v.planDays,
+        delayDays: v.delayDays,
+        progressOverride: v.progressOverride,
+        requirementId: v.requirement?.id ?? null,
+        title: v.requirement ? `${v.requirement.displayKey} ${v.requirement.title}` : v.title,
+        flag: v.flag,
+        note: v.note,
+        assigneeName: v.assignee?.displayName ?? null,
+      })),
+      it,
+      today,
+    );
+    return {
+      iteration: { id: it.id, name: it.name, type: it.type, product: product ?? null, startDate: it.startDate, endDate: it.endDate, status: it.status },
+      today,
+      workdays: workdaysBetween(it.startDate, it.endDate),
+      tasks: views,
+      overview,
+      starredCount: views.filter((v) => v.starred).length,
+      canAddTask: editableProductIds.length > 0,
+      editableProductIds,
+    };
+  });
+}
+
+export async function listRequirementTasks(db: Db, actor: Actor, requirementId: string, opts: { today?: string } = {}): Promise<TaskView[]> {
+  return withOrg(db, actor.orgId, async (tx) => {
+    const req = await loadRequirement(tx, requirementId);
+    if (!(await productRoleOf(tx, actor, req.productId))) throw new AppError('not_found', '需求不存在');
+    const rows = await tx.select().from(tasks).where(eq(tasks.requirementId, requirementId)).orderBy(...byPlanStart);
+    return hydrateTasks(tx, actor, rows, opts.today ?? (await orgToday(tx, actor.orgId)));
+  });
+}
+
+export async function listMemberTasks(
+  db: Db,
+  actor: Actor,
+  memberId: string,
+  opts: { today?: string; includeFinished?: boolean } = {},
+): Promise<MemberTasks> {
+  // 访客只能查询自己的任务：listMembers 对访客本就拒绝，这里不能借着按人查询任务把其他成员的姓名和任务泄露出去。
+  if (actor.orgRole === 'guest' && memberId !== actor.memberId) throw new AppError('forbidden', '访客只能查看自己的任务');
+  return withOrg(db, actor.orgId, async (tx) => {
+    const [member] = await tx.select({ id: members.id, displayName: members.displayName }).from(members).where(eq(members.id, memberId));
+    if (!member) throw new AppError('not_found', '成员不存在');
+    const today = opts.today ?? (await orgToday(tx, actor.orgId));
+    const visible = [...(await visibleProductIds(tx, actor))];
+    if (visible.length === 0) return { member, today, tasks: [] };
+    const scope = opts.includeFinished
+      ? or(isNull(tasks.iterationId), isNull(iterations.deletedAt))
+      : or(
+          and(isNull(tasks.iterationId), ne(tasks.status, 'done')),
+          and(isNull(iterations.deletedAt), inArray(iterations.status, ['planning', 'active'])),
+        );
+    const rows = await tx
+      .select({
+        t: tasks,
+        it: { id: iterations.id, name: iterations.name, startDate: iterations.startDate, endDate: iterations.endDate, status: iterations.status },
+      })
+      .from(tasks)
+      .leftJoin(iterations, eq(iterations.id, tasks.iterationId))
+      .where(and(eq(tasks.assigneeMemberId, memberId), inArray(tasks.productId, visible), scope))
+      .orderBy(...byPlanStart)
+      .limit(500);
+    const views = await hydrateTasks(tx, actor, rows.map((r) => r.t), today);
+    return { member, today, tasks: views.map((v, i) => ({ ...v, iteration: rows[i]!.it })) };
+  });
+}
