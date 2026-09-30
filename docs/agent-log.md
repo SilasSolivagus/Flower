@@ -20,6 +20,23 @@
 
 ## 记录
 
+### 2026-09-30 · 本地 · P1-B2：甘特、人员负载、评审表与工作台
+- 分支 / PR：`feat/p1b2-gantt-workbench`
+- 做了什么：
+  - core：排期纯函数（push 的工作日进度、覆盖规则、热力图色阶、迭代概览，浏览器安全子路径 `@flower/core/schedule`）；任务新建 / 修改 / 删除（每个迭代最多 10 个重点，标重点时锁迭代防并发超限）；甘特、按需求、按人跨迭代的任务查询；按流程检查项生成的评审队列（整体评审状态、会签进度、等我签字含代签）；跨组织工作台（`listMyOrganizations` 查成员关系，逐个组织 `withOrg` 读取）。
+  - 有任务的迭代不能删除（B1 只检查需求与发布版本）。
+  - migrate：push 甘特任务的标记映射为 `attention`，手动进度写入 `meta.progress`；pan123 已重导。
+  - web：甘特页签、时间轴与团队负载、人员负载页、评审表、工作台（登录后默认页），概览页移到 `/[org]/overview`；统一加载失败状态与网络错误中文提示，修复 AuthGate 与产品设置在 5xx 时的表现、`/admin` 两个一级标题、未处理的 `mutateAsync` 拒绝。
+  - 检查项组件移到 `components/check-items.tsx`，需求详情与评审表共用。
+  - 需求分配的新增与删除（core、接口、需求详情「分配」区块）；「等我签字」按分配推给对应的人，没有分配时推给该职能标签的全部成员，且只统计评审已开始的需求；新增迁移 `0008_*.sql`，给 `requirement_assignments` 加唯一约束。
+  - 共享件：`components/load-error.tsx` 的 `QueryError`；e2e `helpers.ts` 新增 `acceptInvite`、`createMember`、`FAIL_500`、`applyReviewWorkflow`；`assertPlatformOption` 移到 `requirements/context.ts`，供表单与测试共用。
+  - `docs/p1b-comparison.md`：日常操作新旧对比，列出 3 项比旧系统多几步的操作。
+- 怎么验证的：`pnpm typecheck`、`pnpm --filter @flower/web lint --max-warnings 0`、`pnpm test`（core 250、web 131、migrate 63）、完整端到端测试（53 个）、`./scripts/smoke.sh` 全部通过；真实数据性能见 `docs/p1b-validation.md`「P1-B2」第 2 节。
+- 留给对方：
+  - 用户验收与试用（`docs/p1b-validation.md`「P1-B2」第 3、4 节）。
+  - 以后新增同时锁迭代与任务的代码，保持「先迭代、后任务」的顺序。
+  - 留给后续阶段的项见 P1-B2 计划「设计决定」表最后一行。
+
 ### 2026-09-30 · 云端 · 审查 P1-B1（PR #6）：修复加入迭代与开始迭代的死锁
 - 分支 / PR：`feat/p1b1-iterations`（PR #6）
 - 做了什么：
