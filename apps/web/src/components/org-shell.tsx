@@ -80,7 +80,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <nav aria-label="主导航" className="sticky top-0 flex h-screen w-60 shrink-0 flex-col gap-4 border-r bg-sidebar px-3 py-4">
-        <Link href="/" className="flex items-center gap-2 px-2 font-bold">
+        <Link href={`/${org}`} className="flex items-center gap-2 px-2 font-bold">
           <Logo />
           Flower
         </Link>

@@ -194,7 +194,7 @@ export default function ReviewsPage() {
   const change = (patch: Partial<ReviewFilter>) => setFilter((f) => ({ ...f, ...patch }));
 
   let body: ReactNode;
-  if (products.isError) {
+  if (!products.data && products.isError) {
     body = <QueryError error={products.error} noAccessMessage="组织不存在，或者你没有查看权限。" retryMessage="加载产品列表失败，请重试。" onRetry={() => products.refetch()} />;
   } else if (products.data && products.data.length === 0) {
     body = <EmptyState icon={ClipboardCheck} title="还没有产品" />;

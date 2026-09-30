@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
-import { requirementKeys, useApiMutation } from '@/lib/queries';
+import { qk, requirementKeys, useApiMutation } from '@/lib/queries';
 import type { RequirementDetail } from '@/lib/types';
 
 export function StatusPanel({ org, requirement: r }: { org: string; requirement: RequirementDetail }) {
@@ -14,11 +14,11 @@ export function StatusPanel({ org, requirement: r }: { org: string; requirement:
   const [reason, setReason] = useState('');
   const state = r.workflow.states.find((s) => s.key === r.stateKey);
   const move = useApiMutation((vars: { to: string; force?: boolean; reason?: string }) => api(`/orgs/${org}/requirements/${r.id}/transitions`, { method: 'POST', body: vars }), {
-    invalidate: [requirementKeys(org)],
+    invalidate: [requirementKeys(org), qk.workbench],
     success: '已流转',
   });
   const force = useApiMutation((vars: { to: string; reason: string }) => api(`/orgs/${org}/requirements/${r.id}/transitions`, { method: 'POST', body: { ...vars, force: true } }), {
-    invalidate: [requirementKeys(org)],
+    invalidate: [requirementKeys(org), qk.workbench],
     silentError: true,
     success: '已强制流转',
     onSuccess: () => {
