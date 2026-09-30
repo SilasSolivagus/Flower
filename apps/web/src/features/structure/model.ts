@@ -32,3 +32,17 @@ export function nodeOptions(nodes: StructureNode[], currentId: string | null): A
     .filter((x) => x.id === currentId || !hidden(x))
     .map((x) => ({ id: x.id, name: x.name, depth: x.depth, deprecated: x.status === 'deprecated' }));
 }
+
+/** 把 id 在同级列表中上移（-1）或下移（1）一位；已在边界时原样返回。 */
+export function moveSibling(ids: string[], id: string, dir: -1 | 1): string[] {
+  const i = ids.indexOf(id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= ids.length) return ids;
+  const next = [...ids];
+  [next[i], next[j]] = [next[j]!, next[i]!];
+  return next;
+}
+
+export function levelLabel(names: string[], depth: number): string {
+  return names[depth - 1] ?? `第 ${depth} 层`;
+}

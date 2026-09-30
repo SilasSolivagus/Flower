@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StructureNode } from '@/lib/types';
-import { flattenTree, nodeOptions } from './model';
+import { flattenTree, levelLabel, moveSibling, nodeOptions } from './model';
 
 const n = (id: string, parentId: string | null, depth: number, sort: number, status: 'active' | 'deprecated' = 'active'): StructureNode => ({
   id,
@@ -29,5 +29,19 @@ describe('结构树模型', () => {
       ['存储', 1],
     ]);
     expect(nodeOptions(withDeprecated, '续费').find((x) => x.id === '续费')).toMatchObject({ deprecated: true });
+  });
+});
+
+describe('结构树维护', () => {
+  it('同级上移、下移，越界时不变', () => {
+    expect(moveSibling(['a', 'b', 'c'], 'b', -1)).toEqual(['b', 'a', 'c']);
+    expect(moveSibling(['a', 'b', 'c'], 'b', 1)).toEqual(['a', 'c', 'b']);
+    expect(moveSibling(['a', 'b', 'c'], 'a', -1)).toEqual(['a', 'b', 'c']);
+    expect(moveSibling(['a', 'b', 'c'], 'c', 1)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('层级叫法按深度取，没有时显示第 N 层', () => {
+    expect(levelLabel(['业务域', '模块', '功能点'], 2)).toBe('模块');
+    expect(levelLabel(['模块'], 3)).toBe('第 3 层');
   });
 });
