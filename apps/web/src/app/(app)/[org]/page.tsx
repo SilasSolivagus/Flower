@@ -72,7 +72,7 @@ export default function OrgOverviewPage() {
         ) : (
           <ul className="grid grid-cols-3 gap-3">
             {products.data?.map((p) => (
-              <li key={p.id}>
+              <li key={p.id} className="flex flex-col gap-1">
                 <Link
                   href={`/${org}/requirements?product=${p.key}`}
                   className="flex items-center justify-between rounded-lg border bg-card px-4 py-3 hover:border-primary"
@@ -83,6 +83,11 @@ export default function OrgOverviewPage() {
                   </span>
                   <span className="text-xs text-muted-foreground">{PRODUCT_ROLE_LABEL[p.myRole]}</span>
                 </Link>
+                {p.myRole === 'admin' && !admin && (
+                  <Link href={`/${org}/settings/products/${p.id}`} aria-label={`${p.name} 产品设置`} className="self-end text-xs text-primary hover:underline">
+                    产品设置
+                  </Link>
+                )}
               </li>
             ))}
           </ul>

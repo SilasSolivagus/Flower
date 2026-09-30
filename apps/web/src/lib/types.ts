@@ -17,6 +17,7 @@ import type {
   MyOrg as CoreMyOrg,
   OrgRole as CoreOrgRole,
   OrgView,
+  ProductMemberRole as CoreProductMemberRole,
   ProductRole as CoreProductRole,
   ProductView,
   ReleaseView,
@@ -72,3 +73,4 @@ export type IterationMilestone = CoreIterationMilestone;
 export type IterationDetail = Jsonify<CoreIterationDetail>;
 export type IterationScope = Jsonify<CoreIterationScope>;
 export type Release = Jsonify<ReleaseView>;
+export type ProductMemberRole = CoreProductMemberRole;

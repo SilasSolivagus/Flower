@@ -1,24 +1,32 @@
 'use client';
 
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
 import { ORG_ROLE_LABEL, PRODUCT_ROLE_LABEL } from '@/lib/labels';
-import { qk, useApiMutation, useMembers, useProductRoles } from '@/lib/queries';
+import { qk, useApiMutation, useProductMembers } from '@/lib/queries';
 import type { ProductRole } from '@/lib/types';
 
 const DEFAULT = 'default';
 
 export function RolesTab({ org, productId }: { org: string; productId: string }) {
-  const members = useMembers(org);
-  const roles = useProductRoles(org, productId);
+  const q = useProductMembers(org, productId);
   const set = useApiMutation(
     (v: { memberId: string; role: ProductRole | null }) =>
       api(`/orgs/${org}/products/${productId}/roles/${v.memberId}`, { method: 'PUT', body: { role: v.role } }),
-    { invalidate: [qk.productRoles(org, productId), qk.members(org)], success: '已更新' },
+    { invalidate: [qk.productMembers(org, productId)], success: '已更新' },
   );
-  const override = new Map((roles.data ?? []).map((r) => [r.memberId, r.role]));
-  const list = (members.data ?? []).filter((m) => m.status === 'active');
+  if (q.isError) {
+    return (
+      <div className="flex flex-col items-center gap-3 py-12 text-center">
+        <p className="text-muted-foreground">加载成员失败，请重试。</p>
+        <Button variant="outline" onClick={() => q.refetch()}>
+          重试
+        </Button>
+      </div>
+    );
+  }
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
       <Table>
@@ -30,10 +38,10 @@ export function RolesTab({ org, productId }: { org: string; productId: string })
           </TableRow>
         </TableHeader>
         <TableBody>
-          {list.map((m) => {
+          {(q.data ?? []).map((m) => {
             const admin = m.orgRole === 'owner' || m.orgRole === 'admin';
             return (
-              <TableRow key={m.id} className="h-10 even:bg-zebra">
+              <TableRow key={m.memberId} className="h-10 even:bg-zebra">
                 <TableCell className="font-medium">{m.displayName}</TableCell>
                 <TableCell>{ORG_ROLE_LABEL[m.orgRole]}</TableCell>
                 <TableCell>
@@ -41,8 +49,8 @@ export function RolesTab({ org, productId }: { org: string; productId: string })
                     <span className="text-muted-foreground">管理员（组织管理员）</span>
                   ) : (
                     <Select
-                      value={override.get(m.id) ?? DEFAULT}
-                      onValueChange={(v) => set.mutate({ memberId: m.id, role: v === DEFAULT ? null : (v as ProductRole) })}
+                      value={m.role ?? DEFAULT}
+                      onValueChange={(v) => set.mutate({ memberId: m.memberId, role: v === DEFAULT ? null : (v as ProductRole) })}
                     >
                       <SelectTrigger className="h-8" aria-label={`${m.displayName} 的产品角色`}>
                         <SelectValue />

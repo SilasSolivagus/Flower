@@ -19,7 +19,7 @@ import type {
   Org,
   OrgMe,
   Product,
-  ProductRole,
+  ProductMemberRole,
   Release,
   RequirementComment,
   RequirementDetail,
@@ -40,7 +40,7 @@ export const qk = {
   tags: (o: string) => ['org', o, 'tags'] as const,
   products: (o: string) => ['org', o, 'products'] as const,
   product: (o: string, id: string) => ['org', o, 'product', id] as const,
-  productRoles: (o: string, id: string) => ['org', o, 'product', id, 'roles'] as const,
+  productMembers: (o: string, id: string) => ['org', o, 'product', id, 'members'] as const,
   productWorkflow: (o: string, id: string) => ['org', o, 'product', id, 'workflow'] as const,
   workflows: (o: string) => ['org', o, 'workflows'] as const,
   workflow: (o: string, id: string) => ['org', o, 'workflow', id] as const,
@@ -78,12 +78,11 @@ export const useProducts = (o: string) =>
   useQuery({ queryKey: qk.products(o), queryFn: () => api<{ products: Product[] }>(`/orgs/${o}/products`), select: (d) => d.products });
 export const useProduct = (o: string, id: string) =>
   useQuery({ queryKey: qk.product(o, id), queryFn: () => api<{ product: Product }>(`/orgs/${o}/products/${id}`), select: (d) => d.product });
-export const useProductRoles = (o: string, id: string, enabled = true) =>
+export const useProductMembers = (o: string, id: string) =>
   useQuery({
-    queryKey: qk.productRoles(o, id),
-    queryFn: () => api<{ roles: Array<{ memberId: string; role: ProductRole }> }>(`/orgs/${o}/products/${id}/roles`),
-    select: (d) => d.roles,
-    enabled,
+    queryKey: qk.productMembers(o, id),
+    queryFn: () => api<{ members: ProductMemberRole[] }>(`/orgs/${o}/products/${id}/members`),
+    select: (d) => d.members,
   });
 export const useProductWorkflow = (o: string, id: string) =>
   useQuery({
