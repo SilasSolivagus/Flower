@@ -15,7 +15,7 @@ export function RolesTab({ org, productId }: { org: string; productId: string })
   const set = useApiMutation(
     (v: { memberId: string; role: ProductRole | null }) =>
       api(`/orgs/${org}/products/${productId}/roles/${v.memberId}`, { method: 'PUT', body: { role: v.role } }),
-    { invalidate: [qk.productMembers(org, productId)], success: '已更新' },
+    { invalidate: [qk.productMembers(org, productId), qk.members(org), qk.products(org), qk.product(org, productId)], success: '已更新' },
   );
   if (q.isError) {
     return (

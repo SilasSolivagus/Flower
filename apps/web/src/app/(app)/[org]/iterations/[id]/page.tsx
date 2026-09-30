@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { localToday, milestoneTimeline, STATUS_ACTIONS } from '@/features/iterations/model';
 import { ApiError, api } from '@/lib/api';
 import { ITERATION_STATUS_LABEL } from '@/lib/labels';
-import { iterationKeys, qk, useApiMutation, useIteration } from '@/lib/queries';
+import { iterationKeys, useApiMutation, useIteration } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { ReleasesTab } from './releases-tab';
 import { RequirementsTab } from './requirements-tab';
@@ -28,7 +28,7 @@ export default function IterationPage() {
     success: '已更新迭代状态',
   });
   const remove = useApiMutation(() => api(`/orgs/${org}/iterations/${id}`, { method: 'DELETE' }), {
-    invalidate: [qk.iterationList(org)],
+    invalidate: [iterationKeys(org)],
     success: '已删除迭代',
     onSuccess: () => router.push(`/${org}/iterations`),
   });

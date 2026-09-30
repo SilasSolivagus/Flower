@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { type IterationForm, iterationFormError } from '@/features/iterations/model';
 import { api } from '@/lib/api';
-import { iterationKeys, useApiMutation } from '@/lib/queries';
+import { iterationKeys, releaseKeys, requirementKeys, useApiMutation } from '@/lib/queries';
 import type { Iteration, IterationMilestone, Product } from '@/lib/types';
 
 const SPECIAL = '__special';
@@ -51,7 +51,12 @@ export function IterationDialog({
         body: scope === SPECIAL ? { ...body, type: 'special' } : { ...body, type: 'regular', productId: scope },
       });
     },
-    { invalidate: [iterationKeys(org)], silentError: true, success: iteration ? '已保存' : '已创建迭代', onSuccess: () => onOpenChange(false) },
+    {
+      invalidate: [iterationKeys(org), requirementKeys(org), releaseKeys(org)],
+      silentError: true,
+      success: iteration ? '已保存' : '已创建迭代',
+      onSuccess: () => onOpenChange(false),
+    },
   );
   const close = () => {
     save.reset();
