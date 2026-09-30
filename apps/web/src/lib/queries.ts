@@ -11,6 +11,7 @@ import type {
   Iteration,
   IterationBrief,
   IterationDetail,
+  IterationGantt,
   IterationScope,
   Invitation,
   LevelNames,
@@ -55,6 +56,8 @@ export const qk = {
   iterationList: (o: string) => ['org', o, 'iterations', 'list'] as const,
   iteration: (o: string, id: string) => ['org', o, 'iterations', 'detail', id] as const,
   iterationScope: (o: string, id: string) => ['org', o, 'iterations', 'scope', id] as const,
+  gantt: (o: string, id: string) => ['org', o, 'iterations', 'gantt', id] as const,
+  workbench: ['me', 'workbench'] as const,
   releases: (o: string, query: string) => ['org', o, 'releases', query] as const,
 };
 
@@ -130,6 +133,15 @@ export const useIteration = (o: string, id: string) =>
   useQuery({ queryKey: qk.iteration(o, id), queryFn: () => api<{ iteration: IterationDetail }>(`/orgs/${o}/iterations/${id}`), select: (d) => d.iteration });
 export const useIterationScope = (o: string, id: string) =>
   useQuery({ queryKey: qk.iterationScope(o, id), queryFn: () => api<{ scope: IterationScope }>(`/orgs/${o}/iterations/${id}/scope`), select: (d) => d.scope });
+
+/** 按人查看任务的公共前缀。 */
+export const taskKeys = (o: string) => ['org', o, 'tasks'] as const;
+
+/** 任务修改后要刷新的查询：迭代（含甘特）、需求（详情里的任务）、按人任务、工作台。 */
+export const taskMutationKeys = (o: string) => [iterationKeys(o), requirementKeys(o), taskKeys(o), qk.workbench];
+
+export const useIterationGantt = (o: string, id: string) =>
+  useQuery({ queryKey: qk.gantt(o, id), queryFn: () => api<{ gantt: IterationGantt }>(`/orgs/${o}/iterations/${id}/gantt`), select: (d) => d.gantt });
 
 /** 发布版本查询的公共前缀。 */
 export const releaseKeys = (o: string) => ['org', o, 'releases'] as const;

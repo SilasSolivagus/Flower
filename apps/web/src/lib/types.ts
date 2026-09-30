@@ -10,6 +10,7 @@ import type {
   InvitationView,
   IterationBrief as CoreIterationBrief,
   IterationDetail as CoreIterationDetail,
+  IterationGantt as CoreIterationGantt,
   IterationMilestone as CoreIterationMilestone,
   IterationScope as CoreIterationScope,
   IterationView,
@@ -25,6 +26,7 @@ import type {
   RequirementList as CoreRequirementList,
   RequirementListItem as CoreRequirementListItem,
   StructureNodeView,
+  TaskView,
   TokenScope as CoreTokenScope,
   TokenView,
   WorkflowBody as CoreWorkflowBody,
@@ -74,3 +76,5 @@ export type IterationDetail = Jsonify<CoreIterationDetail>;
 export type IterationScope = Jsonify<CoreIterationScope>;
 export type Release = Jsonify<ReleaseView>;
 export type ProductMemberRole = CoreProductMemberRole;
+export type Task = Jsonify<TaskView>;
+export type IterationGantt = Jsonify<CoreIterationGantt>;

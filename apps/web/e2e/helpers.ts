@@ -64,3 +64,12 @@ export async function acceptInvite(
 
 /** 模拟服务端 5xx 的响应，配合 page.route(...).fulfill 使用。 */
 export const FAIL_500 = { status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'internal', message: '服务器错误' } }) };
+
+export async function createIteration(request: APIRequestContext, productId: string, name: string, startDate: string, endDate: string): Promise<string> {
+  return (await json<{ iteration: { id: string } }>(request.post('/api/v1/orgs/acme/iterations', { data: { type: 'regular', productId, name, startDate, endDate } })))
+    .iteration.id;
+}
+
+export async function createTask(request: APIRequestContext, data: Record<string, unknown>): Promise<string> {
+  return (await json<{ task: { id: string } }>(request.post('/api/v1/orgs/acme/tasks', { data }))).task.id;
+}

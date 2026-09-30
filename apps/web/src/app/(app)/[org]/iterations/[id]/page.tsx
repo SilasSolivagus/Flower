@@ -1,7 +1,7 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 import { ConfirmAction } from '@/components/confirm-action';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
@@ -13,13 +13,16 @@ import { api } from '@/lib/api';
 import { ITERATION_STATUS_LABEL } from '@/lib/labels';
 import { iterationKeys, useApiMutation, useIteration } from '@/lib/queries';
 import { cn } from '@/lib/utils';
+import { GanttTab } from './gantt-tab';
 import { ReleasesTab } from './releases-tab';
 import { RequirementsTab } from './requirements-tab';
 import { ScopeTab } from './scope-tab';
 
-export default function IterationPage() {
+function IterationPage() {
   const { org, id } = useParams<{ org: string; id: string }>();
   const router = useRouter();
+  // 工作台里的任务链接带 ?tab=gantt，直接打开甘特页签
+  const initialTab = useSearchParams().get('tab') === 'gantt' ? 'gantt' : 'requirements';
   const q = useIteration(org, id);
   const [today] = useState(localToday);
   const setStatus = useApiMutation((to: string) => api(`/orgs/${org}/iterations/${id}/status`, { method: 'POST', body: { to } }), {
@@ -101,14 +104,18 @@ export default function IterationPage() {
           ))}
         </ol>
       )}
-      <Tabs defaultValue="requirements">
+      <Tabs defaultValue={initialTab}>
         <TabsList>
           <TabsTrigger value="requirements">需求（{it.requirementCount}）</TabsTrigger>
+          <TabsTrigger value="gantt">甘特</TabsTrigger>
           {started && <TabsTrigger value="scope">范围对比</TabsTrigger>}
           <TabsTrigger value="releases">发布版本</TabsTrigger>
         </TabsList>
         <TabsContent value="requirements">
           <RequirementsTab org={org} iteration={it} />
+        </TabsContent>
+        <TabsContent value="gantt">
+          <GanttTab org={org} iterationId={it.id} />
         </TabsContent>
         {started && (
           <TabsContent value="scope">
@@ -120,5 +127,13 @@ export default function IterationPage() {
         </TabsContent>
       </Tabs>
     </>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <IterationPage />
+    </Suspense>
   );
 }
