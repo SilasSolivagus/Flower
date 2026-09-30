@@ -45,3 +45,4 @@ export * from './tasks/tasks';
 export * from './tasks/queries';
 export * from './reviews/snapshot';
 export * from './reviews/queue';
+export * from './workbench/workbench';
