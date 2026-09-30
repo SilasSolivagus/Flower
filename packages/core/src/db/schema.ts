@@ -428,7 +428,11 @@ export const requirementAssignments = pgTable(
     functionTagId: uuid('function_tag_id').references(() => functionTags.id),
     platformOptionId: uuid('platform_option_id').references(() => fieldOptions.id),
   },
-  (t) => [index('requirement_assignments_requirement').on(t.requirementId), index('requirement_assignments_member').on(t.memberId)],
+  (t) => [
+    index('requirement_assignments_requirement').on(t.requirementId),
+    index('requirement_assignments_member').on(t.memberId),
+    unique('requirement_assignments_unique').on(t.requirementId, t.memberId, t.functionTagId, t.platformOptionId).nullsNotDistinct(),
+  ],
 );
 
 export const requirementRelations = pgTable(

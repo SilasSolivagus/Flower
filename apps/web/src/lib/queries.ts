@@ -82,8 +82,8 @@ export const useInvitations = (o: string, enabled = true) =>
     select: (d) => d.invitations,
     enabled,
   });
-export const useFunctionTags = (o: string) =>
-  useQuery({ queryKey: qk.tags(o), queryFn: () => api<{ tags: FunctionTag[] }>(`/orgs/${o}/function-tags`), select: (d) => d.tags });
+export const useFunctionTags = (o: string, enabled = true) =>
+  useQuery({ queryKey: qk.tags(o), queryFn: () => api<{ tags: FunctionTag[] }>(`/orgs/${o}/function-tags`), select: (d) => d.tags, enabled });
 export const useProducts = (o: string) =>
   useQuery({ queryKey: qk.products(o), queryFn: () => api<{ products: Product[] }>(`/orgs/${o}/products`), select: (d) => d.products });
 export const useProduct = (o: string, id: string) =>

@@ -14,16 +14,6 @@ function Block({ title, children }: { title: string; children: ReactNode }) {
 export function SideLists({ requirement: r }: { requirement: RequirementDetail }) {
   return (
     <>
-      {r.assignments.length > 0 && (
-        <Block title="开发分配">
-          {r.assignments.map((a, i) => (
-            <li key={i}>
-              {a.member.displayName}
-              <span className="text-muted-foreground">{[a.functionTag?.name, a.platform?.label].filter(Boolean).map((x) => ` · ${x}`).join('')}</span>
-            </li>
-          ))}
-        </Block>
-      )}
       {r.tasks.length > 0 && (
         <Block title="任务">
           {r.tasks.map((t) => (

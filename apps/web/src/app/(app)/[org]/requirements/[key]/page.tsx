@@ -15,6 +15,7 @@ import { Blockers } from './blockers';
 import { Comments } from './comments';
 import { FieldsPanel } from './fields-panel';
 import { History } from './history';
+import { Assignments } from './assignments';
 import { Relations } from './relations';
 import { Releases } from './releases';
 import { SideLists } from './side-lists';
@@ -127,6 +128,7 @@ export default function RequirementPage() {
         <div className="flex flex-col gap-4">
           <StatusPanel org={org} requirement={r} />
           <FieldsPanel org={org} requirement={r} />
+          <Assignments org={org} requirement={r} />
           <SideLists requirement={r} />
           <Releases org={org} requirement={r} />
         </div>

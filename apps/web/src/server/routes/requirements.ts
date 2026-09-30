@@ -1,4 +1,5 @@
 import {
+  addRequirementAssignment,
   addRequirementComment,
   CHECK_STATES,
   createBlocker,
@@ -12,6 +13,7 @@ import {
   listStructureNodes,
   markRequirementCommentsRead,
   RELATION_TYPES,
+  removeRequirementAssignment,
   type RequirementFilter,
   resolveBlocker,
   setCheckItemState,
@@ -155,6 +157,16 @@ export function registerRequirementRoutes(app: App, deps: ApiDeps): void {
 
   app.delete('/orgs/:org/relations/:id', async (c) => {
     await deleteRelation(deps.db, c.get('actor'), c.req.param('id'));
+    return c.body(null, 204);
+  });
+
+  app.post('/orgs/:org/requirements/:id/assignments', async (c) => {
+    const body = await readJson(c, z.object({ memberId: z.string(), functionTagId: z.string(), platformOptionId: z.string().nullable().optional() }));
+    return c.json({ assignment: await addRequirementAssignment(deps.db, c.get('actor'), c.req.param('id'), body) }, 201);
+  });
+
+  app.delete('/orgs/:org/assignments/:id', async (c) => {
+    await removeRequirementAssignment(deps.db, c.get('actor'), c.req.param('id'));
     return c.body(null, 204);
   });
 }

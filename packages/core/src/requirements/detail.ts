@@ -58,7 +58,7 @@ export type RequirementDetail = RequirementListItem & {
   transitions: TransitionOption[];
   joinIterationUnmet: UnmetCondition[];
   history: Array<{ from: string | null; to: string; actor: MemberRef | null; forced: boolean; reason: string | null; at: Date }>;
-  assignments: Array<{ member: MemberRef; functionTag: { id: string; name: string } | null; platform: OptionRef | null }>;
+  assignments: Array<{ id: string; member: MemberRef; functionTag: { id: string; name: string } | null; platform: OptionRef | null }>;
   blockers: Array<{ id: string; description: string; status: 'active' | 'resolved'; owner: MemberRef | null; createdAt: Date; resolvedAt: Date | null }>;
   relations: Array<{ id: string; type: string; direction: 'out' | 'in'; other: { id: string; displayKey: string; title: string } }>;
   releases: Array<{ id: string; versionName: string; platform: OptionRef | null; status: 'planned' | 'released'; releasedAt: Date | null }>;
@@ -235,6 +235,7 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
       joinIterationUnmet: await joinIterationUnmet(tx, body, row),
       history: history.map((h) => ({ from: h.fromState, to: h.toState, actor: ref(h.actorMemberId), forced: h.forced, reason: h.reason, at: h.at })),
       assignments: assignments.map((a) => ({
+        id: a.id,
         member: ref(a.memberId)!,
         functionTag: a.functionTagId ? { id: a.functionTagId, name: tagName.get(a.functionTagId) ?? '' } : null,
         platform: optionRef(a.platformOptionId),
