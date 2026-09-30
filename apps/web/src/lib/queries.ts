@@ -145,11 +145,12 @@ export const useRequirements = (o: string, productId: string | undefined, query:
     enabled: !!productId,
     placeholderData: keepPreviousData,
   });
-export const useRequirement = (o: string, key: string) =>
+export const useRequirement = (o: string, key: string, enabled = true) =>
   useQuery({
     queryKey: qk.requirement(o, key),
     queryFn: () => api<{ requirement: RequirementDetail }>(`/orgs/${o}/requirements/${encodeURIComponent(key)}`),
     select: (d) => d.requirement,
+    enabled,
   });
 export const useRequirementComments = (o: string, id: string | undefined) =>
   useQuery({

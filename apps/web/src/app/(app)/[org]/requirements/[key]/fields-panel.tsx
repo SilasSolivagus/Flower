@@ -2,6 +2,7 @@
 
 import { OptionMultiSelect } from '@/components/option-multi-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { activePeople, canListMembers } from '@/features/members/model';
 import { nodeOptions } from '@/features/structure/model';
 import { api } from '@/lib/api';
 import { requirementKeys, useApiMutation, useFields, useMembers, useNodes, useOrg } from '@/lib/queries';
@@ -21,8 +22,8 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export function FieldsPanel({ org, requirement: r }: { org: string; requirement: RequirementDetail }) {
   const orgQ = useOrg(org);
-  const canListMembers = !!orgQ.data && orgQ.data.me.orgRole !== 'guest';
-  const members = useMembers(org, canListMembers);
+  const canListMembersFlag = canListMembers(orgQ.data?.me);
+  const members = useMembers(org, canListMembersFlag);
   const nodes = useNodes(org, r.productId);
   const fields = useFields(org, r.productId);
   const canEdit = r.myRole !== 'viewer';
@@ -30,11 +31,11 @@ export function FieldsPanel({ org, requirement: r }: { org: string; requirement:
   const setField = useApiMutation((v: { key: string; optionIds: string[] }) => api(`/orgs/${org}/requirements/${r.id}/fields/${v.key}`, { method: 'PUT', body: { optionIds: v.optionIds } }), {
     invalidate: [requirementKeys(org)],
   });
-  const people = (members.data ?? []).filter((m) => m.status === 'active' && m.kind === 'human');
+  const people = activePeople(members.data ?? []);
 
   const memberSelect = (label: string, field: 'ownerMemberId' | 'requesterMemberId', current: { id: string; displayName: string } | null) => (
     <Row label={label}>
-      {canEdit && canListMembers ? (
+      {canEdit && canListMembersFlag ? (
         <Select value={current?.id ?? NONE} onValueChange={(v) => patch.mutate({ [field]: v === NONE ? null : v })}>
           <SelectTrigger className="h-8" aria-label={label}>
             <SelectValue />

@@ -35,5 +35,4 @@ export function releaseStatusText(release: { status: keyof typeof RELEASE_STATUS
   return `${RELEASE_STATUS_LABEL.released}${release.releasedAt ? ` ${formatDate(release.releasedAt)}` : ''}`;
 }
 export const TASK_STATUS_LABEL = { todo: '待开始', doing: '进行中', done: '已完成' } as const;
-export const RELATION_LABEL: Record<string, string> = { duplicate_of: '重复于', merged_into: '合并到', derived_from: '派生自', blocks: '阻塞', related: '相关' };
 export const SORT_LABEL = { updated: '最近更新', number: '编号', created: '创建时间' } as const;

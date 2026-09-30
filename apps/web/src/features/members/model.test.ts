@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Invitation, Member } from '@/lib/types';
-import { filterMembers, invitationState, memberKind } from './model';
+import { activePeople, canListMembers, filterMembers, invitationState, memberKind } from './model';
 
 const m = (over: Partial<Member>): Member => ({
   id: 'x', kind: 'human', displayName: '成员', email: null, department: null, orgRole: 'member', status: 'active',
@@ -29,6 +29,20 @@ describe('成员筛选', () => {
   it('按类型与角色筛选', () => {
     expect(filterMembers(all, { ...f, kind: 'agent' }).map((x) => x.id)).toEqual(['3']);
     expect(filterMembers(all, { ...f, role: 'owner' }).map((x) => x.id)).toEqual(['1']);
+  });
+});
+
+describe('可访问成员列表', () => {
+  it('访客与未加载完成时不能查看', () => {
+    expect(canListMembers(undefined)).toBe(false);
+    expect(canListMembers({ memberId: 'm1', orgRole: 'guest' })).toBe(false);
+    expect(canListMembers({ memberId: 'm1', orgRole: 'member' })).toBe(true);
+  });
+});
+
+describe('可选为负责人的成员', () => {
+  it('只保留在职真人', () => {
+    expect(activePeople(all).map((x) => x.id)).toEqual(['1', '2']);
   });
 });
 

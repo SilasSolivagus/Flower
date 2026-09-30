@@ -10,10 +10,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { ApiError, api } from '@/lib/api';
 import { requirementKeys, useApiMutation, useRequirement } from '@/lib/queries';
+import { Blockers } from './blockers';
 import { CheckItems } from './check-items';
 import { Comments } from './comments';
 import { FieldsPanel } from './fields-panel';
 import { History } from './history';
+import { Relations } from './relations';
 import { Releases } from './releases';
 import { SideLists } from './side-lists';
 import { StatusPanel } from './status-panel';
@@ -124,13 +126,15 @@ export default function RequirementPage() {
             )}
           </section>
           <CheckItems org={org} requirement={r} />
+          <Blockers org={org} requirement={r} />
+          <Relations org={org} requirement={r} />
           <Comments org={org} requirementId={r.id} />
           <History requirement={r} />
         </div>
         <div className="flex flex-col gap-4">
           <StatusPanel org={org} requirement={r} />
           <FieldsPanel org={org} requirement={r} />
-          <SideLists org={org} requirement={r} />
+          <SideLists requirement={r} />
           <Releases org={org} requirement={r} />
         </div>
       </div>
