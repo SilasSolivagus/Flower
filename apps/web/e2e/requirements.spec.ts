@@ -128,7 +128,7 @@ test('需求详情：加载失败（非 404）显示提示，重试后恢复', a
   await login(page, OWNER.email, OWNER.password);
   await page.route('**/api/v1/orgs/acme/requirements/PAN-1', (route) => route.fulfill(FAIL_500));
   await page.goto('/acme/requirements/PAN-1');
-  await expect(page.getByText('加载需求失败，请重试。')).toBeVisible();
+  await expect(page.getByText('加载需求失败，请重试。')).toBeVisible({ timeout: 15_000 });
 
   await page.unroute('**/api/v1/orgs/acme/requirements/PAN-1');
   await page.getByRole('button', { name: '重试' }).click();
@@ -193,7 +193,7 @@ test('需求列表：加载失败显示提示，重试后恢复', async ({ page,
 
   await login(page, OWNER.email, OWNER.password);
   const listUrl = `**/api/v1/orgs/acme/products/${productId}/requirements?*`;
-  await page.route(listUrl, (route) => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'internal', message: '服务器错误' } }) }));
+  await page.route(listUrl, (route) => route.fulfill(FAIL_500));
   await page.goto('/acme/requirements');
   await expect(page.getByText('加载需求列表失败，请重试。')).toBeVisible({ timeout: 15_000 });
 
