@@ -26,11 +26,14 @@ describe('归一化', () => {
     expect(aliasKey(' Web 端 ')).toBe('web端');
   });
 
-  it('两个汉字之间的空白也算多人分隔，其他空白不拆', () => {
+  it('两侧各有至少两个汉字的空白也算多人分隔，其他空白不拆', () => {
     expect(splitNames('王五、赵六 钱七')).toEqual(['王五', '赵六', '钱七']);
     expect(splitNames('王五 、 赵六  、、 钱七')).toEqual(['王五', '赵六', '钱七']);
     expect(splitNames('Alex Chen')).toEqual(['Alex Chen']);
     expect(splitNames('代饶总 by 张三')).toEqual(['代饶总 by 张三']);
+    expect(splitNames('张 三')).toEqual(['张 三']);
+    expect(splitNames('张三 李四')).toEqual(['张三', '李四']);
+    expect(splitNames('欧阳娜娜 张三')).toEqual(['欧阳娜娜', '张三']);
   });
 
   it('解析「头衔-姓名(昵称)」「姓名（昵称）」；姓名不是 2–4 个汉字时原样返回', () => {

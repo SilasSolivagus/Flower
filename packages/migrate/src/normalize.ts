@@ -4,9 +4,9 @@ export const normTitle = (s: string): string => s.normalize('NFKC').replace(/[\s
 
 export const aliasKey = (s: string): string => s.normalize('NFKC').replace(/\s+/g, '').toLowerCase();
 
-/** 一个字段写了多人：顿号、中英文逗号、斜杠、分号，以及两个汉字之间的空白都算分隔。 */
+/** 一个字段写了多人：顿号、中英文逗号、斜杠、分号，以及两侧各有至少两个汉字的空白都算分隔（「张 三」这类单字加空格的写法不拆）。 */
 export const splitNames = (s: S | undefined): string[] =>
-  (s ?? '').split(/[、,，/;；]+|(?<=\p{Script=Han})\s+(?=\p{Script=Han})/u).map((x) => x.trim()).filter(Boolean);
+  (s ?? '').split(/[、,，/;；]+|(?<=\p{Script=Han}{2})\s+(?=\p{Script=Han}{2})/u).map((x) => x.trim()).filter(Boolean);
 
 /**
  * 带头衔或昵称的写法：「头衔-姓名(昵称)」「头衔-姓名」「姓名（昵称）」。
