@@ -1,13 +1,14 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { accounts, createDb, listProducts, resolveActor } from '@flower/core';
+import { accounts, type Actor, createDb, type Db, listProducts, resolveActor } from '@flower/core';
 import { eq } from 'drizzle-orm';
 import type { LegacyData } from './legacy-types';
 import { loadPlane, loadPrd, loadPush } from './load';
 import { readMapping, writeMapping } from './mapping';
 import { buildImportPlan } from './plan';
 import { buildPerfCases, measure } from './perf';
+import { type RejoinEntry, rejoinAccounts } from './rejoin';
 import { renderReport } from './report';
 import { suggestMapping } from './suggest';
 import { writeImport } from './write';
@@ -17,11 +18,18 @@ const USAGE = `用法：
   import  --plane … --push … --prd-url … --mapping <目录> --out <报告目录> [--org-slug pan123] [--org-name 123云盘]
           [--product-key PAN] [--product-name 123云盘] [--as-of YYYY-MM-DD] [--owner-email 邮箱] [--replace] [--dry-run]
   perf --org-slug pan123 --owner-email 邮箱 [--product-key PAN] [--runs 20]（读取 DATABASE_URL）
+  rejoin --org-slug pan123 --owner-email 邮箱 --accounts <账号清单.json>（读取 DATABASE_URL；重导后让已有账号重新加入）
 import 写库时读取环境变量 DATABASE_ADMIN_URL。`;
 
 function fail(msg: string): never {
   console.error(`${msg}\n\n${USAGE}`);
   process.exit(1);
+}
+
+async function ownerActor(db: Db, email: string, orgSlug: string): Promise<Actor> {
+  const [a] = await db.select().from(accounts).where(eq(accounts.email, email.trim().toLowerCase()));
+  if (!a) fail(`找不到账号 ${email}`);
+  return (await resolveActor(db, a.id, orgSlug)) ?? fail(`账号 ${email} 不是组织 ${orgSlug} 的成员`);
 }
 
 async function main(): Promise<void> {
@@ -43,6 +51,7 @@ async function main(): Promise<void> {
       replace: { type: 'boolean', default: false },
       'dry-run': { type: 'boolean', default: false },
       runs: { type: 'string', default: '20' },
+      accounts: { type: 'string' },
     },
   });
   const need = (k: 'plane' | 'push' | 'prd-url' | 'mapping' | 'out') => v[k] ?? fail(`缺少参数 --${k}`);
@@ -52,14 +61,29 @@ async function main(): Promise<void> {
     const email = v['owner-email'] ?? fail('缺少参数 --owner-email');
     const { db, close } = createDb(url, { max: 2 });
     try {
-      const [a] = await db.select().from(accounts).where(eq(accounts.email, email.trim().toLowerCase()));
-      if (!a) fail(`找不到账号 ${email}`);
-      const actor = (await resolveActor(db, a.id, v['org-slug']!)) ?? fail(`账号 ${email} 不是组织 ${v['org-slug']} 的成员`);
+      const actor = await ownerActor(db, email, v['org-slug']!);
       const products = await listProducts(db, actor);
       const product = products.find((p) => p.key === v['product-key']) ?? fail(`找不到产品 ${v['product-key']}`);
       const result = await measure(await buildPerfCases(db, actor, product.id), Number(v.runs));
       console.log('| 用例 | p50 (ms) | p95 (ms) | 最大 (ms) |\n|---|---|---|---|');
       for (const r of result) console.log(`| ${r.name} | ${r.p50} | ${r.p95} | ${r.max} |`);
+    } finally {
+      await close();
+    }
+    return;
+  }
+
+  if (cmd === 'rejoin') {
+    const url = process.env.DATABASE_URL ?? fail('rejoin 需要 DATABASE_URL（运行时角色）');
+    const email = v['owner-email'] ?? fail('缺少参数 --owner-email');
+    const entries = JSON.parse(readFileSync(v.accounts ?? fail('缺少参数 --accounts'), 'utf8')) as RejoinEntry[];
+    const { db, close } = createDb(url, { max: 2 });
+    try {
+      const joined = await rejoinAccounts(db, await ownerActor(db, email, v['org-slug']!), entries);
+      const skipped = joined.filter((j) => j.status === 'skipped').length;
+      console.log(
+        `已重新加入组织 ${v['org-slug']}：${joined.length - skipped} 个账号。${skipped > 0 ? `另有 ${skipped} 个账号已在组织中，已跳过。` : ''}`,
+      );
     } finally {
       await close();
     }
