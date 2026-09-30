@@ -33,6 +33,7 @@ export function activeNavKey(pathname: string, org: string): string {
   const rest = pathname.replace(new RegExp(`^/${org}`), '');
   if (/^\/requirements(\/|$)/.test(rest)) return 'requirements';
   if (/^\/iterations(\/|$)/.test(rest)) return 'iterations';
+  if (/^\/workload(\/|$)/.test(rest)) return 'iterations';
   const m = /^\/settings\/([^/]+)/.exec(rest);
   return m ? m[1]! : 'home';
 }

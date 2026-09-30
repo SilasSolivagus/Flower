@@ -14,6 +14,8 @@ import type {
   IterationMilestone as CoreIterationMilestone,
   IterationScope as CoreIterationScope,
   IterationView,
+  MemberTask as CoreMemberTask,
+  MemberTasks as CoreMemberTasks,
   MemberView,
   MyOrg as CoreMyOrg,
   OrgRole as CoreOrgRole,
@@ -78,3 +80,5 @@ export type Release = Jsonify<ReleaseView>;
 export type ProductMemberRole = CoreProductMemberRole;
 export type Task = Jsonify<TaskView>;
 export type IterationGantt = Jsonify<CoreIterationGantt>;
+export type MemberTask = Jsonify<CoreMemberTask>;
+export type MemberTasks = Jsonify<CoreMemberTasks>;

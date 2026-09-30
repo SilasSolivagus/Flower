@@ -4,16 +4,19 @@ import { STARRED_LIMIT } from '@flower/core/schedule';
 import { useState } from 'react';
 import { FormError } from '@/components/form-error';
 import { QueryError } from '@/components/load-error';
+import { LoadHeatmap } from '@/components/load-heatmap';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { heatRows } from '@/features/gantt/model';
 import { activePeople, canListMembers } from '@/features/members/model';
 import { api } from '@/lib/api';
 import { taskMutationKeys, useApiMutation, useIterationGantt, useMembers, useOrg, useProducts } from '@/lib/queries';
 import type { IterationGantt } from '@/lib/types';
 import { TaskRow } from './task-row';
+import { Timeline } from './timeline';
 
 function OverviewStrip({ overview }: { overview: IterationGantt['overview'] }) {
   const tiles = [
@@ -167,6 +170,8 @@ export function GanttTab({ org, iterationId }: { org: string; iterationId: strin
           </Table>
         </div>
       )}
+      <Timeline tasks={g.tasks} days={g.workdays} today={g.today} />
+      <LoadHeatmap org={org} title="团队负载" days={g.workdays} {...heatRows(g.tasks, g.workdays)} today={g.today} />
     </div>
   );
 }

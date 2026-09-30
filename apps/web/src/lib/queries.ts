@@ -16,6 +16,7 @@ import type {
   Invitation,
   LevelNames,
   Member,
+  MemberTasks,
   MyOrg,
   Org,
   OrgMe,
@@ -58,6 +59,7 @@ export const qk = {
   iterationScope: (o: string, id: string) => ['org', o, 'iterations', 'scope', id] as const,
   gantt: (o: string, id: string) => ['org', o, 'iterations', 'gantt', id] as const,
   workbench: ['me', 'workbench'] as const,
+  memberTasks: (o: string, memberId: string, all: boolean) => ['org', o, 'tasks', 'member', memberId, all ? 'all' : 'open'] as const,
   releases: (o: string, query: string) => ['org', o, 'releases', query] as const,
 };
 
@@ -142,6 +144,13 @@ export const taskMutationKeys = (o: string) => [iterationKeys(o), requirementKey
 
 export const useIterationGantt = (o: string, id: string) =>
   useQuery({ queryKey: qk.gantt(o, id), queryFn: () => api<{ gantt: IterationGantt }>(`/orgs/${o}/iterations/${id}/gantt`), select: (d) => d.gantt });
+
+export const useMemberTasks = (o: string, memberId: string, all: boolean) =>
+  useQuery({
+    queryKey: qk.memberTasks(o, memberId, all),
+    queryFn: () => api<MemberTasks>(`/orgs/${o}/members/${memberId}/tasks${all ? '?all=1' : ''}`),
+    enabled: !!memberId,
+  });
 
 /** 发布版本查询的公共前缀。 */
 export const releaseKeys = (o: string) => ['org', o, 'releases'] as const;

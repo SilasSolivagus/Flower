@@ -37,5 +37,6 @@ describe('buildNav', () => {
     expect(activeNavKey('/acme/requirements/PAN-12', 'acme')).toBe('requirements');
     expect(activeNavKey('/acme/iterations', 'acme')).toBe('iterations');
     expect(activeNavKey('/acme/iterations/abc', 'acme')).toBe('iterations');
+    expect(activeNavKey('/acme/workload', 'acme')).toBe('iterations');
   });
 });
