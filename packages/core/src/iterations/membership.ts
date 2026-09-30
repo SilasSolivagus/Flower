@@ -45,6 +45,16 @@ export async function setRequirementIteration(
   input: { iterationId: string | null; force?: boolean; reason?: string },
 ): Promise<{ iteration: { id: string; name: string } | null }> {
   return withOrg(db, actor.orgId, async (tx) => {
+    // 先对目标迭代加共享锁，与开始迭代（FOR UPDATE）互斥，保证承诺快照与加入操作的先后一致。
+    // 加锁顺序固定为「先迭代、后需求」，与开始迭代一致（锁迭代后写快照，快照的外键再锁其中的需求）；
+    // 反过来会在两个迭代同时开始、需求在两者之间互换时形成死锁环
+    const [it] = input.iterationId
+      ? await tx
+          .select()
+          .from(iterations)
+          .where(and(eq(iterations.id, input.iterationId), isNull(iterations.deletedAt)))
+          .for('share')
+      : [];
     const cur = await loadRequirementForUpdate(tx, requirementId);
     const role = await requireProductRole(tx, actor, cur.productId, 'editor');
     const record = async (next: { id: string; name: string } | null, forced: boolean, reason: string | null) => {
@@ -65,19 +75,9 @@ export async function setRequirementIteration(
       return { iteration: null };
     }
 
-    if (cur.iterationId === input.iterationId) {
-      const [it] = await tx.select().from(iterations).where(and(eq(iterations.id, input.iterationId), isNull(iterations.deletedAt)));
-      if (!it) throw new AppError('not_found', '迭代不存在');
-      return { iteration: { id: it.id, name: it.name } };
-    }
-
-    // 与开始迭代（FOR UPDATE）互斥，保证承诺快照与加入操作的先后一致
-    const [it] = await tx
-      .select()
-      .from(iterations)
-      .where(and(eq(iterations.id, input.iterationId), isNull(iterations.deletedAt)))
-      .for('share');
     if (!it) throw new AppError('not_found', '迭代不存在');
+    if (cur.iterationId === input.iterationId) return { iteration: { id: it.id, name: it.name } };
+
     if (it.type === 'regular' && it.productId !== cur.productId) throw new AppError('invalid', '不能加入其他产品的迭代');
     if (it.status !== 'planning' && it.status !== 'active') throw new AppError('invalid', '只能加入规划中或进行中的迭代');
     const target = { id: it.id, name: it.name };

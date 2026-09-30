@@ -20,6 +20,28 @@
 
 ## 记录
 
+### 2026-09-30 · 云端 · 审查 P1-B1（PR #6）：修复加入迭代与开始迭代的死锁
+- 分支 / PR：`feat/p1b1-iterations`（PR #6）
+- 做了什么：
+  - 按要求审查四个重点：
+    - 迭代与发布版本的权限：常规迭代需产品编辑及以上，专项需组织管理员（`isOrgAdmin` 同时拒绝只读 Token 和限定产品的 Token），强制加入需产品管理员；发布版本的增改、发布、关联都需编辑及以上。
+    - 专项迭代的可见性：详情、计数、范围对比、按迭代列发布版本都按可见产品过滤；看不到任何产品的访客看不到专项。
+    - 字段覆盖时平台选项的迁移：只改指向被复制字段自身选项的发布版本和开发分配，复制非平台字段不会误改；也没有「取消覆盖」的反向路径需要处理。
+    - 以上三项没有发现问题，测试也覆盖到了。
+  - **修复死锁**（`packages/core/src/iterations/membership.ts`）：
+    - 加入迭代原来先锁需求（FOR UPDATE）再锁目标迭代（FOR SHARE）；开始迭代先锁迭代（FOR UPDATE），写承诺快照时外键再锁其中的需求。两边顺序相反。
+    - 两个迭代同时开始、又有需求在两者之间互换时，会形成 4 个事务的等待环，Postgres 报 40P01，用户看到 500。
+    - 改为先锁目标迭代、再锁需求，全部路径统一为「先迭代、后需求」，不可能再成环。错误返回顺序不变（仍先校验权限，再报「迭代不存在」）。
+    - 这和本地 09-30 那条 e2e 清库死锁是两回事：那条在测试工具里，这条在业务代码里，生产环境也会遇到。
+  - 新增 `packages/core/test/iteration-locking.test.ts`：30 轮随机顺序并发执行「开始 A、开始 B、A→B、B→A、移出、加入」，断言没有任何失败。
+- 怎么验证的：
+  - 临时探针在修复前 40 轮出现 6 次 40P01，修复后连续 3 次共 120 轮 0 次。
+  - 回归测试在未修复的代码上失败（4 次 40P01），修复后通过。
+  - core 203、web 111、migrate 60、e2e 37 全部通过；类型检查、lint（`--max-warnings 0`）通过。
+- 留给对方：
+  - 以后新增同时锁迭代和需求的代码，保持「先迭代、后需求」的顺序。
+  - `visibleProductIds` 对每个产品各查两次（N+1），产品多了以后迭代列表会变慢，届时可改成一次查询。目前不影响性能数据。
+
 ### 2026-09-30 · 本地 · e2e：resetDatabase 的 TRUNCATE 与上一用例残留请求死锁（补记 a9eda4a）
 - 分支 / PR：`feat/p1b1-iterations`，代码在 a9eda4a
 - 做了什么：全量 e2e 偶发 `requirements.spec.ts:138` 在 `beforeEach` 报 `PostgresError: deadlock detected`。Postgres 日志中 09-29、09-30 的几次死锁都是 `resetDatabase()` 的 TRUNCATE（逐表取 ACCESS EXCLUSIVE）与 webServer 上一用例残留的只读查询（`field_options`、`product_members`、`sessions`）互相等待，与签字 / 流程流转和迭代锁顺序无关。a9eda4a 让 `apps/web/e2e/db.ts` 在 40P01 时重试 TRUNCATE（最多 5 次），并用 `e2e/db.spec.ts` 构造该交错作回归测试。
