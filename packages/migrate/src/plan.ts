@@ -16,6 +16,7 @@ export function buildImportPlan(data: LegacyData, mapping: Mapping, opts: Import
     ['迭代对照表缺少', resolver.unmapped.iterations],
   ];
   for (const [label, set] of unmapped) for (const v of [...set].sort()) ctx.problem(`${label}：${v}`);
+  report.proxies = [...resolver.proxies].sort((a, b) => a[0].localeCompare(b[0], 'zh')).map(([raw, refs]) => ({ raw, refs }));
 
   const { plane, push, prd } = data;
   report.sourceCounts = {

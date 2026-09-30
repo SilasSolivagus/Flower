@@ -1,7 +1,7 @@
 import type * as core from '@flower/core';
 import { legacyUuid } from './ids';
 import type { LegacyData } from './legacy-types';
-import { type Mapping, Resolver } from './mapping';
+import { type Mapping, type PersonEntry, Resolver } from './mapping';
 import { parseLegacyTime } from './normalize';
 
 export type ImportOptions = {
@@ -56,7 +56,13 @@ export type ReconReport = {
   asOf: string;
   sourceCounts: Record<string, number>;
   targetCounts: Record<string, number>;
-  people: Array<{ key: string; displayName: string; email: string | null; orgRole: string; hasAccount: boolean; mentions: number }>;
+  people: Array<{ key: string; displayName: string; email: string | null; kind: 'human' | 'agent'; orgRole: string; hasAccount: boolean; mentions: number }>;
+  /** 一个字段写了多人：单值字段取第一人，多值字段每人一条。 */
+  personSplits: Array<{ raw: string; people: string[]; singleRefs: number; multiRefs: number }>;
+  /** 一个成员的其他写法（别名，不含邮箱），供审阅合并是否正确。 */
+  personMerges: Array<{ key: string; displayName: string; variants: string[] }>;
+  /** 「代X by Y」写法，按实际操作人 Y 导入。 */
+  proxies: Array<{ raw: string; refs: number }>;
   matching: {
     planeTotal: number;
     pushTotal: number;
@@ -107,6 +113,9 @@ export class PlanContext {
       sourceCounts: {},
       targetCounts: {},
       people: [],
+      personSplits: [],
+      personMerges: [],
+      proxies: [],
       matching: { planeTotal: 0, pushTotal: 0, pushMergedSkipped: 0, byPlaneId: 0, byTitle: 0, pushOnly: 0, titleMatches: [] },
       conflicts: [],
       iterations: [],
@@ -120,9 +129,29 @@ export class PlanContext {
     return legacyUuid(`${this.opts.orgSlug}/${ns}`, key);
   }
 
+  /** 单值引用（需求负责人、提出人、任务负责人、事件操作人）：写了多人时取第一人，拆分记入报告。 */
   memberId(raw: string | null | undefined): string | null {
-    const p = this.resolver.person(raw);
-    return p ? (this.memberIdByKey.get(p.key) ?? null) : null;
+    const people = this.resolver.people(raw);
+    if (people.length > 1) this.noteSplit(raw!, people, 'single');
+    return people[0] ? (this.memberIdByKey.get(people[0].key) ?? null) : null;
+  }
+
+  /** 多值引用（开发分配、会签签字人）：写了多人时每人一个，拆分记入报告。 */
+  memberIds(raw: string | null | undefined): string[] {
+    const people = this.resolver.people(raw);
+    if (people.length > 1) this.noteSplit(raw!, people, 'multi');
+    return people.map((p) => this.memberIdByKey.get(p.key)).filter((id): id is string => !!id);
+  }
+
+  private noteSplit(raw: string, people: PersonEntry[], kind: 'single' | 'multi'): void {
+    const key = raw.trim();
+    let row = this.report.personSplits.find((s) => s.raw === key);
+    if (!row) {
+      row = { raw: key, people: people.map((p) => p.displayName), singleRefs: 0, multiRefs: 0 };
+      this.report.personSplits.push(row);
+    }
+    if (kind === 'single') row.singleRefs += 1;
+    else row.multiRefs += 1;
   }
 
   optionId(fieldKey: string, optionKey: string): string | null {

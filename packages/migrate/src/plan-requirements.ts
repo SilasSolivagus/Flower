@@ -104,8 +104,6 @@ export function buildRequirements(ctx: PlanContext): void {
     const number = index + 1;
     const { plane, push } = pair;
     const id = plane ? reqIdOfPlane.get(plane.id)! : reqIdOfPush.get(push!.id)!;
-    const ownerNames = splitNames(plane ? plane.owner : push!.owner);
-    const requesterNames = splitNames(plane ? plane.requester : push!.requester);
     const createdAt = ctx.time(plane ? plane.created_at : push!.created_at);
     const updatedAt = ctx.time(plane?.updated_at ?? push?.last_edited_at, createdAt);
 
@@ -148,8 +146,8 @@ export function buildRequirements(ctx: PlanContext): void {
       description: plane ? (plane.description ?? '') : (push!.brief ?? ''),
       stateKey,
       stateChangedAt: createdAt,
-      ownerMemberId: ctx.memberId(ownerNames[0]),
-      requesterMemberId: ctx.memberId(requesterNames[0]),
+      ownerMemberId: ctx.memberId(plane ? plane.owner : push!.owner),
+      requesterMemberId: ctx.memberId(plane ? plane.requester : push!.requester),
       nodeId: nodeName ? ctx.nodeIdByName.get(nodeName) ?? null : null,
       iterationId,
       legacyMeta: {
@@ -163,10 +161,18 @@ export function buildRequirements(ctx: PlanContext): void {
             sourceNote: plane.source,
             notes: plane.notes,
             coOwners: splitNames(plane.owner).slice(1),
+            coRequesters: splitNames(plane.requester).slice(1),
           },
         }),
         ...(push && {
-          push: { id: push.id, alias: push.alias, developers: parseJsonArray(push.developers), lastEditedBy: push.last_edited_by, coOwners: splitNames(push.owner).slice(1) },
+          push: {
+            id: push.id,
+            alias: push.alias,
+            developers: parseJsonArray(push.developers),
+            lastEditedBy: push.last_edited_by,
+            coOwners: splitNames(push.owner).slice(1),
+            coRequesters: splitNames(push.requester).slice(1),
+          },
         }),
       },
       createdBy: null,
@@ -263,22 +269,25 @@ export function buildRequirements(ctx: PlanContext): void {
         continue;
       }
       const proxy = parseProxySigner(s.by);
-      const signer = proxy ? resolver.signoffRole(proxy.onBehalfOf) : resolver.person(s.by);
-      const signerId = signer ? ctx.memberIdByKey.get(signer.key)! : null;
-      if (!signerId) continue;
+      const onBehalfOf = proxy ? resolver.signoffRole(proxy.onBehalfOf) : null;
+      // 一栏写了多人时每人一条签字；代签只有被代签的一个人
+      const signerIds = proxy ? (onBehalfOf ? [ctx.memberIdByKey.get(onBehalfOf.key)!] : []) : ctx.memberIds(s.by);
+      if (signerIds.length === 0) continue;
       const at = ctx.time(s.at, createdAt);
       const rule = designItem.signers![ruleIndex]!;
-      if (rule.by === 'member' && rule.ref !== signerId) mismatched += 1;
-      rows.checkItemSignoffs.push({
-        id: ctx.id('signoff', `push:${s.id}`),
-        orgId,
-        resultId: designResultId,
-        signerMemberId: signerId,
-        actedByMemberId: proxy ? ctx.memberId(proxy.actor) : null,
-        signerRuleIndex: ruleIndex,
-        decision,
-        note: s.opinion?.trim() || null,
-        at,
+      signerIds.forEach((signerId, i) => {
+        if (rule.by === 'member' && rule.ref !== signerId) mismatched += 1;
+        rows.checkItemSignoffs.push({
+          id: ctx.id('signoff', i === 0 ? `push:${s.id}` : `push:${s.id}:${i}`),
+          orgId,
+          resultId: designResultId,
+          signerMemberId: signerId,
+          actedByMemberId: proxy ? ctx.memberId(proxy.actor) : null,
+          signerRuleIndex: ruleIndex,
+          decision,
+          note: s.opinion?.trim() || null,
+          at,
+        });
       });
       signoffs.push({ signerRuleIndex: ruleIndex, decision, at });
     }
@@ -301,15 +310,24 @@ export function buildRequirements(ctx: PlanContext): void {
       });
     }
 
-    // 开发分配
+    // 开发分配（多值）：一栏写了多人时每人一条
     if (plane) {
       for (const d of data.plane.requirementDevelopers.filter((x) => x.requirement_id === plane.id)) {
-        const memberId = ctx.memberId(d.developer);
-        if (!memberId) continue;
+        const memberIds = ctx.memberIds(d.developer);
+        if (memberIds.length === 0) continue;
         const platformKey = d.platform ? resolver.platforms(d.platform)[0] : undefined;
         const platformOptionId = platformKey ? ctx.optionId('platform', platformKey) : null;
-        if (rows.requirementAssignments.some((a) => a.requirementId === id && a.memberId === memberId && a.platformOptionId === platformOptionId)) continue;
-        rows.requirementAssignments.push({ id: ctx.id('assignment', `plane:${d.id}`), orgId, requirementId: id, memberId, functionTagId: ctx.tagIdByName.get('开发') ?? null, platformOptionId });
+        memberIds.forEach((memberId, i) => {
+          if (rows.requirementAssignments.some((a) => a.requirementId === id && a.memberId === memberId && a.platformOptionId === platformOptionId)) return;
+          rows.requirementAssignments.push({
+            id: ctx.id('assignment', i === 0 ? `plane:${d.id}` : `plane:${d.id}:${i}`),
+            orgId,
+            requirementId: id,
+            memberId,
+            functionTagId: ctx.tagIdByName.get('开发') ?? null,
+            platformOptionId,
+          });
+        });
       }
     }
 
@@ -529,7 +547,7 @@ export function buildRequirements(ctx: PlanContext): void {
       subjectId: subject,
       actorMemberId: ctx.memberId(c.edited_by),
       actorTokenId: null,
-      payload: { schemaVersion: 1, source: 'push', entityType: c.entity_type, entityId: c.entity_id, field: c.field, oldValue: c.old_value, newValue: c.new_value },
+      payload: { schemaVersion: 1, source: 'push', entityType: c.entity_type, entityId: c.entity_id, field: c.field, oldValue: c.old_value, newValue: c.new_value, editedBy: c.edited_by },
       occurredAt: ctx.time(c.edited_at),
     });
   }
