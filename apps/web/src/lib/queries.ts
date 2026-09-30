@@ -26,6 +26,7 @@ import type {
   RequirementComment,
   RequirementDetail,
   RequirementList,
+  ReviewQueue,
   StructureNode,
   Token,
   WorkflowDefinition,
@@ -52,6 +53,7 @@ export const qk = {
   requirements: (o: string, productId: string, query: string) => ['org', o, 'requirements', 'list', productId, query] as const,
   requirement: (o: string, key: string) => ['org', o, 'requirements', 'detail', key] as const,
   requirementComments: (o: string, id: string) => ['org', o, 'requirements', 'comments', id] as const,
+  reviews: (o: string, productId: string, query: string) => ['org', o, 'requirements', 'reviews', productId, query] as const,
   nodes: (o: string, productId: string) => ['org', o, 'product', productId, 'nodes'] as const,
   iterations: (o: string, productId: string) => ['org', o, 'iterations', 'product', productId] as const,
   iterationList: (o: string) => ['org', o, 'iterations', 'list'] as const,
@@ -179,6 +181,15 @@ export const useRequirementComments = (o: string, id: string | undefined) =>
     select: (d) => d.comments,
     enabled: !!id,
   });
+export const useReviewQueue = (o: string, productId: string | undefined, query: string) =>
+  useQuery({
+    queryKey: qk.reviews(o, productId ?? '', query),
+    queryFn: () => api<{ queue: ReviewQueue }>(`/orgs/${o}/products/${productId}/reviews?${query}`),
+    select: (d) => d.queue,
+    enabled: !!productId,
+    placeholderData: keepPreviousData,
+  });
+
 export const useNodes = (o: string, productId: string | undefined) =>
   useQuery({
     queryKey: qk.nodes(o, productId ?? ''),

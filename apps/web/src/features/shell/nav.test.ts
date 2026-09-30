@@ -8,6 +8,7 @@ describe('buildNav', () => {
       ['概览', null, '/acme'],
       ['需求', null, '/acme/requirements'],
       ['迭代', null, '/acme/iterations'],
+      ['评审', null, '/acme/reviews'],
       ['文档', 'P2', null],
     ]);
     expect(nav.settings.map((i) => i.href)).toEqual([
@@ -38,5 +39,6 @@ describe('buildNav', () => {
     expect(activeNavKey('/acme/iterations', 'acme')).toBe('iterations');
     expect(activeNavKey('/acme/iterations/abc', 'acme')).toBe('iterations');
     expect(activeNavKey('/acme/workload', 'acme')).toBe('iterations');
+    expect(activeNavKey('/acme/reviews', 'acme')).toBe('reviews');
   });
 });

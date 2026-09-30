@@ -27,6 +27,9 @@ import type {
   RequirementDetail as CoreRequirementDetail,
   RequirementList as CoreRequirementList,
   RequirementListItem as CoreRequirementListItem,
+  ReviewFilterState as CoreReviewFilterState,
+  ReviewQueue as CoreReviewQueue,
+  ReviewState as CoreReviewState,
   StructureNodeView,
   TaskView,
   TokenScope as CoreTokenScope,
@@ -82,3 +85,6 @@ export type Task = Jsonify<TaskView>;
 export type IterationGantt = Jsonify<CoreIterationGantt>;
 export type MemberTask = Jsonify<CoreMemberTask>;
 export type MemberTasks = Jsonify<CoreMemberTasks>;
+export type ReviewQueue = Jsonify<CoreReviewQueue>;
+export type ReviewState = CoreReviewState;
+export type ReviewFilterState = CoreReviewFilterState;

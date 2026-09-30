@@ -73,3 +73,40 @@ export async function createIteration(request: APIRequestContext, productId: str
 export async function createTask(request: APIRequestContext, data: Record<string, unknown>): Promise<string> {
   return (await json<{ task: { id: string } }>(request.post('/api/v1/orgs/acme/tasks', { data }))).task.id;
 }
+
+/** 给产品换上带「可行性」「设计签字」的流程；设计签字由产品管理员和一位指定成员会签。 */
+export async function applyReviewWorkflow(request: APIRequestContext, productId: string, bossMemberId: string): Promise<void> {
+  const wf = await json<{ version: { id: string } }>(
+    request.post('/api/v1/orgs/acme/workflows', {
+      data: {
+        name: '评审流程',
+        body: {
+          states: [
+            { key: 'backlog', label: '收集', color: '#94a3b8', order: 1, group: '', category: 'backlog' },
+            { key: 'done', label: '已上线', color: '#10b981', order: 2, group: '', category: 'completed' },
+          ],
+          initial: 'backlog',
+          transitions: [
+            { from: '*', to: 'backlog', conditions: [] },
+            { from: '*', to: 'done', conditions: [] },
+          ],
+          checkItems: [
+            { key: 'feasibility', label: '可行性', scope: 'requirement', type: 'single' },
+            {
+              key: 'design',
+              label: '设计签字',
+              scope: 'requirement',
+              type: 'signoff',
+              signers: [
+                { by: 'product_role', ref: 'admin' },
+                { by: 'member', ref: bossMemberId },
+              ],
+              signoffRule: 'all',
+            },
+          ],
+        },
+      },
+    }),
+  );
+  await ok(request.put(`/api/v1/orgs/acme/products/${productId}/workflow`, { data: { versionId: wf.version.id } }));
+}

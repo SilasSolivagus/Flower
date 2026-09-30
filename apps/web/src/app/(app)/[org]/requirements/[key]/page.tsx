@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { CheckItems } from '@/components/check-items';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 import { requirementKeys, useApiMutation, useRequirement } from '@/lib/queries';
 import { Blockers } from './blockers';
-import { CheckItems } from './check-items';
 import { Comments } from './comments';
 import { FieldsPanel } from './fields-panel';
 import { History } from './history';
