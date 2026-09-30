@@ -6,7 +6,7 @@ import { withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
 import { recordEvent } from '../events';
-import { effectiveFields, loadRequirement } from './context';
+import { assertPlatformOption, loadRequirement } from './context';
 
 export type AssignmentInput = { memberId: string; functionTagId: string; platformOptionId?: string | null };
 
@@ -27,10 +27,7 @@ export async function addRequirementAssignment(db: Db, actor: Actor, requirement
     const [tag] = await tx.select({ id: functionTags.id }).from(functionTags).where(eq(functionTags.id, input.functionTagId));
     if (!tag) throw new AppError('invalid', '职能标签不存在');
     const platformOptionId = input.platformOptionId ?? null;
-    if (platformOptionId) {
-      const platform = (await effectiveFields(tx, req.productId)).get('platform');
-      if (!platform?.options.some((o) => o.id === platformOptionId)) throw new AppError('invalid', '平台选项不属于本产品的「平台」字段');
-    }
+    if (platformOptionId) await assertPlatformOption(tx, req.productId, platformOptionId, null);
     let row: AssignmentRow;
     try {
       [row] = (await tx

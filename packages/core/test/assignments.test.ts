@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { domainEvents } from '../src/db/schema';
 import { withOrg } from '../src/db/tx';
-import { addFieldOption, listFields } from '../src/definitions/fields';
+import { addFieldOption, listFields, updateFieldOption } from '../src/definitions/fields';
 import { createWorkflowTemplate, setProductWorkflowVersion } from '../src/definitions/workflows';
 import type { Actor } from '../src/domain-types';
 import { addRequirementAssignment, removeRequirementAssignment } from '../src/requirements/assignments';
@@ -91,6 +91,14 @@ describe('需求分配', () => {
     await expect(
       addRequirementAssignment(t.db, owner, reqId, { memberId: designerB.memberId, functionTagId: designTag, platformOptionId: priorityOption }),
     ).rejects.toMatchObject({ code: 'invalid', message: '平台选项不属于本产品的「平台」字段' });
+  });
+
+  it('校验：已停用的平台选项不能用于新分配（复用 releases 的平台校验）', async () => {
+    await updateFieldOption(t.db, owner, pc, { active: false });
+    await expect(
+      addRequirementAssignment(t.db, owner, reqId, { memberId: designerB.memberId, functionTagId: designTag, platformOptionId: pc }),
+    ).rejects.toMatchObject({ code: 'invalid', message: '选项「PC客户端」已停用' });
+    await updateFieldOption(t.db, owner, pc, { active: true });
   });
 
   it('只读成员与只读 Token 不能新增或删除；看不到产品的访客得到 404', async () => {

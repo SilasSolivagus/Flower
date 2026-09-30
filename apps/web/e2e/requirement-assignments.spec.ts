@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { createProduct, createRequirement, json, login, ok, OWNER, setupInstance } from './helpers';
+import { acceptInvite, createMember, createProduct, createRequirement, json, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -10,7 +10,7 @@ test.beforeEach(async ({ request }) => {
 test('需求详情：新增与删除分配，重复时在表单里提示', async ({ page, request }) => {
   const productId = await createProduct(request);
   const req = await createRequirement(request, productId, '上传提速');
-  await json(request.post('/api/v1/orgs/acme/members', { data: { displayName: '设计师甲' } }));
+  await createMember(request, '设计师甲');
 
   await login(page, OWNER.email, OWNER.password);
   await page.goto(`/acme/requirements/${req.displayKey}`);
@@ -39,20 +39,13 @@ test('需求详情：新增与删除分配，重复时在表单里提示', async
 test('需求详情：只读成员能看到分配，但没有新增和删除', async ({ request, browser }) => {
   const productId = await createProduct(request);
   const req = await createRequirement(request, productId, '上传提速');
-  const designer = (await json<{ member: { id: string } }>(request.post('/api/v1/orgs/acme/members', { data: { displayName: '设计师甲' } }))).member.id;
+  const designer = await createMember(request, '设计师甲');
   const tags = (await json<{ tags: Array<{ id: string; name: string }> }>(request.get('/api/v1/orgs/acme/function-tags'))).tags;
   await ok(request.post(`/api/v1/orgs/acme/requirements/${req.id}/assignments`, { data: { memberId: designer, functionTagId: tags.find((x) => x.name === '设计')!.id } }));
-  const { token } = await json<{ token: string }>(request.post('/api/v1/orgs/acme/invitations', { data: { email: 'viewer@example.com', orgRole: 'member' } }));
 
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
-  await page.goto(`/invite/${token}`);
-  await page.getByLabel('你的姓名').fill('只读成员');
-  await page.getByLabel('设置密码').fill('password123');
-  await page.getByRole('button', { name: '接受邀请' }).click();
-  await page.waitForURL('**/acme');
-  const members = (await json<{ members: Array<{ id: string; email: string | null }> }>(request.get('/api/v1/orgs/acme/members'))).members;
-  const viewerId = members.find((m) => m.email === 'viewer@example.com')!.id;
+  const viewerId = await acceptInvite(page, request, { email: 'viewer@example.com', orgRole: 'member', name: '只读成员' });
   await ok(request.put(`/api/v1/orgs/acme/products/${productId}/roles/${viewerId}`, { data: { role: 'viewer' } }));
 
   await page.goto(`/acme/requirements/${req.displayKey}`);

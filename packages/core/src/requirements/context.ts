@@ -50,6 +50,14 @@ export async function effectiveFields(tx: Tx, productId: string): Promise<Map<st
   );
 }
 
+/** 校验平台选项属于本产品的「平台」字段，且未停用（已停用但等于 `previous` 时放行，用于保留原有选择）。 */
+export async function assertPlatformOption(tx: Tx, productId: string, optionId: string, previous: string | null): Promise<void> {
+  const platform = (await effectiveFields(tx, productId)).get('platform');
+  const opt = platform?.options.find((o) => o.id === optionId);
+  if (!opt) throw new AppError('invalid', '平台选项不属于本产品的「平台」字段');
+  if (!opt.active && optionId !== previous) throw new AppError('invalid', `选项「${opt.label}」已停用`);
+}
+
 export async function loadRequirement(tx: Tx, id: string): Promise<typeof requirements.$inferSelect> {
   const [r] = await tx.select().from(requirements).where(and(eq(requirements.id, id), isNull(requirements.deletedAt)));
   if (!r) throw new AppError('not_found', '需求不存在');
