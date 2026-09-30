@@ -3,14 +3,13 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { ConfirmAction } from '@/components/confirm-action';
-import { LoadError } from '@/components/load-error';
-import { NoAccess } from '@/components/no-access';
+import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { localToday, milestoneTimeline, STATUS_ACTIONS } from '@/features/iterations/model';
-import { ApiError, api } from '@/lib/api';
+import { api } from '@/lib/api';
 import { ITERATION_STATUS_LABEL } from '@/lib/labels';
 import { iterationKeys, useApiMutation, useIteration } from '@/lib/queries';
 import { cn } from '@/lib/utils';
@@ -33,8 +32,9 @@ export default function IterationPage() {
     onSuccess: () => router.push(`/${org}/iterations`),
   });
 
-  if (q.error instanceof ApiError && (q.error.status === 404 || q.error.status === 403)) return <NoAccess message="迭代不存在，或你没有查看它的权限。" />;
-  if (q.isError) return <LoadError message="加载迭代失败，请重试。" onRetry={() => q.refetch()} />;
+  if (!q.data && q.isError) {
+    return <QueryError error={q.error} noAccessMessage="迭代不存在，或你没有查看它的权限。" retryMessage="加载迭代失败，请重试。" onRetry={() => q.refetch()} />;
+  }
   if (!q.data) return <Skeleton className="h-64" />;
   const it = q.data;
   const timeline = milestoneTimeline(it.milestones, today);

@@ -36,3 +36,31 @@ export async function login(page: Page, email: string, password: string): Promis
   await page.getByRole('button', { name: '登录' }).click();
   await page.waitForURL((url) => !url.pathname.startsWith('/login'));
 }
+
+/** 登记一个无账号成员，返回其 memberId。 */
+export async function createMember(request: APIRequestContext, displayName: string): Promise<string> {
+  return (await json<{ member: { id: string } }>(request.post('/api/v1/orgs/acme/members', { data: { displayName } }))).member.id;
+}
+
+/**
+ * 发邀请、用 page 打开邀请链接并接受，返回新账号的 memberId。
+ * `beforeSubmit` 在邀请页打开后、填写表单前调用，供调用方检查邀请页本身的内容。
+ */
+export async function acceptInvite(
+  page: Page,
+  request: APIRequestContext,
+  opts: { email: string; orgRole: 'admin' | 'member' | 'guest'; name: string; password?: string; beforeSubmit?: () => Promise<void> },
+): Promise<string> {
+  const { token } = await json<{ token: string }>(request.post('/api/v1/orgs/acme/invitations', { data: { email: opts.email, orgRole: opts.orgRole } }));
+  await page.goto(`/invite/${token}`);
+  await opts.beforeSubmit?.();
+  await page.getByLabel('你的姓名').fill(opts.name);
+  await page.getByLabel('设置密码').fill(opts.password ?? 'password123');
+  await page.getByRole('button', { name: '接受邀请' }).click();
+  await page.waitForURL('**/acme');
+  const members = (await json<{ members: Array<{ id: string; email: string | null }> }>(request.get('/api/v1/orgs/acme/members'))).members;
+  return members.find((m) => m.email === opts.email)!.id;
+}
+
+/** 模拟服务端 5xx 的响应，配合 page.route(...).fulfill 使用。 */
+export const FAIL_500 = { status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'internal', message: '服务器错误' } }) };

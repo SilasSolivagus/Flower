@@ -3,6 +3,7 @@
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { NoAccess } from '@/components/no-access';
+import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,7 +32,9 @@ export default function ProductDetailPage() {
     (body: { name?: string; status?: 'active' | 'archived' }) => api(`/orgs/${org}/products/${productId}`, { method: 'PATCH', body }),
     { invalidate: [qk.product(org, productId), qk.products(org), qk.me], success: '已保存' },
   );
-  if (product.isError) return <NoAccess message="产品不存在，或者你没有访问权限。" />;
+  if (!product.data && product.isError) {
+    return <QueryError error={product.error} noAccessMessage="产品不存在，或者你没有访问权限。" retryMessage="加载产品失败，请重试。" onRetry={() => product.refetch()} />;
+  }
   if (!product.data || !orgQ.data) return null;
   if (product.data.myRole !== 'admin') return <NoAccess message="只有产品管理员可以修改产品设置。" />;
   const p = product.data;

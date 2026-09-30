@@ -4,7 +4,7 @@ import { validateWorkflowBody } from '@flower/core/workflow-schema';
 import { useParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { NoAccess } from '@/components/no-access';
+import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ActionGate } from '@/features/workflow/components/action-gate';
@@ -52,7 +52,9 @@ export default function WorkflowEditorPage() {
     },
   );
 
-  if (wf.isError) return <NoAccess message="流程不存在，或者你没有编辑权限。" />;
+  if (!wf.data && wf.isError) {
+    return <QueryError error={wf.error} noAccessMessage="流程不存在，或者你没有编辑权限。" retryMessage="加载流程失败，请重试。" onRetry={() => wf.refetch()} />;
+  }
   if (!wf.data || !draft || !current) return null;
   const def = wf.data.definition;
   const dirty = JSON.stringify(draft) !== JSON.stringify(current.body);

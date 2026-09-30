@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { login, OWNER, setupInstance } from './helpers';
+import { acceptInvite, login, OWNER, setupInstance } from './helpers';
 
 test.describe('初始化与登录', () => {
   test.beforeEach(async () => {
@@ -43,17 +43,14 @@ test.describe('初始化与登录', () => {
 
   test('新用户通过邀请链接注册加入，普通成员看不到组织设置', async ({ page, request, browser }) => {
     await setupInstance(request);
-    const inv = await request.post('/api/v1/orgs/acme/invitations', { data: { email: 'new@example.com', orgRole: 'member' } });
-    const { token } = (await inv.json()) as { token: string };
-
     const ctx = await browser.newContext();
     const guest = await ctx.newPage();
-    await guest.goto(`/invite/${token}`);
-    await expect(guest.getByText('测试组织 邀请你加入')).toBeVisible();
-    await guest.getByLabel('你的姓名').fill('新人');
-    await guest.getByLabel('设置密码').fill('password123');
-    await guest.getByRole('button', { name: '接受邀请' }).click();
-    await guest.waitForURL('**/acme');
+    await acceptInvite(guest, request, {
+      email: 'new@example.com',
+      orgRole: 'member',
+      name: '新人',
+      beforeSubmit: async () => expect(guest.getByText('测试组织 邀请你加入')).toBeVisible(),
+    });
     await expect(guest.getByText('组织设置')).toHaveCount(0);
     await guest.goto('/acme/settings/members');
     await expect(guest.getByRole('heading', { name: '无权访问' })).toBeVisible();

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, api, unmetFrom } from './api';
+import { ApiError, api, isAccessDenied, unmetFrom } from './api';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -40,6 +40,16 @@ describe('api', () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('oops', { status: 502 })));
     await expect(api('/x')).rejects.toMatchObject({ status: 502, code: 'internal', message: '服务暂时不可用，请稍后重试' });
   });
+
+  it('网络不通时抛出中文提示的 ApiError（status 0）', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      }),
+    );
+    await expect(api('/x')).rejects.toMatchObject({ status: 0, code: 'network', message: '网络连接失败，请检查网络后重试' });
+  });
 });
 
 describe('unmetFrom', () => {
@@ -47,5 +57,15 @@ describe('unmetFrom', () => {
     expect(unmetFrom({ unmet: ['「可行性」需为通过（当前：未开始）', 1] })).toEqual(['「可行性」需为通过（当前：未开始）']);
     expect(unmetFrom([{ path: 'x', message: 'y' }])).toEqual([]);
     expect(unmetFrom(null)).toEqual([]);
+  });
+});
+
+describe('isAccessDenied', () => {
+  it('403 与 404 视为无权访问，其他错误可以重试', () => {
+    expect(isAccessDenied(new ApiError(403, 'forbidden', '权限不足', null))).toBe(true);
+    expect(isAccessDenied(new ApiError(404, 'not_found', '不存在', null))).toBe(true);
+    expect(isAccessDenied(new ApiError(500, 'internal', '服务器内部错误', null))).toBe(false);
+    expect(isAccessDenied(new ApiError(0, 'network', '网络连接失败，请检查网络后重试', null))).toBe(false);
+    expect(isAccessDenied(new Error('x'))).toBe(false);
   });
 });

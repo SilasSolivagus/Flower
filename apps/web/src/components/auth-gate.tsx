@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { type ReactNode, useEffect } from 'react';
+import { LoadError } from '@/components/load-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError } from '@/lib/api';
 import { useMe, useSetupStatus } from '@/lib/queries';
@@ -19,6 +20,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [setup.data, unauthenticated, pathname, router]);
 
   if (!me.data) {
+    if (me.isError && !unauthenticated) return <LoadError message="加载账号信息失败，请重试。" onRetry={() => me.refetch()} />;
     return (
       <div className="flex h-screen items-center justify-center" aria-busy="true">
         <Skeleton className="h-6 w-40" />
