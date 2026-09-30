@@ -189,9 +189,13 @@ export async function markReleaseReleased(db: Db, actor: Actor, id: string): Pro
   return withOrg(db, actor.orgId, async (tx) => {
     const cur = await loadRelease(tx, id);
     await requireProductRole(tx, actor, cur.productId, 'editor');
-    if (cur.status === 'released') throw new AppError('invalid', '该版本已发布');
     const now = new Date();
-    const [row] = await tx.update(releases).set({ status: 'released', releasedAt: now }).where(eq(releases.id, id)).returning();
+    const [row] = await tx
+      .update(releases)
+      .set({ status: 'released', releasedAt: now })
+      .where(and(eq(releases.id, id), eq(releases.status, 'planned')))
+      .returning();
+    if (!row) throw new AppError('invalid', '该版本已发布');
     await recordEvent(tx, {
       orgId: actor.orgId,
       productId: cur.productId,

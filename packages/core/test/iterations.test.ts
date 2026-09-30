@@ -85,6 +85,13 @@ describe('新建与修改迭代', () => {
     });
   });
 
+  it('专项的修改、状态流转与删除只有组织管理员可以做，产品编辑不行', async () => {
+    const sp2 = await createIteration(t.db, owner, { type: 'special', name: '专项越权测试', startDate: '2026-07-01', endDate: '2026-07-31' });
+    await expect(updateIteration(t.db, editor, sp2.id, { name: '越权改名' })).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(setIterationStatus(t.db, editor, sp2.id, 'active')).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(deleteIteration(t.db, editor, sp2.id)).rejects.toMatchObject({ code: 'forbidden' });
+  });
+
   it('校验名称、日期与归属', async () => {
     await expect(createIteration(t.db, owner, regular(pan, '倒序', '2026-08-10', '2026-08-01'))).rejects.toMatchObject({ code: 'invalid' });
     await expect(createIteration(t.db, owner, regular(pan, '不存在的日期', '2026-02-30', '2026-03-01'))).rejects.toMatchObject({ code: 'invalid' });

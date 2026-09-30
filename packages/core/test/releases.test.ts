@@ -136,6 +136,20 @@ describe('发布版本', () => {
     expect(rel.releasedAt).toBeInstanceOf(Date);
     await expect(markReleaseReleased(t.db, editor, releaseId)).rejects.toMatchObject({ code: 'invalid', message: '该版本已发布' });
   });
+
+  it('并发标记发布只有一次成功，只写入一条 release.released 事件', async () => {
+    const rel = await createRelease(t.db, editor, { productId: doc, versionName: '3.3.0', plannedDate: '2026-09-01' });
+    const results = await Promise.allSettled([markReleaseReleased(t.db, editor, rel.id), markReleaseReleased(t.db, editor, rel.id)]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason).toMatchObject({ code: 'invalid', message: '该版本已发布' });
+    const events = await withOrg(t.db, owner.orgId, (tx) =>
+      tx.select().from(domainEvents).where(and(eq(domainEvents.subjectId, rel.id), eq(domainEvents.type, 'release.released'))),
+    );
+    expect(events).toHaveLength(1);
+  });
 });
 
 describe('平台字段按产品覆盖', () => {

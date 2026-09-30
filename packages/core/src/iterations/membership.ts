@@ -65,6 +65,12 @@ export async function setRequirementIteration(
       return { iteration: null };
     }
 
+    if (cur.iterationId === input.iterationId) {
+      const [it] = await tx.select().from(iterations).where(and(eq(iterations.id, input.iterationId), isNull(iterations.deletedAt)));
+      if (!it) throw new AppError('not_found', '迭代不存在');
+      return { iteration: { id: it.id, name: it.name } };
+    }
+
     // 与开始迭代（FOR UPDATE）互斥，保证承诺快照与加入操作的先后一致
     const [it] = await tx
       .select()
@@ -75,7 +81,6 @@ export async function setRequirementIteration(
     if (it.type === 'regular' && it.productId !== cur.productId) throw new AppError('invalid', '不能加入其他产品的迭代');
     if (it.status !== 'planning' && it.status !== 'active') throw new AppError('invalid', '只能加入规划中或进行中的迭代');
     const target = { id: it.id, name: it.name };
-    if (cur.iterationId === it.id) return { iteration: target };
 
     const reason = input.reason?.trim() || null;
     if (input.force) {
