@@ -28,8 +28,8 @@
   - migrate：push 甘特任务的标记映射为 `attention`，手动进度写入 `meta.progress`；pan123 已重导。
   - web：甘特页签、时间轴与团队负载、人员负载页、评审表、工作台（登录后默认页），概览页移到 `/[org]/overview`；统一加载失败状态与网络错误中文提示，修复 AuthGate 与产品设置在 5xx 时的表现、`/admin` 两个一级标题、未处理的 `mutateAsync` 拒绝。
   - 检查项组件移到 `components/check-items.tsx`，需求详情与评审表共用。
-  - 需求分配的新增与删除（core、接口、需求详情「分配」区块）；「等我签字」按分配推给对应的人，没有分配时推给该职能标签的全部成员，且只统计评审已开始的需求；新增迁移 `0008_*.sql`，给 `requirement_assignments` 加唯一约束。
-  - 共享件：`components/load-error.tsx` 的 `QueryError`；e2e `helpers.ts` 新增 `acceptInvite`、`createMember`、`FAIL_500`、`applyReviewWorkflow`；`assertPlatformOption` 移到 `requirements/context.ts`，供表单与测试共用。
+  - 需求分配的新增与删除（core、接口、需求详情「分配」区块）；「等我签字」按分配推给对应的人，没有有效分配（被分配人在职且持有该标签）时推给该职能标签的全部成员，且只统计评审已开始的需求；新增迁移 `0008_*.sql`，给 `requirement_assignments` 加唯一约束。
+  - 共享件：`components/load-error.tsx` 的 `QueryError`；e2e `helpers.ts` 新增 `acceptInvite`、`createMember`、`FAIL_500`、`applyReviewWorkflow`；`assertPlatformOption` 移到 `requirements/context.ts`，供 `releases.ts` 与 `assignments.ts` 两个服务共用。
   - `docs/p1b-comparison.md`：日常操作新旧对比，列出 3 项比旧系统多几步的操作。
 - 怎么验证的：`pnpm typecheck`、`pnpm --filter @flower/web lint --max-warnings 0`、`pnpm test`（core 250、web 131、migrate 63）、完整端到端测试（53 个）、`./scripts/smoke.sh` 全部通过；真实数据性能见 `docs/p1b-validation.md`「P1-B2」第 2 节。
 - 留给对方：
