@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { applyReviewWorkflow, createProduct, createRequirement, json, login, ok, OWNER, setupInstance } from './helpers';
+import { applyReviewWorkflow, createMember, createProduct, createRequirement, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -9,7 +9,7 @@ test.beforeEach(async ({ request }) => {
 
 test('评审表：按检查项生成列，统计与「等我签字」筛选，展开后本人签字与代签', async ({ page, request }) => {
   const productId = await createProduct(request);
-  const boss = (await json<{ member: { id: string } }>(request.post('/api/v1/orgs/acme/members', { data: { displayName: '老板乙' } }))).member.id;
+  const boss = await createMember(request, '老板乙');
   await applyReviewWorkflow(request, productId, boss);
   await createRequirement(request, productId, '未开始的需求');
   const started = await createRequirement(request, productId, '评审中的需求');
