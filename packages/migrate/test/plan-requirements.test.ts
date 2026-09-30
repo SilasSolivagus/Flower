@@ -304,5 +304,6 @@ describe('导入计划：需求（修复回归）', () => {
     data.push.ganttTasks[0]!.flag = 'constructor';
     const p = buildImportPlan(data, reviewedMapping(), OPTS);
     expect(p.report.problems).toContain('push 甘特任务标记「constructor」没有对应规则');
+    expect(p.rows.tasks.find((t) => t.title === '前端开发')!.flag).toBeNull();
   });
 });

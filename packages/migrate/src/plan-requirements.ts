@@ -463,7 +463,7 @@ export function buildRequirements(ctx: PlanContext): void {
       planDays: g.plan_days,
       delayDays: g.delay_days,
       phase: g.phase,
-      flag: GANTT_FLAG[flagKey] ?? null,
+      flag: Object.hasOwn(GANTT_FLAG, flagKey) ? GANTT_FLAG[flagKey] : null,
       starred: g.starred === null ? null : g.starred === 1,
       meta: {
         note: g.note,
