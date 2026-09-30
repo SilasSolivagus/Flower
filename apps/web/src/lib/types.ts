@@ -9,12 +9,18 @@ import type {
   InvitationPreview as CoreInvitationPreview,
   InvitationView,
   IterationBrief as CoreIterationBrief,
+  IterationDetail as CoreIterationDetail,
+  IterationMilestone as CoreIterationMilestone,
+  IterationScope as CoreIterationScope,
+  IterationView,
   MemberView,
   MyOrg as CoreMyOrg,
   OrgRole as CoreOrgRole,
   OrgView,
+  ProductMemberRole as CoreProductMemberRole,
   ProductRole as CoreProductRole,
   ProductView,
+  ReleaseView,
   RequirementDetail as CoreRequirementDetail,
   RequirementList as CoreRequirementList,
   RequirementListItem as CoreRequirementListItem,
@@ -62,3 +68,9 @@ export type RequirementComment = Jsonify<CommentView>;
 export type StructureNode = StructureNodeView;
 export type IterationBrief = CoreIterationBrief;
 export type CheckState = CoreCheckState;
+export type Iteration = Jsonify<IterationView>;
+export type IterationMilestone = CoreIterationMilestone;
+export type IterationDetail = Jsonify<CoreIterationDetail>;
+export type IterationScope = Jsonify<CoreIterationScope>;
+export type Release = Jsonify<ReleaseView>;
+export type ProductMemberRole = CoreProductMemberRole;

@@ -17,5 +17,5 @@ test('只有一个组织时首页直接进入该组织；管理员看到配置�
   await request.post('/api/v1/orgs/acme/products', { data: { name: '网盘', key: 'PAN' } });
   await page.reload();
   await expect(page.getByText('已完成 1 / 6')).toBeVisible();
-  await expect(page.getByRole('link', { name: /网盘/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /网盘/ }).filter({ hasText: 'PAN' })).toBeVisible();
 });

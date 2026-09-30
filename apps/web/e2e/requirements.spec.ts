@@ -1,22 +1,11 @@
-import { type APIResponse, expect, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { login, OWNER, setupInstance } from './helpers';
+import { createProduct, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
   await setupInstance(request);
 });
-
-async function ok(pending: Promise<APIResponse>): Promise<APIResponse> {
-  const res = await pending;
-  expect(res.ok(), `${res.url()} → ${res.status()}`).toBeTruthy();
-  return res;
-}
-
-async function createProduct(request: import('@playwright/test').APIRequestContext) {
-  const res = await ok(request.post('/api/v1/orgs/acme/products', { data: { name: '网盘', key: 'PAN' } }));
-  return (await res.json()).product.id as string;
-}
 
 test('需求列表：新建、按状态和优先级筛选、搜索编号', async ({ page, request }) => {
   const productId = await createProduct(request);

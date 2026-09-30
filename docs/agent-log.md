@@ -20,6 +20,46 @@
 
 ## 记录
 
+### 2026-09-30 · 云端 · 审查 P1-B1（PR #6）：修复加入迭代与开始迭代的死锁
+- 分支 / PR：`feat/p1b1-iterations`（PR #6）
+- 做了什么：
+  - 按要求审查四个重点：
+    - 迭代与发布版本的权限：常规迭代需产品编辑及以上，专项需组织管理员（`isOrgAdmin` 同时拒绝只读 Token 和限定产品的 Token），强制加入需产品管理员；发布版本的增改、发布、关联都需编辑及以上。
+    - 专项迭代的可见性：详情、计数、范围对比、按迭代列发布版本都按可见产品过滤；看不到任何产品的访客看不到专项。
+    - 字段覆盖时平台选项的迁移：只改指向被复制字段自身选项的发布版本和开发分配，复制非平台字段不会误改；也没有「取消覆盖」的反向路径需要处理。
+    - 以上三项没有发现问题，测试也覆盖到了。
+  - **修复死锁**（`packages/core/src/iterations/membership.ts`）：
+    - 加入迭代原来先锁需求（FOR UPDATE）再锁目标迭代（FOR SHARE）；开始迭代先锁迭代（FOR UPDATE），写承诺快照时外键再锁其中的需求。两边顺序相反。
+    - 两个迭代同时开始、又有需求在两者之间互换时，会形成 4 个事务的等待环，Postgres 报 40P01，用户看到 500。
+    - 改为先锁目标迭代、再锁需求，全部路径统一为「先迭代、后需求」，不可能再成环。错误返回顺序不变（仍先校验权限，再报「迭代不存在」）。
+    - 这和本地 09-30 那条 e2e 清库死锁是两回事：那条在测试工具里，这条在业务代码里，生产环境也会遇到。
+  - 新增 `packages/core/test/iteration-locking.test.ts`：30 轮随机顺序并发执行「开始 A、开始 B、A→B、B→A、移出、加入」，断言没有任何失败。
+- 怎么验证的：
+  - 临时探针在修复前 40 轮出现 6 次 40P01，修复后连续 3 次共 120 轮 0 次。
+  - 回归测试在未修复的代码上失败（4 次 40P01），修复后通过。
+  - core 203、web 111、migrate 60、e2e 37 全部通过；类型检查、lint（`--max-warnings 0`）通过。
+- 留给对方：
+  - 以后新增同时锁迭代和需求的代码，保持「先迭代、后需求」的顺序。
+  - `visibleProductIds` 对每个产品各查两次（N+1），产品多了以后迭代列表会变慢，届时可改成一次查询。目前不影响性能数据。
+
+### 2026-09-30 · 本地 · e2e：resetDatabase 的 TRUNCATE 与上一用例残留请求死锁（补记 a9eda4a）
+- 分支 / PR：`feat/p1b1-iterations`，代码在 a9eda4a
+- 做了什么：全量 e2e 偶发 `requirements.spec.ts:138` 在 `beforeEach` 报 `PostgresError: deadlock detected`。Postgres 日志中 09-29、09-30 的几次死锁都是 `resetDatabase()` 的 TRUNCATE（逐表取 ACCESS EXCLUSIVE）与 webServer 上一用例残留的只读查询（`field_options`、`product_members`、`sessions`）互相等待，与签字 / 流程流转和迭代锁顺序无关。a9eda4a 让 `apps/web/e2e/db.ts` 在 40P01 时重试 TRUNCATE（最多 5 次），并用 `e2e/db.spec.ts` 构造该交错作回归测试。
+- 怎么验证的：独立脚本构造同样的环，修复前稳定报 40P01、修复后通过；`requirements.spec.ts` 8 个用例通过；lint、typecheck 通过。全量 e2e 未跑。
+- 留给对方：无
+
+### 2026-09-30 · 本地 · P1-B1：迭代、发布版本、阻塞项与关联、结构树维护
+- 分支 / PR：`feat/p1b1-iterations`
+- 做了什么：
+  - core：迭代（新建、修改、状态流转、开始时写承诺快照、删除、范围对比）、加入 / 移出迭代（流程准入条件、产品管理员强制）、发布版本、阻塞项、需求关联、结构树维护、产品成员角色列表；新增错误码 `precondition_failed`（HTTP 412）。
+  - 字段按产品覆盖时同时迁移发布版本与开发分配的平台选项（已处理 2026-09-29 P1-A 待办）。
+  - web：迭代列表与详情、需求详情的迭代选择 / 阻塞项 / 关联 / 发布版本、产品设置结构树页签；修复产品管理员的面包屑、选项编辑与访客角色页签。
+  - 常规迭代的新建 / 修改 / 状态流转 / 删除需要产品 editor 及以上权限（spec §2.2）；专项迭代仅组织管理员；强制加入仅产品管理员。
+  - 抽出共享组件与工具：`components/load-error.tsx`，e2e 的 `helpers.ts`（`ok`、`createProduct`、`json`、`createRequirement` 等），以及成员相关的 `canListMembers`、`activePeople`。
+  - 修了需求关联新增时的一个竞态：搜索框只在文字没变时才清空，避免和列表刷新冲突。
+- 怎么验证的：`pnpm typecheck`、`pnpm test`（core / web / migrate）、`pnpm --filter @flower/web lint --max-warnings 0`、完整端到端测试全部通过；真实数据性能见 `docs/p1b-validation.md` 第 2 节。
+- 留给对方：人工验收清单（`docs/p1b-validation.md` 第 3 节）由用户执行；P1-B2 范围见 P1-B1 计划「留给 P1-B2」。
+
 ### 2026-09-29 · 云端 · 清零 web lint 并加进 CI
 - 分支 / PR：`claude/compassionate-babbage-ei9baf`
 - 做了什么：

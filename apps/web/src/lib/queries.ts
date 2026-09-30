@@ -8,7 +8,10 @@ import type {
   Field,
   FunctionTag,
   InstanceStatus,
+  Iteration,
   IterationBrief,
+  IterationDetail,
+  IterationScope,
   Invitation,
   LevelNames,
   Member,
@@ -16,7 +19,8 @@ import type {
   Org,
   OrgMe,
   Product,
-  ProductRole,
+  ProductMemberRole,
+  Release,
   RequirementComment,
   RequirementDetail,
   RequirementList,
@@ -36,7 +40,7 @@ export const qk = {
   tags: (o: string) => ['org', o, 'tags'] as const,
   products: (o: string) => ['org', o, 'products'] as const,
   product: (o: string, id: string) => ['org', o, 'product', id] as const,
-  productRoles: (o: string, id: string) => ['org', o, 'product', id, 'roles'] as const,
+  productMembers: (o: string, id: string) => ['org', o, 'product', id, 'members'] as const,
   productWorkflow: (o: string, id: string) => ['org', o, 'product', id, 'workflow'] as const,
   workflows: (o: string) => ['org', o, 'workflows'] as const,
   workflow: (o: string, id: string) => ['org', o, 'workflow', id] as const,
@@ -47,7 +51,11 @@ export const qk = {
   requirement: (o: string, key: string) => ['org', o, 'requirements', 'detail', key] as const,
   requirementComments: (o: string, id: string) => ['org', o, 'requirements', 'comments', id] as const,
   nodes: (o: string, productId: string) => ['org', o, 'product', productId, 'nodes'] as const,
-  iterations: (o: string, productId: string) => ['org', o, 'product', productId, 'iterations'] as const,
+  iterations: (o: string, productId: string) => ['org', o, 'iterations', 'product', productId] as const,
+  iterationList: (o: string) => ['org', o, 'iterations', 'list'] as const,
+  iteration: (o: string, id: string) => ['org', o, 'iterations', 'detail', id] as const,
+  iterationScope: (o: string, id: string) => ['org', o, 'iterations', 'scope', id] as const,
+  releases: (o: string, query: string) => ['org', o, 'releases', query] as const,
 };
 
 export const useSetupStatus = () => useQuery({ queryKey: qk.setup, queryFn: () => api<InstanceStatus>('/setup/status') });
@@ -70,12 +78,11 @@ export const useProducts = (o: string) =>
   useQuery({ queryKey: qk.products(o), queryFn: () => api<{ products: Product[] }>(`/orgs/${o}/products`), select: (d) => d.products });
 export const useProduct = (o: string, id: string) =>
   useQuery({ queryKey: qk.product(o, id), queryFn: () => api<{ product: Product }>(`/orgs/${o}/products/${id}`), select: (d) => d.product });
-export const useProductRoles = (o: string, id: string, enabled = true) =>
+export const useProductMembers = (o: string, id: string) =>
   useQuery({
-    queryKey: qk.productRoles(o, id),
-    queryFn: () => api<{ roles: Array<{ memberId: string; role: ProductRole }> }>(`/orgs/${o}/products/${id}/roles`),
-    select: (d) => d.roles,
-    enabled,
+    queryKey: qk.productMembers(o, id),
+    queryFn: () => api<{ members: ProductMemberRole[] }>(`/orgs/${o}/products/${id}/members`),
+    select: (d) => d.members,
   });
 export const useProductWorkflow = (o: string, id: string) =>
   useQuery({
@@ -95,11 +102,12 @@ export const useWorkflow = (o: string, id: string) =>
     queryKey: qk.workflow(o, id),
     queryFn: () => api<{ definition: WorkflowDefinition; versions: WorkflowVersion[] }>(`/orgs/${o}/workflows/${id}`),
   });
-export const useFields = (o: string, productId?: string) =>
+export const useFields = (o: string, productId?: string, enabled = true) =>
   useQuery({
     queryKey: qk.fields(o, productId),
     queryFn: () => api<{ fields: Field[] }>(`/orgs/${o}/fields${productId ? `?product=${productId}` : ''}`),
     select: (d) => d.fields,
+    enabled,
   });
 export const useLevelNames = (o: string, productId?: string) =>
   useQuery({
@@ -112,6 +120,23 @@ export const useTokens = (o: string) =>
 /** 需求相关查询的公共前缀：任何需求修改后统一失效。 */
 export const requirementKeys = (o: string) => ['org', o, 'requirements'] as const;
 
+/** 迭代相关查询的公共前缀：迭代或需求所属迭代变化后统一失效。 */
+export const iterationKeys = (o: string) => ['org', o, 'iterations'] as const;
+
+export const useIterations = (o: string) =>
+  useQuery({ queryKey: qk.iterationList(o), queryFn: () => api<{ iterations: Iteration[] }>(`/orgs/${o}/iterations`), select: (d) => d.iterations });
+
+export const useIteration = (o: string, id: string) =>
+  useQuery({ queryKey: qk.iteration(o, id), queryFn: () => api<{ iteration: IterationDetail }>(`/orgs/${o}/iterations/${id}`), select: (d) => d.iteration });
+export const useIterationScope = (o: string, id: string) =>
+  useQuery({ queryKey: qk.iterationScope(o, id), queryFn: () => api<{ scope: IterationScope }>(`/orgs/${o}/iterations/${id}/scope`), select: (d) => d.scope });
+
+/** 发布版本查询的公共前缀。 */
+export const releaseKeys = (o: string) => ['org', o, 'releases'] as const;
+
+export const useReleases = (o: string, query: string, enabled = true) =>
+  useQuery({ queryKey: qk.releases(o, query), queryFn: () => api<{ releases: Release[] }>(`/orgs/${o}/releases?${query}`), select: (d) => d.releases, enabled });
+
 export const useRequirements = (o: string, productId: string | undefined, query: string) =>
   useQuery({
     queryKey: qk.requirements(o, productId ?? '', query),
@@ -119,11 +144,12 @@ export const useRequirements = (o: string, productId: string | undefined, query:
     enabled: !!productId,
     placeholderData: keepPreviousData,
   });
-export const useRequirement = (o: string, key: string) =>
+export const useRequirement = (o: string, key: string, enabled = true) =>
   useQuery({
     queryKey: qk.requirement(o, key),
     queryFn: () => api<{ requirement: RequirementDetail }>(`/orgs/${o}/requirements/${encodeURIComponent(key)}`),
     select: (d) => d.requirement,
+    enabled,
   });
 export const useRequirementComments = (o: string, id: string | undefined) =>
   useQuery({

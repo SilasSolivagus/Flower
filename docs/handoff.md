@@ -21,6 +21,8 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
 | `docs/superpowers/plans/2026-09-29-flower-p0b-admin-ui.md` | P0-B 管理界面计划（已完成） |
 | `docs/superpowers/plans/2026-09-29-flower-p1a-requirements-migration.md` | P1-A 计划：需求数据模型、旧数据迁移、需求列表与详情（已完成） |
 | `docs/p1a-validation.md` | P1-A 真实数据验证记录（迁移对账汇总、性能测量） |
+| `docs/superpowers/plans/2026-09-30-flower-p1b1-iterations.md` | P1-B1 计划：迭代、发布版本、阻塞项与关联、结构树维护、产品管理员缺口（已完成） |
+| `docs/p1b-validation.md` | P1-B 真实数据验证记录与人工验收清单 |
 | `docs/story-map/flower-story-map.html` | 用户故事地图（在线版：https://claude.ai/artifact/TsrYHNpBZ2TLc6uq6suadu） |
 | 视觉样稿 | https://claude.ai/artifact/DgxTagCVRUGsKbvZSm9XPL （最上面一行"定稿"：A 配色 + C 密度） |
 | `docs/diagrams/` | 服务器现状图、目标架构草案 |
@@ -35,14 +37,16 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
   - 迁移工具 `packages/migrate` 读三份生产只读副本，经可编辑的对照表生成导入计划和对账报告。
   - 真实数据已导入本地开发库，组织 pan123，共 764 条需求，对账 0 问题。
   - 性能：9 个场景 p95 均在 10ms 以内。
+- **P1-B1 迭代、发布版本、阻塞项与关联、结构树维护：已完成**（分支见协作日志）。
+  - 迭代列表与详情（状态、里程碑、需求、承诺范围对比、发布版本），需求按流程准入条件加入迭代，产品管理员可强制。
+  - 字段按产品覆盖时，发布版本与开发分配上的平台选项一并迁移（P1-A 遗留项已处理）。
+  - 人工验收清单见 `docs/p1b-validation.md` 第 3 节，待用户执行。
 
 ## 下一步
 
-1. 合并 P1-A 的 PR 后，和用户在真实数据上做界面验收。
-2. 写 P1-B 计划：迭代、甘特、工作台、会签界面，以及日常操作对比和用户试用。
-3. P1-B 计划要纳入 P0-B 暂缓项，以及 P1-A 留下的两项：
-   - 字段按产品覆盖时，发布版本和需求指派上的 `platform_option_id` 不迁移；
-   - 开发库 pan123 的数据早于半天修复，需要用 `--replace` 重导。
+1. 用户按 `docs/p1b-validation.md` 第 3 节在本地 pan123 上验收 P1-B1，问题记在该节末尾。
+2. 写 P1-B2 计划：任务与甘特（push 的工作日算法）、人员负载、工作台（登录后默认页）、按检查项配置的批量评审表，以及日常操作新旧对比和用户试用。
+3. P1-B2 计划要纳入 P1-B1 计划「设计决定」表「留给 P1-B2」一行，以及 P0-B 暂缓的界面打磨项（统一的加载与错误状态、网络错误的中文提示等）。
 
 ## 生产数据副本
 

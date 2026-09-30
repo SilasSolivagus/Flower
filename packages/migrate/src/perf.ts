@@ -1,4 +1,4 @@
-import { type Actor, type Db, getRequirementByKey, listRequirementComments, listRequirements } from '@flower/core';
+import { type Actor, type Db, getIterationScope, getRequirementByKey, listIterations, listRequirementComments, listRequirements } from '@flower/core';
 
 export type PerfCase = { name: string; run: () => Promise<unknown> };
 
@@ -33,6 +33,10 @@ export async function buildPerfCases(db: Db, actor: Actor, productId: string): P
   const ids = sample.items.slice(0, 20).map((r) => r.id);
   let i = 0;
   let j = 0;
+  // 范围对比只对已开始的迭代有意义；取其中需求最多的一个
+  const largest = (await listIterations(db, actor))
+    .filter((it) => it.status !== 'planning')
+    .sort((a, b) => b.requirementCount - a.requirementCount)[0];
   return [
     { name: '列表：默认第 1 页', run: () => listRequirements(db, actor, productId, {}) },
     { name: '列表：第 5 页', run: () => listRequirements(db, actor, productId, { page: 5 }) },
@@ -43,5 +47,7 @@ export async function buildPerfCases(db: Db, actor: Actor, productId: string): P
     { name: '列表：按编号', run: () => listRequirements(db, actor, productId, { q: keys[0] ?? '1' }) },
     { name: '详情：轮流打开', run: () => getRequirementByKey(db, actor, keys[i++ % Math.max(keys.length, 1)] ?? 'PAN-1') },
     { name: '评论：轮流读取', run: () => listRequirementComments(db, actor, ids[j++ % Math.max(ids.length, 1)]!) },
+    { name: '迭代：列表', run: () => listIterations(db, actor) },
+    { name: '迭代：范围对比（需求最多的迭代）', run: () => (largest ? getIterationScope(db, actor, largest.id) : Promise.resolve(null)) },
   ];
 }

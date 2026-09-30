@@ -1,6 +1,7 @@
 import {
   createProduct,
   getProduct,
+  listProductMemberRoles,
   listProductRoles,
   listProducts,
   PRODUCT_ROLES,
@@ -37,4 +38,8 @@ export function registerProductRoutes(app: App, deps: ApiDeps): void {
     await setProductRole(deps.db, c.get('actor'), c.req.param('id'), c.req.param('memberId'), body.role);
     return c.body(null, 204);
   });
+
+  app.get('/orgs/:org/products/:id/members', async (c) =>
+    c.json({ members: await listProductMemberRoles(deps.db, c.get('actor'), c.req.param('id')) }),
+  );
 }

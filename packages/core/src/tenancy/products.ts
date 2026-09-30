@@ -3,7 +3,7 @@ import { productRoleOf, requireOrgAdmin, requireProductRole } from '../access/pe
 import type { Db } from '../db/client';
 import { members, productMembers, products, workflowDefinitions, workflowVersions } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
-import type { Actor, ProductRole } from '../domain-types';
+import type { Actor, OrgRole, ProductRole } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
 import { recordEvent } from '../events';
 
@@ -154,6 +154,22 @@ export async function listProductRoles(db: Db, actor: Actor, productId: string):
       .select({ memberId: productMembers.memberId, role: productMembers.role })
       .from(productMembers)
       .where(eq(productMembers.productId, productId));
+  });
+}
+
+export type ProductMemberRole = { memberId: string; displayName: string; kind: 'human' | 'agent'; orgRole: OrgRole; role: ProductRole | null };
+
+/** 产品设置「成员角色」页签的数据：产品管理员（含访客产品管理员）可调用，不依赖组织成员列表权限。 */
+export async function listProductMemberRoles(db: Db, actor: Actor, productId: string): Promise<ProductMemberRole[]> {
+  return withOrg(db, actor.orgId, async (tx) => {
+    await requireProductRole(tx, actor, productId, 'admin');
+    const rows = await tx.select().from(members).where(eq(members.status, 'active')).orderBy(asc(members.createdAt));
+    const overrides = await tx
+      .select({ memberId: productMembers.memberId, role: productMembers.role })
+      .from(productMembers)
+      .where(eq(productMembers.productId, productId));
+    const byId = new Map(overrides.map((o) => [o.memberId, o.role]));
+    return rows.map((m) => ({ memberId: m.id, displayName: m.displayName, kind: m.kind, orgRole: m.orgRole, role: byId.get(m.id) ?? null }));
   });
 }
 

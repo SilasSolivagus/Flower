@@ -41,8 +41,10 @@ describe('性能测量', () => {
       '列表：按编号',
       '详情：轮流打开',
       '评论：轮流读取',
+      '迭代：列表',
+      '迭代：范围对比（需求最多的迭代）',
     ]);
     const result = await measure(cases, 2);
-    expect(result).toHaveLength(9);
+    expect(result).toHaveLength(11);
   });
 });

@@ -2,9 +2,12 @@
 
 import { OptionMultiSelect } from '@/components/option-multi-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { activePeople, canListMembers } from '@/features/members/model';
+import { nodeOptions } from '@/features/structure/model';
 import { api } from '@/lib/api';
 import { requirementKeys, useApiMutation, useFields, useMembers, useNodes, useOrg } from '@/lib/queries';
 import type { RequirementDetail } from '@/lib/types';
+import { IterationField } from './iteration-field';
 
 const NONE = '__none';
 
@@ -19,8 +22,8 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export function FieldsPanel({ org, requirement: r }: { org: string; requirement: RequirementDetail }) {
   const orgQ = useOrg(org);
-  const canListMembers = !!orgQ.data && orgQ.data.me.orgRole !== 'guest';
-  const members = useMembers(org, canListMembers);
+  const canListMembersFlag = canListMembers(orgQ.data?.me);
+  const members = useMembers(org, canListMembersFlag);
   const nodes = useNodes(org, r.productId);
   const fields = useFields(org, r.productId);
   const canEdit = r.myRole !== 'viewer';
@@ -28,11 +31,11 @@ export function FieldsPanel({ org, requirement: r }: { org: string; requirement:
   const setField = useApiMutation((v: { key: string; optionIds: string[] }) => api(`/orgs/${org}/requirements/${r.id}/fields/${v.key}`, { method: 'PUT', body: { optionIds: v.optionIds } }), {
     invalidate: [requirementKeys(org)],
   });
-  const people = (members.data ?? []).filter((m) => m.status === 'active' && m.kind === 'human');
+  const people = activePeople(members.data ?? []);
 
   const memberSelect = (label: string, field: 'ownerMemberId' | 'requesterMemberId', current: { id: string; displayName: string } | null) => (
     <Row label={label}>
-      {canEdit && canListMembers ? (
+      {canEdit && canListMembersFlag ? (
         <Select value={current?.id ?? NONE} onValueChange={(v) => patch.mutate({ [field]: v === NONE ? null : v })}>
           <SelectTrigger className="h-8" aria-label={label}>
             <SelectValue />
@@ -53,22 +56,25 @@ export function FieldsPanel({ org, requirement: r }: { org: string; requirement:
     </Row>
   );
 
-  const topNodes = (nodes.data ?? []).filter((n) => n.depth === 1);
+  const options = nodeOptions(nodes.data ?? [], r.node?.id ?? null);
   return (
     <section className="flex flex-col gap-2.5 rounded-md border bg-card p-4" aria-label="属性">
       {memberSelect('负责人', 'ownerMemberId', r.owner)}
       {memberSelect('提出人', 'requesterMemberId', r.requester)}
-      <Row label="业务域">
-        {canEdit && topNodes.length > 0 ? (
+      <Row label="结构节点">
+        {canEdit && options.length > 0 ? (
           <Select value={r.node?.id ?? NONE} onValueChange={(v) => patch.mutate({ nodeId: v === NONE ? null : v })}>
-            <SelectTrigger className="h-8" aria-label="业务域">
+            <SelectTrigger className="h-8" aria-label="结构节点">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NONE}>不填</SelectItem>
-              {topNodes.map((n) => (
+              {options.map((n) => (
                 <SelectItem key={n.id} value={n.id}>
-                  {n.name}
+                  <span style={{ paddingLeft: `${(n.depth - 1) * 12}px` }}>
+                    {n.name}
+                    {n.deprecated ? '（已停用）' : ''}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -109,7 +115,9 @@ export function FieldsPanel({ org, requirement: r }: { org: string; requirement:
           </Row>
         );
       })}
-      <Row label="迭代">{r.iteration?.name ?? '未排期'}</Row>
+      <Row label="迭代">
+        <IterationField org={org} requirement={r} />
+      </Row>
     </section>
   );
 }

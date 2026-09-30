@@ -1,8 +1,10 @@
 import type { AccountView } from '../src/auth/accounts';
 import type { Db } from '../src/db/client';
+import type { WorkflowBody } from '../src/definitions/workflow-schema';
 import type { Actor } from '../src/domain-types';
 import { initializeInstance } from '../src/setup/instance';
 import { type OrgView, resolveActor } from '../src/tenancy/orgs';
+import { createPlaceholderMember } from '../src/tenancy/members';
 
 export const OWNER_EMAIL = 'owner@example.com';
 export const OWNER_PASSWORD = 'password123';
@@ -17,3 +19,33 @@ export async function seedInstance(db: Db): Promise<{ account: AccountView; org:
   if (!owner) throw new Error('seedInstance: 无法解析 owner');
   return { account, org, owner };
 }
+
+/** 新建一个占位成员，返回以该成员身份操作的 Actor（沿用 owner 的组织信息，替换 memberId 与组织角色）。 */
+export async function asMember(db: Db, owner: Actor, displayName: string, orgRole: Actor['orgRole'] = 'member'): Promise<Actor> {
+  const m = await createPlaceholderMember(db, owner, { displayName });
+  return { ...owner, memberId: m.id, orgRole, accountId: null };
+}
+
+/** 新建常规迭代的输入构造。 */
+export const regularIteration = (productId: string, name: string, startDate: string, endDate: string) =>
+  ({ type: 'regular' as const, productId, name, startDate, endDate });
+
+/** 只读范围（全部产品）的 API Token Actor。 */
+export function readOnlyToken(owner: Actor): Actor {
+  return { ...owner, tokenId: '00000000-0000-0000-0000-0000000000f1', tokenScope: { products: 'all', access: 'read' } };
+}
+
+/** 带 join_iteration 准入条件（「可行性」检查项需通过）的流程，供加入迭代相关测试共用。 */
+export const GATED_WORKFLOW: WorkflowBody = {
+  states: [
+    { key: 'backlog', label: '收集', color: '#94a3b8', order: 1, group: '', category: 'backlog' },
+    { key: 'done', label: '已上线', color: '#10b981', order: 2, group: '', category: 'completed' },
+  ],
+  initial: 'backlog',
+  transitions: [
+    { from: '*', to: 'backlog', conditions: [] },
+    { from: '*', to: 'done', conditions: [] },
+  ],
+  actionGates: [{ action: 'join_iteration', conditions: [{ type: 'check_item', item: 'feasibility', in: ['passed'] }] }],
+  checkItems: [{ key: 'feasibility', label: '可行性', scope: 'requirement', type: 'single', defaultState: 'not_started' }],
+};

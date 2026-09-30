@@ -1,14 +1,19 @@
 import {
   addRequirementComment,
   CHECK_STATES,
+  createBlocker,
+  createRelation,
   createRequirement,
+  deleteRelation,
   getRequirementByKey,
   listProductIterations,
   listRequirementComments,
   listRequirements,
   listStructureNodes,
   markRequirementCommentsRead,
+  RELATION_TYPES,
   type RequirementFilter,
+  resolveBlocker,
   setCheckItemState,
   setRequirementField,
   signCheckItem,
@@ -135,4 +140,21 @@ export function registerRequirementRoutes(app: App, deps: ApiDeps): void {
   app.post('/orgs/:org/requirements/:id/comments/read', async (c) =>
     c.json({ marked: await markRequirementCommentsRead(deps.db, c.get('actor'), c.req.param('id')) }),
   );
+
+  app.post('/orgs/:org/requirements/:id/blockers', async (c) => {
+    const body = await readJson(c, z.object({ description: z.string().max(500), ownerMemberId: z.string().nullable().optional() }));
+    return c.json({ blocker: await createBlocker(deps.db, c.get('actor'), c.req.param('id'), body) }, 201);
+  });
+
+  app.post('/orgs/:org/blockers/:id/resolve', async (c) => c.json({ blocker: await resolveBlocker(deps.db, c.get('actor'), c.req.param('id')) }));
+
+  app.post('/orgs/:org/requirements/:id/relations', async (c) => {
+    const body = await readJson(c, z.object({ toId: z.string(), type: z.enum(RELATION_TYPES) }));
+    return c.json({ relation: await createRelation(deps.db, c.get('actor'), { fromId: c.req.param('id'), toId: body.toId, type: body.type }) }, 201);
+  });
+
+  app.delete('/orgs/:org/relations/:id', async (c) => {
+    await deleteRelation(deps.db, c.get('actor'), c.req.param('id'));
+    return c.body(null, 204);
+  });
 }

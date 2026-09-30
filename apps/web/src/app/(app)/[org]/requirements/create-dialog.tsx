@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { activePeople, canListMembers } from '@/features/members/model';
 import { api } from '@/lib/api';
 import { requirementKeys, useApiMutation, useFields, useMembers, useOrg } from '@/lib/queries';
 import type { RequirementListItem } from '@/lib/types';
@@ -18,8 +19,7 @@ const NONE = '__none';
 export function CreateRequirementDialog({ org, productId, open, onOpenChange }: { org: string; productId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
   const fields = useFields(org, productId);
   const orgQ = useOrg(org);
-  const canListMembers = !!orgQ.data && orgQ.data.me.orgRole !== 'guest';
-  const members = useMembers(org, canListMembers);
+  const members = useMembers(org, canListMembers(orgQ.data?.me));
   const [title, setTitle] = useState('');
   const [requester, setRequester] = useState(NONE);
   const [priority, setPriority] = useState(NONE);
@@ -52,7 +52,7 @@ export function CreateRequirementDialog({ org, productId, open, onOpenChange }: 
   );
   const priorityField = fields.data?.find((f) => f.key === 'priority');
   const platformField = fields.data?.find((f) => f.key === 'platform');
-  const people = (members.data ?? []).filter((m) => m.status === 'active' && m.kind === 'human');
+  const people = activePeople(members.data ?? []);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

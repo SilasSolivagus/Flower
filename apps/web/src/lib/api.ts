@@ -25,3 +25,9 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   }
   return data as T;
 }
+
+/** 「条件未满足」类错误的 details.unmet；其他形状返回空数组。 */
+export function unmetFrom(details: unknown): string[] {
+  const list = (details as { unmet?: unknown } | null)?.unmet;
+  return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : [];
+}

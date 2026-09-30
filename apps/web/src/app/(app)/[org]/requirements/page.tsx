@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { activePeople, canListMembers } from '@/features/members/model';
 import { filterToApiQuery, filterToSearch, type ListFilter, parseFilter, patchFilter } from '@/features/requirements/filter';
 import { SORT_LABEL } from '@/lib/labels';
 import { useFields, useMembers, useNodes, useOrg, useProductIterations, useProducts, useProductWorkflow, useRequirements } from '@/lib/queries';
@@ -40,8 +41,8 @@ function RequirementsPage() {
   const product = products.data?.find((p) => p.key === filter.product) ?? products.data?.[0];
   const workflow = useProductWorkflow(org, product?.id ?? '');
   const fields = useFields(org, product?.id);
-  const canListMembers = !!orgQ.data && orgQ.data.me.orgRole !== 'guest';
-  const members = useMembers(org, canListMembers);
+  const canListMembersFlag = canListMembers(orgQ.data?.me);
+  const members = useMembers(org, canListMembersFlag);
   const nodes = useNodes(org, product?.id);
   const iterations = useProductIterations(org, product?.id);
   const data = useRequirements(org, product?.id, filterToApiQuery(filter));
@@ -167,16 +168,14 @@ function RequirementsPage() {
             </SelectContent>
           </Select>
         )}
-        {canListMembers && members.data && (
+        {canListMembersFlag && members.data && (
           <Select value={filter.owner ?? ALL} onValueChange={(v) => setFilter({ owner: v === ALL ? null : v })}>
             <SelectTrigger className="h-8 w-32" aria-label="负责人">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>全部负责人</SelectItem>
-              {members.data
-                .filter((m) => m.status === 'active' && m.kind === 'human')
-                .map((m) => (
+              {activePeople(members.data).map((m) => (
                   <SelectItem key={m.id} value={m.id}>
                     {m.displayName}
                   </SelectItem>

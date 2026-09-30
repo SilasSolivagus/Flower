@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import { qk, useApiMutation, useOrg, useProduct } from '@/lib/queries';
 import { FieldsTab } from './fields-tab';
 import { RolesTab } from './roles-tab';
+import { StructureTab } from './structure-tab';
 import { WorkflowTab } from './workflow-tab';
 
 export default function ProductDetailPage() {
@@ -38,7 +39,11 @@ export default function ProductDetailPage() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: '组织设置' }, { label: '产品', href: `/${org}/settings/products` }, { label: p.name }]}
+        crumbs={
+          orgAdmin
+            ? [{ label: '组织设置' }, { label: '产品', href: `/${org}/settings/products` }, { label: p.name }]
+            : [{ label: '概览', href: `/${org}` }, { label: '产品设置' }, { label: p.name }]
+        }
         title={p.name}
         description={
           <>
@@ -53,6 +58,7 @@ export default function ProductDetailPage() {
           <TabsTrigger value="roles">成员角色</TabsTrigger>
           <TabsTrigger value="workflow">流程</TabsTrigger>
           <TabsTrigger value="fields">字段与层级</TabsTrigger>
+          <TabsTrigger value="structure">结构树</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">
           <section className="flex max-w-lg flex-col gap-4 rounded-lg border bg-card p-4">
@@ -81,6 +87,9 @@ export default function ProductDetailPage() {
         </TabsContent>
         <TabsContent value="fields">
           <FieldsTab org={org} productId={productId} />
+        </TabsContent>
+        <TabsContent value="structure">
+          <StructureTab org={org} productId={productId} />
         </TabsContent>
       </Tabs>
     </>

@@ -55,3 +55,11 @@ export function requireOrgAdmin(actor: Actor): void {
 export function requireNonGuest(actor: Actor): void {
   if (actor.orgRole === 'guest') throw new AppError('forbidden', '访客无权查看此内容');
 }
+
+/** 操作者能看到的产品：未删除，且按组织角色、产品角色与 Token 范围算出的角色不为空。 */
+export async function visibleProductIds(tx: Tx, actor: Actor): Promise<Set<string>> {
+  const rows = await tx.select({ id: products.id }).from(products).where(isNull(products.deletedAt));
+  const out = new Set<string>();
+  for (const p of rows) if (await productRoleOf(tx, actor, p.id)) out.add(p.id);
+  return out;
+}

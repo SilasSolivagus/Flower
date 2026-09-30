@@ -5,7 +5,15 @@ import { iterations, structureNodes } from '../db/schema';
 import { withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 
-export type StructureNodeView = { id: string; parentId: string | null; depth: number; name: string; status: 'active' | 'deprecated'; sort: number };
+export type StructureNodeView = {
+  id: string;
+  parentId: string | null;
+  depth: number;
+  name: string;
+  description: string | null;
+  status: 'active' | 'deprecated';
+  sort: number;
+};
 export type IterationBrief = {
   id: string;
   name: string;
@@ -19,7 +27,7 @@ export async function listStructureNodes(db: Db, actor: Actor, productId: string
   return withOrg(db, actor.orgId, async (tx) => {
     await requireProductRole(tx, actor, productId, 'viewer');
     const rows = await tx.select().from(structureNodes).where(eq(structureNodes.productId, productId)).orderBy(asc(structureNodes.depth), asc(structureNodes.sort), asc(structureNodes.name));
-    return rows.map((n) => ({ id: n.id, parentId: n.parentId, depth: n.depth, name: n.name, status: n.status, sort: n.sort }));
+    return rows.map((n) => ({ id: n.id, parentId: n.parentId, depth: n.depth, name: n.name, description: n.description, status: n.status, sort: n.sort }));
   });
 }
 
