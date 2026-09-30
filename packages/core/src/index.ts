@@ -41,3 +41,4 @@ export * from './requirements/blockers';
 export * from './requirements/relations';
 export * from './structure/nodes';
 export * from './tasks/schedule';
+export * from './tasks/tasks';

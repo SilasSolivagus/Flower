@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { atLeast, isOrgAdmin, productRoleOf, requireOrgAdmin, requireProductRole, visibleProductIds } from '../access/permissions';
 import { assertIsoDate } from '../dates';
 import type { Db } from '../db/client';
-import { blockers, type IterationMilestone, iterationScopeSnapshots, iterations, products, releases, requirements } from '../db/schema';
+import { blockers, type IterationMilestone, iterationScopeSnapshots, iterations, products, releases, requirements, tasks } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError, pgErrorCode } from '../errors';
@@ -94,15 +94,16 @@ function isVisible(row: IterRow, visible: Set<string>): boolean {
   return row.type === 'special' ? visible.size > 0 : visible.has(row.productId!);
 }
 
-async function loadIteration(tx: Tx, id: string, lock = false): Promise<IterRow> {
+/** 读取迭代；`lock` 为 'share' 或 'update' 时对该行加对应的行锁。任务写操作（tasks.ts）复用本函数，不另建加锁函数。 */
+export async function loadIteration(tx: Tx, id: string, lock?: 'share' | 'update'): Promise<IterRow> {
   const where = and(eq(iterations.id, id), isNull(iterations.deletedAt));
-  const [row] = lock ? await tx.select().from(iterations).where(where).for('update') : await tx.select().from(iterations).where(where);
+  const [row] = lock ? await tx.select().from(iterations).where(where).for(lock) : await tx.select().from(iterations).where(where);
   if (!row) throw new AppError('not_found', '迭代不存在');
   return row;
 }
 
 /** 读取并确认操作者能看到该迭代；看不到时与不存在一样返回 404。 */
-async function loadVisibleIteration(tx: Tx, id: string, visible: Set<string>, lock = false): Promise<IterRow> {
+async function loadVisibleIteration(tx: Tx, id: string, visible: Set<string>, lock?: 'share' | 'update'): Promise<IterRow> {
   const row = await loadIteration(tx, id, lock);
   if (!isVisible(row, visible)) throw new AppError('not_found', '迭代不存在');
   return row;
@@ -265,7 +266,7 @@ export async function updateIteration(
 ): Promise<IterationView> {
   return withOrg(db, actor.orgId, async (tx) => {
     const visible = await visibleProductIds(tx, actor);
-    const cur = await loadVisibleIteration(tx, id, visible, true);
+    const cur = await loadVisibleIteration(tx, id, visible, 'update');
     await requireManage(tx, actor, cur);
     if (cur.status === 'done' || cur.status === 'canceled') throw new AppError('invalid', '已完成或已取消的迭代不能修改');
     const next = {
@@ -296,7 +297,7 @@ export async function updateIteration(
 export async function setIterationStatus(db: Db, actor: Actor, id: string, to: IterationStatus): Promise<IterationView> {
   return withOrg(db, actor.orgId, async (tx) => {
     const visible = await visibleProductIds(tx, actor);
-    const cur = await loadVisibleIteration(tx, id, visible, true);
+    const cur = await loadVisibleIteration(tx, id, visible, 'update');
     await requireManage(tx, actor, cur);
     if (!NEXT_STATUS[cur.status].includes(to)) {
       throw new AppError('invalid', `不能从「${ITERATION_STATUS_LABELS[cur.status]}」变为「${ITERATION_STATUS_LABELS[to] ?? to}」`);
@@ -339,7 +340,7 @@ export async function setIterationStatus(db: Db, actor: Actor, id: string, to: I
 export async function deleteIteration(db: Db, actor: Actor, id: string): Promise<void> {
   return withOrg(db, actor.orgId, async (tx) => {
     const visible = await visibleProductIds(tx, actor);
-    const cur = await loadVisibleIteration(tx, id, visible, true);
+    const cur = await loadVisibleIteration(tx, id, visible, 'update');
     await requireManage(tx, actor, cur);
     if (cur.status !== 'planning') throw new AppError('invalid', '只能删除规划中的迭代');
     const [reqCount] = await tx
@@ -347,6 +348,8 @@ export async function deleteIteration(db: Db, actor: Actor, id: string): Promise
       .from(requirements)
       .where(and(eq(requirements.iterationId, id), isNull(requirements.deletedAt)));
     if (reqCount!.n > 0) throw new AppError('invalid', '迭代中还有需求，请先移出');
+    const [taskCount] = await tx.select({ n: sql<number>`count(*)::int` }).from(tasks).where(eq(tasks.iterationId, id));
+    if (taskCount!.n > 0) throw new AppError('invalid', '迭代中还有任务，请先删除');
     const [relCount] = await tx.select({ n: sql<number>`count(*)::int` }).from(releases).where(eq(releases.iterationId, id));
     if (relCount!.n > 0) throw new AppError('invalid', '迭代下还有发布版本，请先改到其他迭代');
     await tx.update(iterations).set({ deletedAt: new Date() }).where(eq(iterations.id, id));
