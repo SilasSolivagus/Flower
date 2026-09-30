@@ -1,4 +1,4 @@
-import { type CheckState, DEFAULT_FUNCTION_TAGS, type WorkflowBody } from '@flower/core';
+import { type CheckState, DEFAULT_FUNCTION_TAGS, type TaskFlag, type WorkflowBody } from '@flower/core';
 
 export const V1_STATES: WorkflowBody['states'] = [
   { key: 'collect', label: '收集', color: '#94a3b8', order: 1, group: '分析', category: 'backlog' },
@@ -99,6 +99,17 @@ export const PUSH_VERSION_STATUS: Record<string, 'planning' | 'active' | 'done'>
 export const ITERATION_LOG_LABEL: Record<string, string> = { note: '备注', risk: '风险', change: '变更', removed: '移出' };
 export const SUBTASK_STATUS: Record<string, 'todo' | 'doing' | 'done'> = { todo: 'todo', doing: 'doing', 'in-progress': 'doing', done: 'done' };
 export const BLOCKER_STATUS: Record<string, 'active' | 'resolved'> = { active: 'active', resolved: 'resolved' };
+
+/** push 甘特任务的标记。push 界面只提供「正常」「关注」；「延期」是旧取值，延期由延期天数表示，不再作为标记。 */
+export const GANTT_FLAG: Record<string, TaskFlag | null> = { '': null, 正常: null, 关注: 'attention', 延期: null };
+
+/** push 甘特任务的手动进度：概览覆盖值（≥ 0）优先，其次是数字形式的实际状态；都没有时为 null（按工期推算）。 */
+export function ganttProgressOverride(ovProgress: number | null, actualStatus: string | null): number | null {
+  if (ovProgress !== null && ovProgress >= 0) return Math.min(100, Math.round(ovProgress));
+  const s = actualStatus?.trim();
+  if (!s || Number.isNaN(Number(s))) return null;
+  return Math.min(100, Math.max(0, Math.round(Number(s))));
+}
 
 export const DEFAULT_PLATFORM_OPTIONS = [
   { key: 'pc', label: 'PC客户端' },

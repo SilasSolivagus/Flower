@@ -105,7 +105,8 @@ describe('导入计划：需求', () => {
     const byTitle = (t: string) => rows.tasks.find((x) => x.title === t)!;
     expect(byTitle('接口联调')).toMatchObject({ requirementId: req(1).id, status: 'todo', assigneeMemberId: member('王五') });
     expect(byTitle('前端开发')).toMatchObject({ requirementId: req(1).id, status: 'done', planStart: '2026-03-02', planDays: 5 });
-    expect(byTitle('专项设计')).toMatchObject({ requirementId: null, status: 'doing', starred: true, flag: '关注' });
+    expect(byTitle('专项设计')).toMatchObject({ requirementId: null, status: 'doing', starred: true, flag: 'attention' });
+    expect(byTitle('前端开发')).toMatchObject({ flag: null });
   });
 
   it('审计事件：123plane 动态与 push 变更记录', () => {
@@ -265,5 +266,43 @@ describe('导入计划：需求（修复回归）', () => {
     );
     const req3 = p.rows.requirements.find((r) => r.legacyKey === 'X003')!;
     expect(req3.iterationId).toBeNull();
+  });
+
+  it('甘特任务：标记与手动进度按 push 的取值映射', () => {
+    const data = makeLegacyData();
+    const base = {
+      requirement_id: null, version_id: 'it0316', assignee: null, phase: null, plan_start: '2026-03-02', plan_days: 1, delay_days: 0,
+      note: '', created_at: null, alias: null, starred: null, ov_assignee: null, ov_status: null, manual: 0,
+    };
+    data.push.ganttTasks.push(
+      { ...base, id: 10, title: '正常任务', flag: '正常', actual_status: '', ov_progress: -1 },
+      { ...base, id: 11, title: '旧延期标记', flag: '延期', actual_status: '', ov_progress: null },
+      { ...base, id: 12, title: '概览覆盖', flag: '关注', actual_status: '35', ov_progress: 60 },
+      { ...base, id: 13, title: '实际进度', flag: '', actual_status: '35', ov_progress: -1 },
+      { ...base, id: 14, title: '实际完成', flag: '正常', actual_status: '已完成', ov_progress: null, plan_start: '2099-01-01' },
+    );
+    const p = buildImportPlan(data, reviewedMapping(), OPTS);
+    const byTitle = (title: string) => p.rows.tasks.find((x) => x.title === title)!;
+    expect(byTitle('正常任务').flag).toBeNull();
+    expect(byTitle('正常任务').meta).not.toHaveProperty('progress');
+    expect(byTitle('旧延期标记').flag).toBeNull();
+    expect(byTitle('概览覆盖')).toMatchObject({ flag: 'attention', meta: expect.objectContaining({ progress: 60, ovProgress: 60 }) });
+    expect(byTitle('实际进度').meta).toMatchObject({ progress: 35 });
+    expect(byTitle('实际完成')).toMatchObject({ status: 'done' });
+    expect(p.report.problems.filter((m) => m.includes('甘特任务标记'))).toEqual([]);
+  });
+
+  it('甘特任务的未知标记会阻止写入', () => {
+    const data = makeLegacyData();
+    data.push.ganttTasks[0]!.flag = '神秘';
+    const p = buildImportPlan(data, reviewedMapping(), OPTS);
+    expect(p.report.problems).toContain('push 甘特任务标记「神秘」没有对应规则');
+  });
+
+  it('甘特任务标记「constructor」不会被当成原型属性命中，仍会报告问题', () => {
+    const data = makeLegacyData();
+    data.push.ganttTasks[0]!.flag = 'constructor';
+    const p = buildImportPlan(data, reviewedMapping(), OPTS);
+    expect(p.report.problems).toContain('push 甘特任务标记「constructor」没有对应规则');
   });
 });
