@@ -8,7 +8,7 @@ import { createRequirement } from '../src/requirements/requirements';
 import { setCheckItemState, signCheckItem } from '../src/requirements/transitions';
 import { listReviewQueue } from '../src/reviews/queue';
 import { listFunctionTags } from '../src/tenancy/function-tags';
-import { setMemberFunctionTags } from '../src/tenancy/members';
+import { setMemberFunctionTags, updateMember } from '../src/tenancy/members';
 import { createProduct, setProductRole } from '../src/tenancy/products';
 import { createTestDb } from './db';
 import { asMember, readOnlyToken, reviewWorkflow, seedInstance } from './factories';
@@ -116,6 +116,24 @@ describe('评审队列', () => {
     expect(await waitingKeys(designer)).toEqual(['PAN-6', 'PAN-3']);
     // 设计师丙：同样持有设计标签，但 PAN-6 分配给了别人；PAN-7 分配给了他，但评审没开始，也不推
     expect(await waitingKeys(other)).toEqual(['PAN-3']);
+  });
+
+  it('分配给不持有标签的成员，或分配给离职成员：视同没有有效分配，回退为推给全部持有者', async () => {
+    // PAN-8：设计分配给老板乙，但老板乙没有设计标签
+    const noTag = await createRequirement(t.db, owner, pan, { title: '分配给不持有标签成员的需求' });
+    await setCheckItemState(t.db, owner, noTag.id, 'feasibility', { state: 'passed' });
+    await assignDesigner(noTag.id, boss.memberId);
+
+    // PAN-9：设计分配给设计师戊，但她已离职
+    const former = await asMember(t.db, owner, '设计师戊');
+    await setMemberFunctionTags(t.db, owner, former.memberId, [designTag]);
+    const left = await createRequirement(t.db, owner, pan, { title: '分配给离职成员的需求' });
+    await setCheckItemState(t.db, owner, left.id, 'feasibility', { state: 'passed' });
+    await assignDesigner(left.id, former.memberId);
+    await updateMember(t.db, owner, former.memberId, { status: 'left' });
+
+    const keys = await waitingKeys(designer);
+    expect(keys).toEqual(expect.arrayContaining([noTag.displayKey, left.displayKey]));
   });
 
   it('只读 Token 可以查看但没有待签；看不到产品返回 404；流程没有检查项时返回空表', async () => {

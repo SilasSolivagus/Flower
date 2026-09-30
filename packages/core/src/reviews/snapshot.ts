@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { checkItemResults, checkItemSignoffs, memberFunctionTags, requirementAssignments } from '../db/schema';
+import { checkItemResults, checkItemSignoffs, memberFunctionTags, members, requirementAssignments } from '../db/schema';
 import type { Tx } from '../db/tx';
 import type { WorkflowBody } from '../definitions/workflow-schema';
 import type { Actor, ProductRole } from '../domain-types';
@@ -47,11 +47,17 @@ export async function checkSnapshots(tx: Tx, body: WorkflowBody, requirementIds:
     list.push({ signerRuleIndex: s.signerRuleIndex, decision: s.decision, at: s.at });
     byResult.set(s.resultId, list);
   }
+  // 只把在职、且当前持有该标签的被分配人计入 assignees；否则 waitingRules 视同没有有效分配，回退为推给全部持有者。
   const assignmentRows = requirementIds.length
     ? await tx
         .select({ requirementId: requirementAssignments.requirementId, memberId: requirementAssignments.memberId, tagId: requirementAssignments.functionTagId })
         .from(requirementAssignments)
-        .where(inArray(requirementAssignments.requirementId, requirementIds))
+        .innerJoin(members, eq(members.id, requirementAssignments.memberId))
+        .innerJoin(
+          memberFunctionTags,
+          and(eq(memberFunctionTags.memberId, requirementAssignments.memberId), eq(memberFunctionTags.tagId, requirementAssignments.functionTagId)),
+        )
+        .where(and(inArray(requirementAssignments.requirementId, requirementIds), eq(members.status, 'active')))
     : [];
   const assigneesByRequirement = new Map<string, Map<string, Set<string>>>();
   for (const a of assignmentRows) {
