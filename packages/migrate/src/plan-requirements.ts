@@ -5,6 +5,8 @@ import type { PlanContext } from './plan-types';
 import {
   BLOCKER_STATUS,
   FEASIBILITY_TO_CHECK,
+  GANTT_FLAG,
+  ganttProgressOverride,
   ITERATION_LOG_LABEL,
   LINE_OPTIONS,
   planeStatusToState,
@@ -441,7 +443,11 @@ export function buildRequirements(ctx: PlanContext): void {
     const it = g.version_id?.trim() ? resolver.iteration('push', g.version_id) : null;
     const start = parseLegacyDate(g.plan_start);
     const end = start ? addDays(start, (g.plan_days ?? 0) + (g.delay_days ?? 0)) : null;
-    const status = !start ? 'todo' : end! <= ctx.opts.asOf ? 'done' : start <= ctx.opts.asOf ? 'doing' : 'todo';
+    const flagKey = (g.flag ?? '').trim();
+    if (!Object.hasOwn(GANTT_FLAG, flagKey)) ctx.problem(`push 甘特任务标记「${flagKey}」没有对应规则`);
+    const progress = ganttProgressOverride(g.ov_progress, g.actual_status);
+    const status =
+      g.actual_status?.trim() === '已完成' ? 'done' : !start ? 'todo' : end! <= ctx.opts.asOf ? 'done' : start <= ctx.opts.asOf ? 'doing' : 'todo';
     const createdAt = ctx.time(g.created_at);
     rows.tasks.push({
       id: ctx.id('task', `push:${g.id}`),
@@ -457,9 +463,17 @@ export function buildRequirements(ctx: PlanContext): void {
       planDays: g.plan_days,
       delayDays: g.delay_days,
       phase: g.phase,
-      flag: g.flag,
+      flag: Object.hasOwn(GANTT_FLAG, flagKey) ? GANTT_FLAG[flagKey] : null,
       starred: g.starred === null ? null : g.starred === 1,
-      meta: { note: g.note, actualStatus: g.actual_status, manual: g.manual, ovAssignee: g.ov_assignee, ovStatus: g.ov_status, ovProgress: g.ov_progress },
+      meta: {
+        note: g.note,
+        actualStatus: g.actual_status,
+        manual: g.manual,
+        ovAssignee: g.ov_assignee,
+        ovStatus: g.ov_status,
+        ovProgress: g.ov_progress,
+        ...(progress === null ? {} : { progress }),
+      },
       legacyKey: `push:${g.id}`,
       createdAt,
       updatedAt: createdAt,

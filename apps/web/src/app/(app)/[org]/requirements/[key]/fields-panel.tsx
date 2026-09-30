@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { activePeople, canListMembers } from '@/features/members/model';
 import { nodeOptions } from '@/features/structure/model';
 import { api } from '@/lib/api';
-import { requirementKeys, useApiMutation, useFields, useMembers, useNodes, useOrg } from '@/lib/queries';
+import { qk, requirementKeys, useApiMutation, useFields, useMembers, useNodes, useOrg } from '@/lib/queries';
 import type { RequirementDetail } from '@/lib/types';
 import { IterationField } from './iteration-field';
 
@@ -27,7 +27,9 @@ export function FieldsPanel({ org, requirement: r }: { org: string; requirement:
   const nodes = useNodes(org, r.productId);
   const fields = useFields(org, r.productId);
   const canEdit = r.myRole !== 'viewer';
-  const patch = useApiMutation((body: Record<string, string | null>) => api(`/orgs/${org}/requirements/${r.id}`, { method: 'PATCH', body }), { invalidate: [requirementKeys(org)] });
+  const patch = useApiMutation((body: Record<string, string | null>) => api(`/orgs/${org}/requirements/${r.id}`, { method: 'PATCH', body }), {
+    invalidate: [requirementKeys(org), qk.workbench],
+  });
   const setField = useApiMutation((v: { key: string; optionIds: string[] }) => api(`/orgs/${org}/requirements/${r.id}/fields/${v.key}`, { method: 'PUT', body: { optionIds: v.optionIds } }), {
     invalidate: [requirementKeys(org)],
   });

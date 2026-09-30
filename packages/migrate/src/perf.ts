@@ -1,4 +1,16 @@
-import { type Actor, type Db, getIterationScope, getRequirementByKey, listIterations, listRequirementComments, listRequirements } from '@flower/core';
+import {
+  type Actor,
+  type Db,
+  getIterationGantt,
+  getIterationScope,
+  getRequirementByKey,
+  getWorkbench,
+  listIterations,
+  listMemberTasks,
+  listRequirementComments,
+  listRequirements,
+  listReviewQueue,
+} from '@flower/core';
 
 export type PerfCase = { name: string; run: () => Promise<unknown> };
 
@@ -33,10 +45,18 @@ export async function buildPerfCases(db: Db, actor: Actor, productId: string): P
   const ids = sample.items.slice(0, 20).map((r) => r.id);
   let i = 0;
   let j = 0;
+  const iterationList = await listIterations(db, actor);
   // 范围对比只对已开始的迭代有意义；取其中需求最多的一个
-  const largest = (await listIterations(db, actor))
-    .filter((it) => it.status !== 'planning')
-    .sort((a, b) => b.requirementCount - a.requirementCount)[0];
+  const largest = iterationList.filter((it) => it.status !== 'planning').sort((a, b) => b.requirementCount - a.requirementCount)[0];
+  // 甘特取任务最多的迭代；人员负载取任务最多的负责人
+  let busiest: { id: string; count: number } | null = null;
+  const assigneeCount = new Map<string, number>();
+  for (const it of iterationList) {
+    const g = await getIterationGantt(db, actor, it.id);
+    if (!busiest || g.tasks.length > busiest.count) busiest = { id: it.id, count: g.tasks.length };
+    for (const t of g.tasks) if (t.assignee) assigneeCount.set(t.assignee.id, (assigneeCount.get(t.assignee.id) ?? 0) + 1);
+  }
+  const topAssignee = [...assigneeCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
   return [
     { name: '列表：默认第 1 页', run: () => listRequirements(db, actor, productId, {}) },
     { name: '列表：第 5 页', run: () => listRequirements(db, actor, productId, { page: 5 }) },
@@ -49,5 +69,13 @@ export async function buildPerfCases(db: Db, actor: Actor, productId: string): P
     { name: '评论：轮流读取', run: () => listRequirementComments(db, actor, ids[j++ % Math.max(ids.length, 1)]!) },
     { name: '迭代：列表', run: () => listIterations(db, actor) },
     { name: '迭代：范围对比（需求最多的迭代）', run: () => (largest ? getIterationScope(db, actor, largest.id) : Promise.resolve(null)) },
+    { name: '甘特：任务最多的迭代', run: () => (busiest ? getIterationGantt(db, actor, busiest.id) : Promise.resolve(null)) },
+    {
+      name: '人员负载：任务最多的人（含已结束迭代）',
+      run: () => (topAssignee ? listMemberTasks(db, actor, topAssignee, { includeFinished: true }) : Promise.resolve(null)),
+    },
+    { name: '评审队列：默认', run: () => listReviewQueue(db, actor, productId) },
+    { name: '评审队列：等我签字', run: () => listReviewQueue(db, actor, productId, { waitingForMe: true }) },
+    { name: '工作台', run: () => getWorkbench(db, actor.accountId!) },
   ];
 }

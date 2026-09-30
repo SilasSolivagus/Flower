@@ -7,7 +7,7 @@ import { type Tx, withOrg } from '../db/tx';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
-import { effectiveFields, loadRequirement } from '../requirements/context';
+import { assertPlatformOption, loadRequirement } from '../requirements/context';
 import type { OptionRef } from '../requirements/requirements';
 
 export type ReleaseView = {
@@ -38,13 +38,6 @@ function assertNotes(v: string | null | undefined): string | null {
   const n = v?.trim() || null;
   if (n && n.length > 2000) throw new AppError('invalid', '说明不超过 2000 个字符');
   return n;
-}
-
-async function assertPlatformOption(tx: Tx, productId: string, optionId: string, previous: string | null): Promise<void> {
-  const platform = (await effectiveFields(tx, productId)).get('platform');
-  const opt = platform?.options.find((o) => o.id === optionId);
-  if (!opt) throw new AppError('invalid', '平台选项不属于本产品的「平台」字段');
-  if (!opt.active && optionId !== previous) throw new AppError('invalid', `选项「${opt.label}」已停用`);
 }
 
 async function assertReleaseIteration(tx: Tx, productId: string, iterationId: string): Promise<void> {

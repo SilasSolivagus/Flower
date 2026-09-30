@@ -43,8 +43,13 @@ describe('性能测量', () => {
       '评论：轮流读取',
       '迭代：列表',
       '迭代：范围对比（需求最多的迭代）',
+      '甘特：任务最多的迭代',
+      '人员负载：任务最多的人（含已结束迭代）',
+      '评审队列：默认',
+      '评审队列：等我签字',
+      '工作台',
     ]);
     const result = await measure(cases, 2);
-    expect(result).toHaveLength(11);
+    expect(result).toHaveLength(16);
   });
 });

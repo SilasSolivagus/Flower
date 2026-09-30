@@ -10,9 +10,12 @@ import type {
   InvitationView,
   IterationBrief as CoreIterationBrief,
   IterationDetail as CoreIterationDetail,
+  IterationGantt as CoreIterationGantt,
   IterationMilestone as CoreIterationMilestone,
   IterationScope as CoreIterationScope,
   IterationView,
+  MemberTask as CoreMemberTask,
+  MemberTasks as CoreMemberTasks,
   MemberView,
   MyOrg as CoreMyOrg,
   OrgRole as CoreOrgRole,
@@ -24,9 +27,14 @@ import type {
   RequirementDetail as CoreRequirementDetail,
   RequirementList as CoreRequirementList,
   RequirementListItem as CoreRequirementListItem,
+  ReviewFilterState as CoreReviewFilterState,
+  ReviewQueue as CoreReviewQueue,
+  ReviewState as CoreReviewState,
   StructureNodeView,
+  TaskView,
   TokenScope as CoreTokenScope,
   TokenView,
+  Workbench as CoreWorkbench,
   WorkflowBody as CoreWorkflowBody,
   WorkflowDefinitionView,
   WorkflowVersionView,
@@ -74,3 +82,11 @@ export type IterationDetail = Jsonify<CoreIterationDetail>;
 export type IterationScope = Jsonify<CoreIterationScope>;
 export type Release = Jsonify<ReleaseView>;
 export type ProductMemberRole = CoreProductMemberRole;
+export type Task = Jsonify<TaskView>;
+export type IterationGantt = Jsonify<CoreIterationGantt>;
+export type MemberTask = Jsonify<CoreMemberTask>;
+export type MemberTasks = Jsonify<CoreMemberTasks>;
+export type ReviewQueue = Jsonify<CoreReviewQueue>;
+export type ReviewState = CoreReviewState;
+export type ReviewFilterState = CoreReviewFilterState;
+export type Workbench = Jsonify<CoreWorkbench>;

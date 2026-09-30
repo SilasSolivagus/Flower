@@ -39,6 +39,6 @@ PR 会跑 GitHub Actions CI（`.github/workflows/ci.yml`）：类型检查 + web
 - 每个写操作在同一事务内调用 `recordEvent`。
 - 服务函数一律声明为 `async`，保证权限校验失败以 Promise 拒绝的形式返回。
 - 面向用户的错误信息用中文，通过 `AppError(code, message, details?)` 抛出。
-- 页面是客户端组件，通过 `/api/v1` 取数；只允许 `import type` 引用 `@flower/core`，以及浏览器安全的 `@flower/core/workflow-schema`。
+- 页面是客户端组件，通过 `/api/v1` 取数；只允许 `import type` 引用 `@flower/core`，以及浏览器安全的 `@flower/core/workflow-schema`、`@flower/core/schedule`（这两个文件不能导入其他模块）。
 - 纯逻辑放在 `apps/web/src/features/**/model.ts` 并写 Vitest 单测；页面行为用 Playwright 覆盖，每个 spec 自己调用 `resetDatabase()`。
 - `.local-data/` 存放生产数据副本、对照表和对账报告，含员工个人信息，只在本地，不提交。迁移写入需要 `DATABASE_ADMIN_URL`；同一组织再次导入必须加 `--replace`，会先删除该组织的全部数据。

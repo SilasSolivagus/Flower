@@ -5,8 +5,10 @@ import {
   Bot,
   Box,
   Building2,
+  ClipboardCheck,
   FileText,
   Home,
+  LayoutGrid,
   List,
   RefreshCw,
   SlidersHorizontal,
@@ -18,18 +20,19 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { activeNavKey, buildNav, type NavIcon, type NavItem } from '@/features/shell/nav';
-import { ApiError } from '@/lib/api';
 import { useOrg } from '@/lib/queries';
 import { cn } from '@/lib/utils';
+import { QueryError } from './load-error';
 import { Logo } from './logo';
-import { NoAccess } from './no-access';
 import { OrgSwitcher } from './org-switcher';
 import { UserMenu } from './user-menu';
 
 const ICONS: Record<NavIcon, typeof Home> = {
   home: Home,
+  grid: LayoutGrid,
   list: List,
   cycle: RefreshCw,
+  review: ClipboardCheck,
   doc: FileText,
   users: Users,
   tag: Tag,
@@ -68,16 +71,16 @@ export function OrgShell({ children }: { children: ReactNode }) {
   const { org } = useParams<{ org: string }>();
   const pathname = usePathname();
   const q = useOrg(org);
-  if (q.error instanceof ApiError && q.error.status === 404) {
-    return <NoAccess message="组织不存在，或者你还不是这个组织的成员。" />;
+  if (!q.data) {
+    if (!q.isError) return null;
+    return <QueryError error={q.error} noAccessMessage="组织不存在，或者你还不是这个组织的成员。" retryMessage="加载组织失败，请重试。" onRetry={() => q.refetch()} />;
   }
-  if (!q.data) return null;
   const nav = buildNav(org, q.data.me.orgRole);
   const active = activeNavKey(pathname, org);
   return (
     <div className="flex min-h-screen">
       <nav aria-label="主导航" className="sticky top-0 flex h-screen w-60 shrink-0 flex-col gap-4 border-r bg-sidebar px-3 py-4">
-        <Link href="/" className="flex items-center gap-2 px-2 font-bold">
+        <Link href={`/${org}`} className="flex items-center gap-2 px-2 font-bold">
           <Logo />
           Flower
         </Link>

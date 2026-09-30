@@ -20,6 +20,48 @@
 
 ## 记录
 
+### 2026-09-30 · 云端 · 审查 P1-B2（PR #7）：四个重点均无问题，未改代码
+- 分支 / PR：`feat/p1b2-gantt-workbench`（PR #7）
+- 做了什么：按要求审查四个重点，都没有发现需要修的问题，本次只追加这条记录。
+  - **工作台跨组织读取**：
+    - 成员关系用 `listMyOrganizations`（withSystem）查找，只含在职成员、未删除的组织。
+    - 每个组织各开一个 `withOrg`，以该组织的成员身份、按可见产品读取，不在同一个 RLS 上下文里混读。
+    - `/me/workbench` 用 `requireAccount`：Bearer 认证不会设置 `account`，Token 访问返回 401，已有 API 测试覆盖。
+  - **「等我签字」**：
+    - `checkSnapshots` 只把「在职且当前持有该标签」的被分配人计入分配；`waitingRules` 有这样的人时只推给他们，否则退回全部持有者。
+    - 评审未开始的不推。
+    - 只读 Token 在评审表上没有待签，也没有代签（角色被压到 viewer）。
+    - 分配给离职成员、分配给不持有标签的成员这两种回退都有测试。
+  - **任务写路径加锁**：
+    - 新建时先锁迭代（标重点时 UPDATE，否则 SHARE），再插入任务；需求由外键在之后加锁，顺序为「迭代 → 需求」，与 B1 的规则一致。
+    - 修改只在可能新增重点时锁迭代，且在锁任务之前。
+    - 删除迭代在迭代的 UPDATE 锁下检查任务数，与新建互斥。
+    - 临时并发探针（未提交）把新建任务（含标重点）、修改任务、开始迭代、删除迭代、需求进出迭代按随机顺序并发跑了 80 轮，数据库错误 0 次。
+  - **迁移 0008 的唯一约束** `UNIQUE NULLS NOT DISTINCT (requirement_id, member_id, function_tag_id, platform_option_id)`：
+    - 需要 Postgres 15+，项目用 pg17。
+    - 现有数据不会有重复，不会让迁移失败：本 PR 之前没有新增分配的接口；导入工具按「需求 + 成员 + 平台」去重，标签固定为「开发」；B1 的平台选项迁移是一一映射。
+    - 重复分配返回 409「已经有相同的分配」，有测试。
+- 怎么验证的：core 251、web 131、migrate 63、e2e 53 全部通过；类型检查、lint（`--max-warnings 0`）通过。
+- 留给对方：
+  - 专项迭代的甘特里，`starredCount` 只统计操作者可见产品的任务；而重点上限 10 按整个迭代计算。看不到全部产品的人可能看到「还能标」却被拒绝，提示文案可以说明一下。不影响数据正确性。
+
+### 2026-09-30 · 本地 · P1-B2：甘特、人员负载、评审表与工作台
+- 分支 / PR：`feat/p1b2-gantt-workbench`
+- 做了什么：
+  - core：排期纯函数（push 的工作日进度、覆盖规则、热力图色阶、迭代概览，浏览器安全子路径 `@flower/core/schedule`）；任务新建 / 修改 / 删除（每个迭代最多 10 个重点，标重点时锁迭代防并发超限）；甘特、按需求、按人跨迭代的任务查询；按流程检查项生成的评审队列（整体评审状态、会签进度、等我签字含代签）；跨组织工作台（`listMyOrganizations` 查成员关系，逐个组织 `withOrg` 读取）。
+  - 有任务的迭代不能删除（B1 只检查需求与发布版本）。
+  - migrate：push 甘特任务的标记映射为 `attention`，手动进度写入 `meta.progress`；pan123 已重导。
+  - web：甘特页签、时间轴与团队负载、人员负载页、评审表、工作台（登录后默认页），概览页移到 `/[org]/overview`；统一加载失败状态与网络错误中文提示，修复 AuthGate 与产品设置在 5xx 时的表现、`/admin` 两个一级标题、未处理的 `mutateAsync` 拒绝。
+  - 检查项组件移到 `components/check-items.tsx`，需求详情与评审表共用。
+  - 需求分配的新增与删除（core、接口、需求详情「分配」区块）；「等我签字」按分配推给对应的人，没有有效分配（被分配人在职且持有该标签）时推给该职能标签的全部成员，且只统计评审已开始的需求；新增迁移 `0008_*.sql`，给 `requirement_assignments` 加唯一约束。
+  - 共享件：`components/load-error.tsx` 的 `QueryError`；e2e `helpers.ts` 新增 `acceptInvite`、`createMember`、`FAIL_500`、`applyReviewWorkflow`；`assertPlatformOption` 移到 `requirements/context.ts`，供 `releases.ts` 与 `assignments.ts` 两个服务共用。
+  - `docs/p1b-comparison.md`：日常操作新旧对比，列出 3 项比旧系统多几步的操作。
+- 怎么验证的：`pnpm typecheck`、`pnpm --filter @flower/web lint --max-warnings 0`、`pnpm test`（core 250、web 131、migrate 63）、完整端到端测试（53 个）、`./scripts/smoke.sh` 全部通过；真实数据性能见 `docs/p1b-validation.md`「P1-B2」第 2 节。
+- 留给对方：
+  - 用户验收与试用（`docs/p1b-validation.md`「P1-B2」第 3、4 节）。
+  - 以后新增同时锁迭代与任务的代码，保持「先迭代、后任务」的顺序。
+  - 留给后续阶段的项见 P1-B2 计划「设计决定」表最后一行。
+
 ### 2026-09-30 · 云端 · 审查 P1-B1（PR #6）：修复加入迭代与开始迭代的死锁
 - 分支 / PR：`feat/p1b1-iterations`（PR #6）
 - 做了什么：

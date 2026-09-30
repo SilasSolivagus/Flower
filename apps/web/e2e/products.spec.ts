@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { login, OWNER, setupInstance } from './helpers';
+import { createMember, login, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ page, request }) => {
   await resetDatabase();
@@ -21,7 +21,7 @@ test('新建产品，编号前缀自动转大写且创建后只读', async ({ pa
 
 test('产品详情：复制流程为产品覆盖、覆盖字段、设置层级叫法、调整成员角色', async ({ page, request }) => {
   const p = await (await request.post('/api/v1/orgs/acme/products', { data: { name: '网盘', key: 'PAN' } })).json();
-  await request.post('/api/v1/orgs/acme/members', { data: { displayName: '外部顾问' } });
+  await createMember(request, '外部顾问');
   await page.goto(`/acme/settings/products/${p.product.id}`);
 
   await page.getByRole('tab', { name: '流程' }).click();

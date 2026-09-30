@@ -37,8 +37,14 @@ export default function AdminPage() {
   if (!me.data) return null;
   return (
     <PlainShell>
-      <h1 className="text-xl font-semibold">实例设置</h1>
-      {me.data.account.isInstanceAdmin ? <Settings /> : <NoAccess message="只有实例管理员可以修改实例设置。" />}
+      {me.data.account.isInstanceAdmin ? (
+        <>
+          <h1 className="text-xl font-semibold">实例设置</h1>
+          <Settings />
+        </>
+      ) : (
+        <NoAccess message="只有实例管理员可以修改实例设置。" />
+      )}
     </PlainShell>
   );
 }

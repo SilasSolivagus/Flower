@@ -40,8 +40,13 @@ function TagsPage() {
   const remove = useApiMutation((id: string) => api(`/orgs/${org}/function-tags/${id}`, { method: 'DELETE' }), { ...inv, success: '已删除' });
 
   async function reorder(next: FunctionTag[]) {
-    for (const [i, t] of next.entries()) {
-      if (t.sort !== i) await update.mutateAsync({ id: t.id, sort: i });
+    // 逐个保存排序；某个请求失败时 useApiMutation 已提示原因，停止后续请求
+    try {
+      for (const [i, t] of next.entries()) {
+        if (t.sort !== i) await update.mutateAsync({ id: t.id, sort: i });
+      }
+    } catch {
+      return;
     }
   }
 

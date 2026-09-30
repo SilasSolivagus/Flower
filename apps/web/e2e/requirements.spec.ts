@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { createProduct, login, ok, OWNER, setupInstance } from './helpers';
+import { createMember, createProduct, FAIL_500, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -126,9 +126,9 @@ test('需求详情：加载失败（非 404）显示提示，重试后恢复', a
   await ok(request.post(`/api/v1/orgs/acme/products/${productId}/requirements`, { data: { title: '加载失败重试用例' } }));
 
   await login(page, OWNER.email, OWNER.password);
-  await page.route('**/api/v1/orgs/acme/requirements/PAN-1', (route) => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'internal', message: '服务器错误' } }) }));
+  await page.route('**/api/v1/orgs/acme/requirements/PAN-1', (route) => route.fulfill(FAIL_500));
   await page.goto('/acme/requirements/PAN-1');
-  await expect(page.getByText('加载需求失败，请重试。')).toBeVisible();
+  await expect(page.getByText('加载需求失败，请重试。')).toBeVisible({ timeout: 15_000 });
 
   await page.unroute('**/api/v1/orgs/acme/requirements/PAN-1');
   await page.getByRole('button', { name: '重试' }).click();
@@ -139,7 +139,7 @@ test('需求详情：本人签字与管理员代签', async ({ page, request }) 
   const productId = await createProduct(request);
   const members = (await (await ok(request.get('/api/v1/orgs/acme/members'))).json()).members as Array<{ id: string; displayName: string }>;
   const ownerId = members.find((m) => m.displayName === OWNER.name)!.id;
-  const designer = (await (await ok(request.post('/api/v1/orgs/acme/members', { data: { displayName: '设计师丙' } }))).json()).member.id as string;
+  const designer = await createMember(request, '设计师丙');
   const wf = await ok(
     request.post('/api/v1/orgs/acme/workflows', {
       data: {
@@ -193,7 +193,7 @@ test('需求列表：加载失败显示提示，重试后恢复', async ({ page,
 
   await login(page, OWNER.email, OWNER.password);
   const listUrl = `**/api/v1/orgs/acme/products/${productId}/requirements?*`;
-  await page.route(listUrl, (route) => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'internal', message: '服务器错误' } }) }));
+  await page.route(listUrl, (route) => route.fulfill(FAIL_500));
   await page.goto('/acme/requirements');
   await expect(page.getByText('加载需求列表失败，请重试。')).toBeVisible({ timeout: 15_000 });
 

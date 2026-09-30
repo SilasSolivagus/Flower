@@ -16,7 +16,7 @@ export function Comments({ org, requirementId }: { org: string; requirementId: s
     onSuccess: () => setBody(''),
   });
   const read = useApiMutation(() => api(`/orgs/${org}/requirements/${requirementId}/comments/read`, { method: 'POST' }), {
-    invalidate: [qk.requirementComments(org, requirementId)],
+    invalidate: [qk.requirementComments(org, requirementId), qk.workbench],
     silentError: true,
   });
   const readMutate = read.mutate;

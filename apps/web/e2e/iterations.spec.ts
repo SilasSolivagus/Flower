@@ -1,6 +1,6 @@
 import { type APIRequestContext, expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { createProduct, login, ok, OWNER, setupInstance } from './helpers';
+import { acceptInvite, createProduct, FAIL_500, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -54,19 +54,9 @@ test('迭代列表：新建常规迭代与专项，时间重叠时提示，编�
 
 test('迭代列表：产品编辑者可以创建常规迭代，但看不到专项选项', async ({ page, request, browser }) => {
   const productId = await createProduct(request);
-  const inv = await ok(request.post('/api/v1/orgs/acme/invitations', { data: { email: 'editor@example.com', orgRole: 'member' } }));
-  const { token } = (await inv.json()) as { token: string };
-
   const ctx = await browser.newContext();
   const editorPage = await ctx.newPage();
-  await editorPage.goto(`/invite/${token}`);
-  await editorPage.getByLabel('你的姓名').fill('编辑者');
-  await editorPage.getByLabel('设置密码').fill('password123');
-  await editorPage.getByRole('button', { name: '接受邀请' }).click();
-  await editorPage.waitForURL('**/acme');
-
-  const members = (await (await ok(request.get('/api/v1/orgs/acme/members'))).json()).members as Array<{ id: string; email: string | null }>;
-  const editorMemberId = members.find((m) => m.email === 'editor@example.com')!.id;
+  const editorMemberId = await acceptInvite(editorPage, request, { email: 'editor@example.com', orgRole: 'member', name: '编辑者' });
   await ok(request.put(`/api/v1/orgs/acme/products/${productId}/roles/${editorMemberId}`, { data: { role: 'editor' } }));
 
   await editorPage.goto('/acme/iterations');
@@ -87,9 +77,7 @@ test('迭代列表：产品编辑者可以创建常规迭代，但看不到专�
 
 test('迭代列表：加载失败显示重试', async ({ page }) => {
   await login(page, OWNER.email, OWNER.password);
-  await page.route('**/api/v1/orgs/acme/iterations', (route) =>
-    route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'internal', message: '服务器错误' } }) }),
-  );
+  await page.route('**/api/v1/orgs/acme/iterations', (route) => route.fulfill(FAIL_500));
   await page.goto('/acme/iterations');
   await expect(page.getByText('加载迭代失败，请重试。')).toBeVisible({ timeout: 15_000 });
   await page.unroute('**/api/v1/orgs/acme/iterations');
@@ -203,9 +191,7 @@ test('迭代详情：不存在时显示无权访问；加载失败（非 404）�
   await page.goto('/acme/iterations/00000000-0000-0000-0000-000000000000');
   await expect(page.getByRole('heading', { name: '无权访问' })).toBeVisible();
 
-  await page.route(`**/api/v1/orgs/acme/iterations/${iteration.id}`, (route) =>
-    route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { code: 'internal', message: '服务器错误' } }) }),
-  );
+  await page.route(`**/api/v1/orgs/acme/iterations/${iteration.id}`, (route) => route.fulfill(FAIL_500));
   await page.goto(`/acme/iterations/${iteration.id}`);
   await expect(page.getByText('加载迭代失败，请重试。')).toBeVisible({ timeout: 15_000 });
   await page.unroute(`**/api/v1/orgs/acme/iterations/${iteration.id}`);

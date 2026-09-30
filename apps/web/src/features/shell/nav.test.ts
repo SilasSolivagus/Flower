@@ -5,9 +5,11 @@ describe('buildNav', () => {
   it('管理员看到设置分组，未完成模块带阶段标签且没有链接', () => {
     const nav = buildNav('acme', 'admin');
     expect(nav.main.map((i) => [i.label, i.phase ?? null, i.href ?? null])).toEqual([
-      ['概览', null, '/acme'],
+      ['工作台', null, '/acme'],
+      ['概览', null, '/acme/overview'],
       ['需求', null, '/acme/requirements'],
       ['迭代', null, '/acme/iterations'],
+      ['评审', null, '/acme/reviews'],
       ['文档', 'P2', null],
     ]);
     expect(nav.settings.map((i) => i.href)).toEqual([
@@ -37,5 +39,8 @@ describe('buildNav', () => {
     expect(activeNavKey('/acme/requirements/PAN-12', 'acme')).toBe('requirements');
     expect(activeNavKey('/acme/iterations', 'acme')).toBe('iterations');
     expect(activeNavKey('/acme/iterations/abc', 'acme')).toBe('iterations');
+    expect(activeNavKey('/acme/workload', 'acme')).toBe('iterations');
+    expect(activeNavKey('/acme/reviews', 'acme')).toBe('reviews');
+    expect(activeNavKey('/acme/overview', 'acme')).toBe('overview');
   });
 });

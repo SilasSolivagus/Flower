@@ -11,10 +11,12 @@ import type {
   Iteration,
   IterationBrief,
   IterationDetail,
+  IterationGantt,
   IterationScope,
   Invitation,
   LevelNames,
   Member,
+  MemberTasks,
   MyOrg,
   Org,
   OrgMe,
@@ -24,8 +26,10 @@ import type {
   RequirementComment,
   RequirementDetail,
   RequirementList,
+  ReviewQueue,
   StructureNode,
   Token,
+  Workbench,
   WorkflowDefinition,
   WorkflowVersion,
 } from './types';
@@ -50,16 +54,22 @@ export const qk = {
   requirements: (o: string, productId: string, query: string) => ['org', o, 'requirements', 'list', productId, query] as const,
   requirement: (o: string, key: string) => ['org', o, 'requirements', 'detail', key] as const,
   requirementComments: (o: string, id: string) => ['org', o, 'requirements', 'comments', id] as const,
+  reviews: (o: string, productId: string, query: string) => ['org', o, 'requirements', 'reviews', productId, query] as const,
   nodes: (o: string, productId: string) => ['org', o, 'product', productId, 'nodes'] as const,
   iterations: (o: string, productId: string) => ['org', o, 'iterations', 'product', productId] as const,
   iterationList: (o: string) => ['org', o, 'iterations', 'list'] as const,
   iteration: (o: string, id: string) => ['org', o, 'iterations', 'detail', id] as const,
   iterationScope: (o: string, id: string) => ['org', o, 'iterations', 'scope', id] as const,
+  gantt: (o: string, id: string) => ['org', o, 'iterations', 'gantt', id] as const,
+  workbench: ['me', 'workbench'] as const,
+  memberTasks: (o: string, memberId: string, all: boolean) => ['org', o, 'tasks', 'member', memberId, all ? 'all' : 'open'] as const,
   releases: (o: string, query: string) => ['org', o, 'releases', query] as const,
 };
 
 export const useSetupStatus = () => useQuery({ queryKey: qk.setup, queryFn: () => api<InstanceStatus>('/setup/status') });
 export const useMe = () => useQuery({ queryKey: qk.me, queryFn: () => api<{ account: Account; orgs: MyOrg[] }>('/me') });
+export const useWorkbench = () =>
+  useQuery({ queryKey: qk.workbench, queryFn: () => api<{ workbench: Workbench }>('/me/workbench'), select: (d) => d.workbench });
 export const useInstanceSettings = () => useQuery({ queryKey: qk.instance, queryFn: () => api<InstanceStatus>('/instance/settings') });
 export const useOrg = (o: string) =>
   useQuery({ queryKey: qk.org(o), queryFn: () => api<{ org: Org; me: OrgMe }>(`/orgs/${o}`) });
@@ -72,8 +82,8 @@ export const useInvitations = (o: string, enabled = true) =>
     select: (d) => d.invitations,
     enabled,
   });
-export const useFunctionTags = (o: string) =>
-  useQuery({ queryKey: qk.tags(o), queryFn: () => api<{ tags: FunctionTag[] }>(`/orgs/${o}/function-tags`), select: (d) => d.tags });
+export const useFunctionTags = (o: string, enabled = true) =>
+  useQuery({ queryKey: qk.tags(o), queryFn: () => api<{ tags: FunctionTag[] }>(`/orgs/${o}/function-tags`), select: (d) => d.tags, enabled });
 export const useProducts = (o: string) =>
   useQuery({ queryKey: qk.products(o), queryFn: () => api<{ products: Product[] }>(`/orgs/${o}/products`), select: (d) => d.products });
 export const useProduct = (o: string, id: string) =>
@@ -131,6 +141,22 @@ export const useIteration = (o: string, id: string) =>
 export const useIterationScope = (o: string, id: string) =>
   useQuery({ queryKey: qk.iterationScope(o, id), queryFn: () => api<{ scope: IterationScope }>(`/orgs/${o}/iterations/${id}/scope`), select: (d) => d.scope });
 
+/** 按人查看任务的公共前缀。 */
+export const taskKeys = (o: string) => ['org', o, 'tasks'] as const;
+
+/** 任务修改后要刷新的查询：迭代（含甘特）、需求（详情里的任务）、按人任务、工作台。 */
+export const taskMutationKeys = (o: string) => [iterationKeys(o), requirementKeys(o), taskKeys(o), qk.workbench];
+
+export const useIterationGantt = (o: string, id: string) =>
+  useQuery({ queryKey: qk.gantt(o, id), queryFn: () => api<{ gantt: IterationGantt }>(`/orgs/${o}/iterations/${id}/gantt`), select: (d) => d.gantt });
+
+export const useMemberTasks = (o: string, memberId: string, all: boolean) =>
+  useQuery({
+    queryKey: qk.memberTasks(o, memberId, all),
+    queryFn: () => api<MemberTasks>(`/orgs/${o}/members/${memberId}/tasks${all ? '?all=1' : ''}`),
+    enabled: !!memberId,
+  });
+
 /** 发布版本查询的公共前缀。 */
 export const releaseKeys = (o: string) => ['org', o, 'releases'] as const;
 
@@ -158,6 +184,15 @@ export const useRequirementComments = (o: string, id: string | undefined) =>
     select: (d) => d.comments,
     enabled: !!id,
   });
+export const useReviewQueue = (o: string, productId: string | undefined, query: string) =>
+  useQuery({
+    queryKey: qk.reviews(o, productId ?? '', query),
+    queryFn: () => api<{ queue: ReviewQueue }>(`/orgs/${o}/products/${productId}/reviews?${query}`),
+    select: (d) => d.queue,
+    enabled: !!productId,
+    placeholderData: keepPreviousData,
+  });
+
 export const useNodes = (o: string, productId: string | undefined) =>
   useQuery({
     queryKey: qk.nodes(o, productId ?? ''),

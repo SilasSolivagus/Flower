@@ -45,7 +45,12 @@ export function PublishDialog({
           <Button
             disabled={pending}
             onClick={async () => {
-              await onPublish(note);
+              try {
+                await onPublish(note);
+              } catch {
+                // 失败原因由上面的 FormError（error 属性）显示，对话框保持打开
+                return;
+              }
               setOpen(false);
               setNote('');
             }}

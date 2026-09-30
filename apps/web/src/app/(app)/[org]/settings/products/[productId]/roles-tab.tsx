@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
+import { LoadError } from '@/components/load-error';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api } from '@/lib/api';
@@ -17,16 +17,7 @@ export function RolesTab({ org, productId }: { org: string; productId: string })
       api(`/orgs/${org}/products/${productId}/roles/${v.memberId}`, { method: 'PUT', body: { role: v.role } }),
     { invalidate: [qk.productMembers(org, productId), qk.members(org), qk.products(org), qk.product(org, productId)], success: '已更新' },
   );
-  if (q.isError) {
-    return (
-      <div className="flex flex-col items-center gap-3 py-12 text-center">
-        <p className="text-muted-foreground">加载成员失败，请重试。</p>
-        <Button variant="outline" onClick={() => q.refetch()}>
-          重试
-        </Button>
-      </div>
-    );
-  }
+  if (q.isError) return <LoadError message="加载成员失败，请重试。" onRetry={() => q.refetch()} />;
   return (
     <div className="overflow-hidden rounded-lg border bg-card">
       <Table>

@@ -1,0 +1,1 @@
+ALTER TABLE "requirement_assignments" ADD CONSTRAINT "requirement_assignments_unique" UNIQUE NULLS NOT DISTINCT("requirement_id","member_id","function_tag_id","platform_option_id");

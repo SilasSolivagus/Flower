@@ -8,11 +8,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { formatDateTime } from '@/features/requirements/format';
 import { api } from '@/lib/api';
 import { CHECK_STATE_LABEL } from '@/lib/labels';
-import { requirementKeys, useApiMutation } from '@/lib/queries';
+import { qk, requirementKeys, useApiMutation } from '@/lib/queries';
 import type { CheckState, RequirementDetail } from '@/lib/types';
 
 type Item = RequirementDetail['checkItems'][number];
-const STATE_STYLE: Record<CheckState, string> = {
+export const CHECK_STATE_STYLE: Record<CheckState, string> = {
   not_started: 'text-muted-foreground',
   in_progress: 'text-amber-700 dark:text-amber-400',
   passed: 'text-primary',
@@ -36,13 +36,13 @@ export function CheckItems({ org, requirement: r }: { org: string; requirement: 
   const [note, setNote] = useState('');
   const canEdit = r.myRole !== 'viewer';
   const setState = useApiMutation((v: { key: string; state: CheckState }) => api(`/orgs/${org}/requirements/${r.id}/checks/${v.key}`, { method: 'PUT', body: { state: v.state } }), {
-    invalidate: [requirementKeys(org)],
+    invalidate: [requirementKeys(org), qk.workbench],
   });
   const sign = useApiMutation(
     (v: { key: string; decision: 'passed' | 'rejected'; ruleIndex?: number; onBehalf?: boolean; note?: string }) =>
       api(`/orgs/${org}/requirements/${r.id}/checks/${v.key}/signoffs`, { method: 'POST', body: { decision: v.decision, ruleIndex: v.ruleIndex, onBehalf: v.onBehalf, note: v.note } }),
     {
-      invalidate: [requirementKeys(org)],
+      invalidate: [requirementKeys(org), qk.workbench],
       success: '已签字',
       onSuccess: () => {
         setProxy(null);
@@ -76,7 +76,7 @@ export function CheckItems({ org, requirement: r }: { org: string; requirement: 
                   </SelectContent>
                 </Select>
               ) : (
-                <span className={`text-[13px] ${STATE_STYLE[c.state]}`}>{CHECK_STATE_LABEL[c.state]}</span>
+                <span className={`text-[13px] ${CHECK_STATE_STYLE[c.state]}`}>{CHECK_STATE_LABEL[c.state]}</span>
               )}
               {c.note && <span className="truncate text-[12px] text-muted-foreground">{c.note}</span>}
             </div>

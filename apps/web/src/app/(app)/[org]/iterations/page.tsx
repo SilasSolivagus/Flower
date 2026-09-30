@@ -42,7 +42,14 @@ export default function IterationsPage() {
       <PageHeader
         title="迭代"
         description="常规迭代属于产品，同一产品内时间不重叠；专项属于组织，可以跨产品。"
-        actions={canCreate && <Button onClick={() => setDialog({ open: true, iteration: null })}>新建迭代</Button>}
+        actions={
+          <>
+            <Button variant="outline" asChild>
+              <Link href={`/${org}/workload`}>人员负载</Link>
+            </Button>
+            {canCreate && <Button onClick={() => setDialog({ open: true, iteration: null })}>新建迭代</Button>}
+          </>
+        }
       />
       {!q.data ? (
         <Skeleton className="h-40" />
