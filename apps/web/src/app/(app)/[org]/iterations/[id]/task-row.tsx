@@ -30,31 +30,34 @@ type Patch = {
 };
 const NONE = 'none';
 const COLUMN_COUNT = 9;
+/** 用非受控输入框（defaultValue + key）的字段：key 只随该字段自己的服务端值和自己的拒绝次数变化，
+ * 这样保存或拒绝一个字段不会牵连同一行里正在编辑的其他字段。 */
+type FieldKey = 'alias' | 'planStart' | 'planDays' | 'progressOverride' | 'delayDays' | 'note';
 
 /** 甘特表的一行：文本和数字输入失焦时保存（与 push 一致），下拉框选中后立即保存。 */
 export function TaskRow({ org, task: t, people }: { org: string; task: Task; people: Member[] | null }) {
-  // 输入框以服务端的值为 key：保存成功后 updatedAt 变化会重新挂载；保存失败或输入不合法时加一，恢复服务端的值
-  const [nonce, setNonce] = useState(0);
-  const reset = () => setNonce((n) => n + 1);
+  // 每个非受控输入框各自的拒绝计数：保存失败或输入不合法时该字段加一，恢复服务端的值；不影响同一行的其他字段
+  const [rejects, setRejects] = useState<Partial<Record<FieldKey, number>>>({});
+  const rejectField = (field: FieldKey) => setRejects((r) => ({ ...r, [field]: (r[field] ?? 0) + 1 }));
+  const fieldKey = (field: FieldKey, value: string | number | null) => `${field}:${value ?? ''}:${rejects[field] ?? 0}`;
   // 输入不合法时（不经过 mutation）单独保存的错误；下一次保存会清空
   const [localError, setLocalError] = useState<ApiError | null>(null);
   const invalidate = taskMutationKeys(org);
   const patch = useApiMutation((body: Patch) => api(`/orgs/${org}/tasks/${t.id}`, { method: 'PATCH', body }), { invalidate, silentError: true });
   const remove = useApiMutation(() => api(`/orgs/${org}/tasks/${t.id}`, { method: 'DELETE' }), { invalidate, success: '已删除任务' });
-  const save = (body: Patch) => {
+  const save = (body: Patch, field?: FieldKey) => {
     setLocalError(null);
-    patch.mutate(body, { onError: reset });
+    patch.mutate(body, { onError: field ? () => rejectField(field) : undefined });
   };
-  const saveNumber = (parsed: ParsedNumber, current: number | null, toPatch: (v: number | null) => Patch) => {
+  const saveNumber = (parsed: ParsedNumber, current: number | null, field: FieldKey, toPatch: (v: number | null) => Patch) => {
     if (!parsed.ok) {
       setLocalError(new ApiError(0, 'invalid', parsed.message, null));
-      reset();
+      rejectField(field);
       return;
     }
-    if (parsed.value !== current) save(toPatch(parsed.value));
+    if (parsed.value !== current) save(toPatch(parsed.value), field);
   };
   const error = localError ?? patch.error;
-  const k = `${t.updatedAt}-${nonce}`;
   const label = t.title;
   const disabled = !t.canEdit;
   // 负责人下拉：在职真人成员；当前负责人已离开时也保留在选项里
@@ -83,7 +86,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
         <TableCell className="max-w-0">
           <div className="flex min-w-0 items-center gap-2">
             <Input
-              key={`alias-${k}`}
+              key={fieldKey('alias', t.alias)}
               aria-label={`别名 ${label}`}
               defaultValue={t.alias ?? ''}
               placeholder={t.title}
@@ -92,7 +95,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
               className="h-8 w-32 shrink-0 font-medium"
               onBlur={(e) => {
                 const v = e.target.value.trim();
-                if (v !== (t.alias ?? '')) save({ alias: v || null });
+                if (v !== (t.alias ?? '')) save({ alias: v || null }, 'alias');
               }}
             />
             <div className="flex min-w-0 items-center gap-1.5 truncate text-[12px] text-muted-foreground">
@@ -143,7 +146,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
         <TableCell>
           <div className="flex gap-1.5">
             <Input
-              key={`start-${k}`}
+              key={fieldKey('planStart', t.planStart)}
               type="date"
               aria-label={`开始日期 ${label}`}
               defaultValue={t.planStart ?? ''}
@@ -151,11 +154,11 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
               className="h-8 w-36 font-mono text-[12px]"
               onBlur={(e) => {
                 const v = e.target.value || null;
-                if (v !== t.planStart) save({ planStart: v });
+                if (v !== t.planStart) save({ planStart: v }, 'planStart');
               }}
             />
             <Input
-              key={`days-${k}`}
+              key={fieldKey('planDays', t.planDays)}
               type="number"
               min={0.5}
               step={0.5}
@@ -163,14 +166,14 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
               defaultValue={t.planDays ?? ''}
               disabled={disabled}
               className="h-8 w-16"
-              onBlur={(e) => saveNumber(parseHalfDays(e.target.value, 0.5, '工期'), t.planDays, (v) => ({ planDays: v }))}
+              onBlur={(e) => saveNumber(parseHalfDays(e.target.value, 0.5, '工期'), t.planDays, 'planDays', (v) => ({ planDays: v }))}
             />
           </div>
         </TableCell>
         <TableCell>
           <div className="flex items-center gap-2">
             <Input
-              key={`progress-${k}`}
+              key={fieldKey('progressOverride', t.progressOverride)}
               type="number"
               min={0}
               max={100}
@@ -180,7 +183,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
               placeholder="自动"
               disabled={disabled}
               className="h-8 w-16"
-              onBlur={(e) => saveNumber(parseProgress(e.target.value), t.progressOverride, (v) => ({ progress: v }))}
+              onBlur={(e) => saveNumber(parseProgress(e.target.value), t.progressOverride, 'progressOverride', (v) => ({ progress: v }))}
             />
             <div
               role="progressbar"
@@ -207,7 +210,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
               </SelectContent>
             </Select>
             <Input
-              key={`delay-${k}`}
+              key={fieldKey('delayDays', t.delayDays)}
               type="number"
               min={0}
               step={0.5}
@@ -216,13 +219,13 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
               placeholder="0"
               disabled={disabled}
               className="h-8 w-16"
-              onBlur={(e) => saveNumber(parseHalfDays(e.target.value, 0, '延期'), t.delayDays, (v) => ({ delayDays: v }))}
+              onBlur={(e) => saveNumber(parseHalfDays(e.target.value, 0, '延期'), t.delayDays, 'delayDays', (v) => ({ delayDays: v }))}
             />
           </div>
         </TableCell>
         <TableCell>
           <Input
-            key={`note-${k}`}
+            key={fieldKey('note', t.note)}
             aria-label={`说明 ${label}`}
             defaultValue={t.note ?? ''}
             placeholder="卡点、周知事项"
@@ -231,7 +234,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
             className="h-8"
             onBlur={(e) => {
               const v = e.target.value.trim();
-              if (v !== (t.note ?? '')) save({ note: v || null });
+              if (v !== (t.note ?? '')) save({ note: v || null }, 'note');
             }}
           />
         </TableCell>

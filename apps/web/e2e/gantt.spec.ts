@@ -52,6 +52,29 @@ test('甘特页签：失焦保存别名与进度，标记关注后计入遗留�
   await expect(page.getByLabel('进度 联调', { exact: true })).toHaveValue('60');
 });
 
+test('甘特页签：保存一个字段时，同一行正在编辑的另一个字段不丢失', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const iterationId = await createIteration(request, productId, '迭代0105', '2026-01-05', '2026-01-16');
+  await createTask(request, { iterationId, title: '联调' });
+
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/iterations/${iterationId}?tab=gantt`);
+
+  const alias = page.getByLabel('别名 联调');
+  const note = page.getByLabel('说明 联调');
+  const aliasSaved = taskSaved(page);
+  const ganttRefetched = page.waitForResponse((r) => r.request().method() === 'GET' && r.url().includes(`/iterations/${iterationId}/gantt`));
+  await alias.fill('联调-别名');
+  // 别名失焦后触发保存；不等它完成，趁刷新还没落地就去编辑同一行的说明字段
+  await alias.blur();
+  await note.click();
+  await note.type('等前端联调完成');
+  await aliasSaved;
+  await ganttRefetched;
+  await expect(note).toHaveValue('等前端联调完成');
+  await expect(alias).toHaveValue('联调-别名');
+});
+
 test('甘特页签：每个迭代最多 10 个重点任务；新增与删除不挂需求的任务', async ({ page, request }) => {
   const productId = await createProduct(request);
   const iterationId = await createIteration(request, productId, '迭代0105', '2026-01-05', '2026-01-16');
