@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-09-30 · 本地 · e2e：resetDatabase 的 TRUNCATE 与上一用例残留请求死锁（补记 a9eda4a）
+- 分支 / PR：`feat/p1b1-iterations`，代码在 a9eda4a
+- 做了什么：全量 e2e 偶发 `requirements.spec.ts:138` 在 `beforeEach` 报 `PostgresError: deadlock detected`。Postgres 日志中 09-29、09-30 的几次死锁都是 `resetDatabase()` 的 TRUNCATE（逐表取 ACCESS EXCLUSIVE）与 webServer 上一用例残留的只读查询（`field_options`、`product_members`、`sessions`）互相等待，与签字 / 流程流转和迭代锁顺序无关。a9eda4a 让 `apps/web/e2e/db.ts` 在 40P01 时重试 TRUNCATE（最多 5 次），并用 `e2e/db.spec.ts` 构造该交错作回归测试。
+- 怎么验证的：独立脚本构造同样的环，修复前稳定报 40P01、修复后通过；`requirements.spec.ts` 8 个用例通过；lint、typecheck 通过。全量 e2e 未跑。
+- 留给对方：无
+
 ### 2026-09-30 · 本地 · P1-B1：迭代、发布版本、阻塞项与关联、结构树维护
 - 分支 / PR：`feat/p1b1-iterations`
 - 做了什么：
