@@ -48,10 +48,10 @@ function QueueTable({ org, queue }: { org: string; queue: ReviewQueue }) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-10">
+            <TableHead className="sticky left-0 z-10 w-12 bg-card">
               <span className="sr-only">展开</span>
             </TableHead>
-            <TableHead className="w-24">编号</TableHead>
+            <TableHead className="sticky left-12 z-10 w-24 bg-card">编号</TableHead>
             <TableHead>标题</TableHead>
             <TableHead className="w-24">状态</TableHead>
             <TableHead className="w-24">负责人</TableHead>
@@ -71,8 +71,8 @@ function QueueTable({ org, queue }: { org: string; queue: ReviewQueue }) {
             const waiting = waitingText(r.waiting);
             return (
               <Fragment key={r.id}>
-                <TableRow className="h-10 even:bg-zebra">
-                  <TableCell>
+                <TableRow className="group h-10 even:bg-zebra">
+                  <TableCell className="sticky left-0 z-10 bg-card group-even:bg-zebra">
                     <Button
                       variant="ghost"
                       size="icon-sm"
@@ -83,9 +83,9 @@ function QueueTable({ org, queue }: { org: string; queue: ReviewQueue }) {
                       {expanded ? <ChevronDown className="size-4" aria-hidden="true" /> : <ChevronRight className="size-4" aria-hidden="true" />}
                     </Button>
                   </TableCell>
-                  <TableCell className="font-mono text-[13px]">{r.displayKey}</TableCell>
+                  <TableCell className="sticky left-12 z-10 bg-card font-mono text-[13px] group-even:bg-zebra">{r.displayKey}</TableCell>
                   <TableCell>
-                    <Link href={`/${org}/requirements/${r.displayKey}`} className="hover:underline">
+                    <Link href={`/${org}/requirements/${r.displayKey}`} className="block max-w-80 truncate hover:underline" title={r.title}>
                       {r.title}
                     </Link>
                   </TableCell>

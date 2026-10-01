@@ -14,7 +14,7 @@ const ROW = 'flex h-10 items-center gap-3 px-4 text-[13px] hover:bg-muted';
 function Section({ title, total, shown, empty, children }: { title: string; total: number; shown: number; empty: string; children: ReactNode }) {
   const id = useId();
   return (
-    <section aria-labelledby={id} className="flex flex-col rounded-lg border bg-card">
+    <section aria-labelledby={id} className="flex min-w-0 flex-col rounded-lg border bg-card">
       <h2 id={id} className="flex items-center justify-between border-b px-4 py-2.5 font-semibold">
         {title}
         <span className="font-mono text-xs font-normal text-muted-foreground">{total}</span>
@@ -32,7 +32,7 @@ function OrgBadge({ show, name }: { show: boolean; name: string }) {
 function Sections({ data }: { data: Workbench }) {
   const badge = showOrgBadge(data.orgs);
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <Section title="我负责的需求" total={data.owned.total} shown={data.owned.items.length} empty="没有进行中的需求">
         {data.owned.items.map((r) => (
           <li key={r.id}>

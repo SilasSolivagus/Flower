@@ -46,12 +46,12 @@ export function ReleasesTab({ org, iteration: it }: { org: string; iteration: It
                 <TableHead className="w-28">基线日期</TableHead>
                 <TableHead className="w-32">状态</TableHead>
                 <TableHead className="w-16 text-right">需求</TableHead>
-                <TableHead className="w-40" />
+                <TableHead className="sticky right-0 z-10 w-40 bg-card" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {q.data.map((r) => (
-                <TableRow key={r.id} className="h-10 even:bg-zebra">
+                <TableRow key={r.id} className="group h-10 even:bg-zebra">
                   <TableCell className="font-mono">{r.versionName}</TableCell>
                   {!it.product && <TableCell className="font-mono text-[13px]">{r.productKey}</TableCell>}
                   <TableCell className="text-[13px]">{r.platform?.label ?? '—'}</TableCell>
@@ -59,7 +59,7 @@ export function ReleasesTab({ org, iteration: it }: { org: string; iteration: It
                   <TableCell className="font-mono text-[13px]">{r.baselineDate ?? '—'}</TableCell>
                   <TableCell className="text-[13px]">{releaseStatusText(r)}</TableCell>
                   <TableCell className="text-right font-mono">{r.requirementCount}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="sticky right-0 z-10 bg-card text-right group-even:bg-zebra">
                     {r.canEdit && (
                       <>
                         <Button variant="ghost" size="sm" aria-label={`编辑 ${r.versionName}`} onClick={() => setDialog({ open: true, release: r })}>
