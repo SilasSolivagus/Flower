@@ -19,7 +19,8 @@ export function ReleasesTab({ org, iteration: it }: { org: string; iteration: It
   const editable = editableIterationProducts(products.data ?? [], it);
   const q = useReleases(org, `iteration=${it.id}`);
   const [dialog, setDialog] = useState<{ open: boolean; release: Release | null }>({ open: false, release: null });
-  const [linking, setLinking] = useState<Release | null>(null);
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const linking = q.data?.find((r) => r.id === linkingId) ?? null;
   const markReleased = useApiMutation((id: string) => api(`/orgs/${org}/releases/${id}/released`, { method: 'POST' }), {
     invalidate: [releaseKeys(org), requirementKeys(org)],
     success: '已标记为已发布',
@@ -64,7 +65,7 @@ export function ReleasesTab({ org, iteration: it }: { org: string; iteration: It
                   <TableCell className="sticky right-0 z-10 bg-card text-right group-even:bg-zebra">
                     {r.canEdit && (
                       <>
-                        <Button variant="ghost" size="sm" aria-label={`关联需求 ${r.versionName}`} onClick={() => setLinking(r)}>
+                        <Button variant="ghost" size="sm" aria-label={`关联需求 ${r.versionName}`} onClick={() => setLinkingId(r.id)}>
                           关联需求
                         </Button>
                         <Button variant="ghost" size="sm" aria-label={`编辑 ${r.versionName}`} onClick={() => setDialog({ open: true, release: r })}>
@@ -93,7 +94,7 @@ export function ReleasesTab({ org, iteration: it }: { org: string; iteration: It
         </div>
       )}
       <ReleaseDialog org={org} open={dialog.open} onOpenChange={(open) => setDialog((d) => ({ ...d, open }))} iteration={it} release={dialog.release} products={editable} />
-      <LinkRequirementsDialog key={linking?.id ?? 'closed'} org={org} iteration={it} release={linking} onClose={() => setLinking(null)} />
+      <LinkRequirementsDialog key={linkingId ?? 'closed'} org={org} iteration={it} release={linking} onClose={() => setLinkingId(null)} />
     </div>
   );
 }

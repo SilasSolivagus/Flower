@@ -15,6 +15,7 @@ import type { IterationDetail, Release } from '@/lib/types';
 export function LinkRequirementsDialog({ org, iteration, release, onClose }: { org: string; iteration: IterationDetail; release: Release | null; onClose: () => void }) {
   const [picked, setPicked] = useState<string[]>([]);
   const [query, setQuery] = useState('');
+  const allCandidates = release ? linkCandidates(iteration.requirements, release, '') : [];
   const candidates = release ? linkCandidates(iteration.requirements, release, query) : [];
   const link = useApiMutation(
     () => api<{ linked: number }>(`/orgs/${org}/releases/${release!.id}/requirements`, { method: 'POST', body: { requirementIds: picked } }),
@@ -30,7 +31,9 @@ export function LinkRequirementsDialog({ org, iteration, release, onClose }: { o
         </DialogHeader>
         <Input aria-label="筛选需求" placeholder="输入编号或标题" value={query} onChange={(e) => setQuery(e.target.value)} />
         {candidates.length === 0 ? (
-          <p className="py-6 text-center text-[13px] text-muted-foreground">本迭代里没有这个产品的需求</p>
+          <p className="py-6 text-center text-[13px] text-muted-foreground">
+            {allCandidates.length === 0 ? '本迭代里没有这个产品的需求' : '没有匹配的需求'}
+          </p>
         ) : (
           <ul aria-label="本迭代的需求" className="flex max-h-80 flex-col overflow-y-auto">
             {candidates.map((c) => (

@@ -293,7 +293,19 @@ test('发布版本：在迭代的发布版本页签一次关联多条需求，�
   const dialog = page.getByRole('dialog', { name: '关联需求到 3.2.0' });
   await expect(dialog.getByRole('checkbox', { name: /PAN-3/ })).toBeDisabled();
   await expect(dialog.getByRole('checkbox', { name: /PAN-3/ })).toBeChecked();
-  await dialog.getByRole('checkbox', { name: /PAN-1/ }).check();
+
+  await dialog.getByPlaceholder('输入编号或标题').fill('不存在的需求标题');
+  await expect(dialog.getByText('没有匹配的需求')).toBeVisible();
+  await dialog.getByPlaceholder('输入编号或标题').fill('');
+
+  // 对话框仍开着时，另一处把 PAN-1 关联到同一版本；查询过期（staleTime 10s）后网络重连触发重取，对话框里的勾选状态要跟着变成已关联且禁用，而不是用打开时的旧快照。
+  await ok(request.put(`/api/v1/orgs/acme/releases/${release.id}/requirements/${reqs[0]!.id}`));
+  await page.waitForTimeout(11_000);
+  await page.context().setOffline(true);
+  await page.context().setOffline(false);
+  await expect(dialog.getByRole('checkbox', { name: /PAN-1/ })).toBeDisabled({ timeout: 15_000 });
+  await expect(dialog.getByRole('checkbox', { name: /PAN-1/ })).toBeChecked();
+
   await dialog.getByRole('checkbox', { name: /PAN-2/ }).check();
   await dialog.getByRole('button', { name: /^关联所选/ }).click();
   await expect(page.getByText('已关联需求')).toBeVisible();
