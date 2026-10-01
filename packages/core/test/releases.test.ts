@@ -176,6 +176,28 @@ describe('发布版本', () => {
     );
     expect(events).toHaveLength(2);
   });
+
+  it('并发且有重叠的两批关联都成功，或失败是中文 AppError，不是 500；每条链接只记一条事件', async () => {
+    const a = await createRequirement(t.db, owner, pan, { title: '并发关联一' });
+    const b = await createRequirement(t.db, owner, pan, { title: '并发关联二' });
+    const rel = await createRelease(t.db, editor, { productId: pan, versionName: '3.1.10', plannedDate: '2026-01-16' });
+
+    const results = await Promise.allSettled([
+      linkRequirementsToRelease(t.db, editor, rel.id, [a.id, b.id]),
+      linkRequirementsToRelease(t.db, editor, rel.id, [b.id, a.id]),
+    ]);
+    for (const r of results) {
+      if (r.status === 'rejected') expect(r.reason).toMatchObject({ code: expect.any(String), message: expect.stringMatching(/[一-龥]/) });
+    }
+
+    const v = (await listReleases(t.db, owner, { productId: pan })).find((r) => r.id === rel.id)!;
+    expect(v.requirementCount).toBe(2);
+    expect([...v.requirementIds].sort()).toEqual([a.id, b.id].sort());
+    const events = await withOrg(t.db, owner.orgId, (tx) =>
+      tx.select().from(domainEvents).where(and(eq(domainEvents.type, 'requirement.release_linked'), inArray(domainEvents.subjectId, [a.id, b.id]))),
+    );
+    expect(events).toHaveLength(2);
+  });
 });
 
 describe('平台字段按产品覆盖', () => {

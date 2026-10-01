@@ -218,7 +218,7 @@ async function assertRequirementInProduct(tx: Tx, productId: string, requirement
 
 /** 把多条需求关联到一个发布版本：已关联的跳过，每条新关联记一条事件；任一条不合法时整批不写入。 */
 export async function linkRequirementsToRelease(db: Db, actor: Actor, releaseId: string, requirementIds: string[]): Promise<{ linked: number }> {
-  const ids = [...new Set(requirementIds)];
+  const ids = [...new Set(requirementIds)].sort();
   if (ids.length === 0 || ids.length > 200) throw new AppError('invalid', '一次关联 1–200 条需求');
   return withOrg(db, actor.orgId, async (tx) => {
     const rel = await loadReleaseForEdit(tx, actor, releaseId);
