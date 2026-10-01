@@ -29,6 +29,15 @@ export function milestoneTimeline(milestones: IterationMilestone[], today: strin
   return [...milestones].sort((a, b) => a.date.localeCompare(b.date)).map((m) => ({ ...m, past: m.date < today }));
 }
 
+export const ITERATION_TABS = ['requirements', 'gantt', 'scope', 'releases'] as const;
+export type IterationTab = (typeof ITERATION_TABS)[number];
+
+/** 地址栏的 ?tab= 转成页签；不认识的值和未开始迭代的「范围对比」都回到「需求」。 */
+export function iterationTab(raw: string | null, started: boolean): IterationTab {
+  const tab = (ITERATION_TABS as readonly string[]).includes(raw ?? '') ? (raw as IterationTab) : 'requirements';
+  return tab === 'scope' && !started ? 'requirements' : tab;
+}
+
 export type IterationForm = { name: string; startDate: string; endDate: string; milestones: IterationMilestone[] };
 
 /** 前端预校验，返回第一条错误；服务端仍会完整校验。 */

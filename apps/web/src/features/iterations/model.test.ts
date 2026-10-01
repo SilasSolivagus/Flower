@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Iteration, Product } from '@/lib/types';
-import { commitmentRate, editableIterationProducts, groupIterations, iterationFormError, localToday, milestoneTimeline, STATUS_ACTIONS } from './model';
+import { commitmentRate, editableIterationProducts, groupIterations, iterationFormError, iterationTab, localToday, milestoneTimeline, STATUS_ACTIONS } from './model';
 
 const it0 = (over: Partial<Iteration>): Iteration => ({
   id: 'i',
@@ -110,5 +110,16 @@ describe('迭代状态操作与承诺完成率', () => {
     expect(commitmentRate({ committedDone: [1, 2], committedOpen: [3], removed: [4] })).toBe(50);
     expect(commitmentRate({ committedDone: [1], committedOpen: [2, 3], removed: [] })).toBe(33);
     expect(commitmentRate({ committedDone: [], committedOpen: [], removed: [] })).toBeNull();
+  });
+});
+
+describe('迭代详情页签', () => {
+  it('地址栏的 tab 转成页签；不认识的值和未开始迭代的「范围对比」回到「需求」', () => {
+    expect(iterationTab(null, true)).toBe('requirements');
+    expect(iterationTab('gantt', false)).toBe('gantt');
+    expect(iterationTab('releases', false)).toBe('releases');
+    expect(iterationTab('scope', true)).toBe('scope');
+    expect(iterationTab('scope', false)).toBe('requirements');
+    expect(iterationTab('whatever', true)).toBe('requirements');
   });
 });

@@ -1,6 +1,6 @@
 import { type APIRequestContext, expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { acceptInvite, createProduct, FAIL_500, login, ok, OWNER, setupInstance } from './helpers';
+import { acceptInvite, createIteration, createProduct, FAIL_500, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -197,6 +197,35 @@ test('迭代详情：不存在时显示无权访问；加载失败（非 404）�
   await page.unroute(`**/api/v1/orgs/acme/iterations/${iteration.id}`);
   await page.getByRole('button', { name: '重试' }).click();
   await expect(page.getByRole('heading', { name: '迭代0901' })).toBeVisible();
+});
+
+test('迭代详情：当前页签写入地址栏，刷新、离开再后退都保持；未开始的迭代没有范围对比', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const iterationId = await createIteration(request, productId, '迭代0105', '2026-01-05', '2026-01-16');
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/iterations/${iterationId}`);
+  await expect(page.getByRole('tab', { name: /^需求/ })).toHaveAttribute('aria-selected', 'true');
+
+  await page.getByRole('tab', { name: '发布版本' }).click();
+  await expect(page).toHaveURL(new RegExp(`/acme/iterations/${iterationId}\\?tab=releases$`));
+  await page.reload();
+  await expect(page.getByRole('tab', { name: '发布版本' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('button', { name: '新建发布版本' })).toBeVisible();
+
+  await page.getByRole('tab', { name: '甘特' }).click();
+  await expect(page).toHaveURL(/\?tab=gantt$/);
+  await page.getByRole('navigation', { name: '面包屑' }).getByRole('link', { name: '迭代' }).click();
+  await expect(page).toHaveURL(/\/acme\/iterations$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\?tab=gantt$/);
+  await expect(page.getByRole('tab', { name: '甘特' })).toHaveAttribute('aria-selected', 'true');
+
+  await page.getByRole('tab', { name: /^需求/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/acme/iterations/${iterationId}$`));
+
+  await page.goto(`/acme/iterations/${iterationId}?tab=scope`);
+  await expect(page.getByRole('tab', { name: /^需求/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: '范围对比' })).toHaveCount(0);
 });
 
 test('发布版本：在迭代详情新建、改计划日期（基线不变）、标记发布；在需求详情关联与解除', async ({ page, request }) => {

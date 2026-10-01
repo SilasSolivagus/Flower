@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { localToday, milestoneTimeline, STATUS_ACTIONS } from '@/features/iterations/model';
+import { iterationTab, localToday, milestoneTimeline, STATUS_ACTIONS } from '@/features/iterations/model';
 import { api } from '@/lib/api';
 import { ITERATION_STATUS_LABEL } from '@/lib/labels';
 import { iterationKeys, useApiMutation, useIteration } from '@/lib/queries';
@@ -21,8 +21,7 @@ import { ScopeTab } from './scope-tab';
 function IterationPage() {
   const { org, id } = useParams<{ org: string; id: string }>();
   const router = useRouter();
-  // 工作台里的任务链接带 ?tab=gantt，直接打开甘特页签
-  const initialTab = useSearchParams().get('tab') === 'gantt' ? 'gantt' : 'requirements';
+  const params = useSearchParams();
   const q = useIteration(org, id);
   const [today] = useState(localToday);
   const setStatus = useApiMutation((to: string) => api(`/orgs/${org}/iterations/${id}/status`, { method: 'POST', body: { to } }), {
@@ -42,6 +41,15 @@ function IterationPage() {
   const it = q.data;
   const timeline = milestoneTimeline(it.milestones, today);
   const started = it.status !== 'planning';
+  // 页签只由地址栏决定：切换时改写 ?tab=，刷新、离开再后退都回到同一个页签（工作台的任务链接带 ?tab=gantt）
+  const tab = iterationTab(params.get('tab'), started);
+  const selectTab = (next: string) => {
+    const sp = new URLSearchParams(params.toString());
+    if (next === 'requirements') sp.delete('tab');
+    else sp.set('tab', next);
+    const qs = sp.toString();
+    router.replace(`/${org}/iterations/${id}${qs ? `?${qs}` : ''}`, { scroll: false });
+  };
 
   return (
     <>
@@ -104,7 +112,7 @@ function IterationPage() {
           ))}
         </ol>
       )}
-      <Tabs defaultValue={initialTab}>
+      <Tabs value={tab} onValueChange={selectTab}>
         <TabsList>
           <TabsTrigger value="requirements">需求（{it.requirementCount}）</TabsTrigger>
           <TabsTrigger value="gantt">甘特</TabsTrigger>
