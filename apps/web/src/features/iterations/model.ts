@@ -38,6 +38,21 @@ export function iterationTab(raw: string | null, started: boolean): IterationTab
   return tab === 'scope' && !started ? 'requirements' : tab;
 }
 
+export type LinkCandidate = { id: string; displayKey: string; title: string; linked: boolean };
+
+/** 发布版本可以关联的需求：本迭代里同产品的需求，按编号或标题过滤（忽略大小写与首尾空白）；已关联的标出来。 */
+export function linkCandidates(
+  requirements: Array<{ id: string; productId: string; displayKey: string; title: string }>,
+  release: { productId: string; requirementIds: string[] },
+  query: string,
+): LinkCandidate[] {
+  const q = query.trim().toLowerCase();
+  return requirements
+    .filter((r) => r.productId === release.productId)
+    .filter((r) => !q || r.displayKey.toLowerCase().includes(q) || r.title.toLowerCase().includes(q))
+    .map((r) => ({ id: r.id, displayKey: r.displayKey, title: r.title, linked: release.requirementIds.includes(r.id) }));
+}
+
 export type IterationForm = { name: string; startDate: string; endDate: string; milestones: IterationMilestone[] };
 
 /** 前端预校验，返回第一条错误；服务端仍会完整校验。 */

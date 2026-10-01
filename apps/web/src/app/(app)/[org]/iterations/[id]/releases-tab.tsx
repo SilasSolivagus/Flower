@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { releaseStatusText } from '@/lib/labels';
 import { releaseKeys, requirementKeys, useApiMutation, useProducts, useReleases } from '@/lib/queries';
 import type { IterationDetail, Release } from '@/lib/types';
+import { LinkRequirementsDialog } from './link-requirements-dialog';
 import { ReleaseDialog } from './release-dialog';
 
 export function ReleasesTab({ org, iteration: it }: { org: string; iteration: IterationDetail }) {
@@ -18,6 +19,7 @@ export function ReleasesTab({ org, iteration: it }: { org: string; iteration: It
   const editable = editableIterationProducts(products.data ?? [], it);
   const q = useReleases(org, `iteration=${it.id}`);
   const [dialog, setDialog] = useState<{ open: boolean; release: Release | null }>({ open: false, release: null });
+  const [linking, setLinking] = useState<Release | null>(null);
   const markReleased = useApiMutation((id: string) => api(`/orgs/${org}/releases/${id}/released`, { method: 'POST' }), {
     invalidate: [releaseKeys(org), requirementKeys(org)],
     success: '已标记为已发布',
@@ -46,7 +48,7 @@ export function ReleasesTab({ org, iteration: it }: { org: string; iteration: It
                 <TableHead className="w-28">基线日期</TableHead>
                 <TableHead className="w-32">状态</TableHead>
                 <TableHead className="w-16 text-right">需求</TableHead>
-                <TableHead className="sticky right-0 z-10 w-40 bg-card" />
+                <TableHead className="sticky right-0 z-10 w-56 bg-card" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -62,6 +64,9 @@ export function ReleasesTab({ org, iteration: it }: { org: string; iteration: It
                   <TableCell className="sticky right-0 z-10 bg-card text-right group-even:bg-zebra">
                     {r.canEdit && (
                       <>
+                        <Button variant="ghost" size="sm" aria-label={`关联需求 ${r.versionName}`} onClick={() => setLinking(r)}>
+                          关联需求
+                        </Button>
                         <Button variant="ghost" size="sm" aria-label={`编辑 ${r.versionName}`} onClick={() => setDialog({ open: true, release: r })}>
                           编辑
                         </Button>
@@ -88,6 +93,7 @@ export function ReleasesTab({ org, iteration: it }: { org: string; iteration: It
         </div>
       )}
       <ReleaseDialog org={org} open={dialog.open} onOpenChange={(open) => setDialog((d) => ({ ...d, open }))} iteration={it} release={dialog.release} products={editable} />
+      <LinkRequirementsDialog key={linking?.id ?? 'closed'} org={org} iteration={it} release={linking} onClose={() => setLinking(null)} />
     </div>
   );
 }

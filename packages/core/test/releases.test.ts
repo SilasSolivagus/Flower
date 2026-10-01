@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { domainEvents, requirementAssignments } from '../src/db/schema';
 import { withOrg } from '../src/db/tx';
@@ -8,6 +8,7 @@ import { createIteration } from '../src/iterations/iterations';
 import {
   createRelease,
   linkRequirementRelease,
+  linkRequirementsToRelease,
   listReleases,
   markReleaseReleased,
   unlinkRequirementRelease,
@@ -149,6 +150,31 @@ describe('发布版本', () => {
       tx.select().from(domainEvents).where(and(eq(domainEvents.subjectId, rel.id), eq(domainEvents.type, 'release.released'))),
     );
     expect(events).toHaveLength(1);
+  });
+
+  it('批量关联：去重、跳过已关联、每条新关联记一条事件；有一条不属于本产品时整批不写入', async () => {
+    const a = await createRequirement(t.db, owner, pan, { title: '批量关联一' });
+    const b = await createRequirement(t.db, owner, pan, { title: '批量关联二' });
+    const other = await createRequirement(t.db, owner, doc, { title: '别的产品' });
+    // 计划日期取得早，按计划日期倒序时排在最后，不影响后面按产品取第一条的用例
+    const rel = await createRelease(t.db, editor, { productId: pan, versionName: '3.1.9', plannedDate: '2026-01-15' });
+    const view = async () => (await listReleases(t.db, owner, { productId: pan })).find((r) => r.id === rel.id)!;
+
+    await expect(linkRequirementsToRelease(t.db, editor, rel.id, [a.id, other.id])).rejects.toMatchObject({ code: 'invalid', message: '只能关联本产品的需求' });
+    expect(await view()).toMatchObject({ requirementCount: 0, requirementIds: [] });
+    expect(await linkRequirementsToRelease(t.db, editor, rel.id, [a.id, a.id])).toEqual({ linked: 1 });
+    expect(await linkRequirementsToRelease(t.db, editor, rel.id, [a.id, b.id])).toEqual({ linked: 1 });
+    await expect(linkRequirementsToRelease(t.db, viewer, rel.id, [a.id])).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(linkRequirementsToRelease(t.db, readToken, rel.id, [a.id])).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(linkRequirementsToRelease(t.db, editor, rel.id, [])).rejects.toMatchObject({ code: 'invalid', message: '一次关联 1–200 条需求' });
+
+    const v = await view();
+    expect(v.requirementCount).toBe(2);
+    expect([...v.requirementIds].sort()).toEqual([a.id, b.id].sort());
+    const events = await withOrg(t.db, owner.orgId, (tx) =>
+      tx.select().from(domainEvents).where(and(eq(domainEvents.type, 'requirement.release_linked'), inArray(domainEvents.subjectId, [a.id, b.id]))),
+    );
+    expect(events).toHaveLength(2);
   });
 });
 

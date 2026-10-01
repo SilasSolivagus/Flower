@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Iteration, Product } from '@/lib/types';
-import { commitmentRate, editableIterationProducts, groupIterations, iterationFormError, iterationTab, localToday, milestoneTimeline, STATUS_ACTIONS } from './model';
+import { commitmentRate, editableIterationProducts, groupIterations, iterationFormError, iterationTab, linkCandidates, localToday, milestoneTimeline, STATUS_ACTIONS } from './model';
 
 const it0 = (over: Partial<Iteration>): Iteration => ({
   id: 'i',
@@ -121,5 +121,23 @@ describe('迭代详情页签', () => {
     expect(iterationTab('scope', true)).toBe('scope');
     expect(iterationTab('scope', false)).toBe('requirements');
     expect(iterationTab('whatever', true)).toBe('requirements');
+  });
+});
+
+describe('发布版本关联需求的候选', () => {
+  const reqs = [
+    { id: 'r1', productId: 'p1', displayKey: 'PAN-1', title: '分享链接加密码' },
+    { id: 'r2', productId: 'p1', displayKey: 'PAN-2', title: '回收站恢复' },
+    { id: 'r3', productId: 'p2', displayKey: 'DOC-1', title: '文档导出' },
+  ];
+
+  it('只列本迭代里同产品的需求，按编号或标题过滤，标出已关联的', () => {
+    const release = { productId: 'p1', requirementIds: ['r2'] };
+    expect(linkCandidates(reqs, release, '')).toEqual([
+      { id: 'r1', displayKey: 'PAN-1', title: '分享链接加密码', linked: false },
+      { id: 'r2', displayKey: 'PAN-2', title: '回收站恢复', linked: true },
+    ]);
+    expect(linkCandidates(reqs, release, 'pan-2').map((c) => c.id)).toEqual(['r2']);
+    expect(linkCandidates(reqs, release, ' 分享 ').map((c) => c.id)).toEqual(['r1']);
   });
 });

@@ -139,4 +139,18 @@ describe('发布版本接口', () => {
     expect((await call(app, 'POST', `/orgs/acme/releases/${id}/released`, { session })).status).toBe(400);
     expect((await call(app, 'POST', '/orgs/acme/releases', { token: readToken, body: { productId, versionName: 'x', plannedDate: '2026-09-30' } })).status).toBe(403);
   });
+
+  it('批量关联需求到发布版本：已关联的跳过，只读 Token 被拒绝，空列表返回 400', async () => {
+    const rel = (await call(app, 'POST', '/orgs/acme/releases', { session, body: { productId, versionName: '0.9.0', plannedDate: '2026-01-15' } })).body.release;
+    const a = (await call(app, 'POST', `/orgs/acme/products/${productId}/requirements`, { session, body: { title: '批量关联一' } })).body.requirement;
+    const b = (await call(app, 'POST', `/orgs/acme/products/${productId}/requirements`, { session, body: { title: '批量关联二' } })).body.requirement;
+    const path = `/orgs/acme/releases/${rel.id}/requirements`;
+    expect((await call(app, 'POST', path, { session, body: { requirementIds: [a.id] } })).body).toEqual({ linked: 1 });
+    expect((await call(app, 'POST', path, { session, body: { requirementIds: [a.id, b.id] } })).body).toEqual({ linked: 1 });
+    const listed = (await call(app, 'GET', `/orgs/acme/releases?product=${productId}`, { session })).body.releases.find((r: { id: string }) => r.id === rel.id);
+    expect(listed.requirementCount).toBe(2);
+    expect([...listed.requirementIds].sort()).toEqual([a.id, b.id].sort());
+    expect((await call(app, 'POST', path, { token: readToken, body: { requirementIds: [a.id] } })).status).toBe(403);
+    expect((await call(app, 'POST', path, { session, body: { requirementIds: [] } })).status).toBe(400);
+  });
 });

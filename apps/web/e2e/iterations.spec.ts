@@ -1,6 +1,6 @@
 import { type APIRequestContext, expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { acceptInvite, createIteration, createProduct, FAIL_500, login, ok, OWNER, setupInstance } from './helpers';
+import { acceptInvite, createIteration, createProduct, FAIL_500, json, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -270,4 +270,36 @@ test('发布版本：在迭代详情新建、改计划日期（基线不变）�
   await expect(releases).toContainText('3.2.0');
   await releases.getByRole('button', { name: '解除 3.2.0' }).click();
   await expect(releases).toContainText('未关联');
+});
+
+test('发布版本：在迭代的发布版本页签一次关联多条需求，已关联的不能再勾', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const iterationId = await createIteration(request, productId, '迭代0801', '2026-08-01', '2026-08-14');
+  const reqs = [];
+  for (const title of ['分享链接加密码', '回收站恢复', '离线下载']) {
+    const r = await createRequirement(request, productId, title, false);
+    await ok(request.put(`/api/v1/orgs/acme/requirements/${r.id}/iteration`, { data: { iterationId } }));
+    reqs.push(r);
+  }
+  const release = (await json<{ release: { id: string } }>(request.post('/api/v1/orgs/acme/releases', { data: { productId, versionName: '3.2.0', iterationId, plannedDate: '2026-08-14' } })))
+    .release;
+  await ok(request.put(`/api/v1/orgs/acme/releases/${release.id}/requirements/${reqs[2]!.id}`));
+
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/iterations/${iterationId}?tab=releases`);
+  const row = page.getByRole('row').filter({ hasText: '3.2.0' });
+  await expect(row.getByRole('cell', { name: '1', exact: true })).toBeVisible();
+  await row.getByRole('button', { name: '关联需求 3.2.0' }).click();
+  const dialog = page.getByRole('dialog', { name: '关联需求到 3.2.0' });
+  await expect(dialog.getByRole('checkbox', { name: /PAN-3/ })).toBeDisabled();
+  await expect(dialog.getByRole('checkbox', { name: /PAN-3/ })).toBeChecked();
+  await dialog.getByRole('checkbox', { name: /PAN-1/ }).check();
+  await dialog.getByRole('checkbox', { name: /PAN-2/ }).check();
+  await dialog.getByRole('button', { name: /^关联所选/ }).click();
+  await expect(page.getByText('已关联需求')).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+  await expect(row.getByRole('cell', { name: '3', exact: true })).toBeVisible();
+
+  await page.goto(`/acme/requirements/${reqs[0]!.displayKey}`);
+  await expect(page.getByRole('region', { name: '发布版本' })).toContainText('3.2.0');
 });
