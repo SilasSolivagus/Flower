@@ -17,6 +17,24 @@ export function activePeople(members: Member[]): Member[] {
   return members.filter((m) => m.status === 'active' && m.kind === 'human');
 }
 
+export type PickerOption = { id: string; displayName: string; email?: string | null; department?: string | null };
+
+/** 成员选择框的选项：传入的成员；当前值指向不在列表里的成员（例如已离开）时追加在末尾，保证能显示出来。 */
+export function pickerOptions(people: Member[], current: { id: string; displayName: string } | null): PickerOption[] {
+  const list: PickerOption[] = people.map((p) => ({ id: p.id, displayName: p.displayName, email: p.email, department: p.department }));
+  return current && !list.some((o) => o.id === current.id) ? [...list, { id: current.id, displayName: current.displayName }] : list;
+}
+
+/** 按姓名、邮箱、部门过滤，忽略大小写与空白；姓名以关键词开头的排在前面，其余保持原顺序。 */
+export function filterPickerOptions(options: PickerOption[], query: string): PickerOption[] {
+  const norm = (s: string | null | undefined) => (s ?? '').replace(/\s+/g, '').toLowerCase();
+  const q = norm(query);
+  if (!q) return options;
+  const matched = options.filter((o) => [o.displayName, o.email, o.department].some((s) => norm(s).includes(q)));
+  const starts = (o: PickerOption) => norm(o.displayName).startsWith(q);
+  return [...matched.filter(starts), ...matched.filter((o) => !starts(o))];
+}
+
 export function filterMembers(members: Member[], f: MemberFilter): Member[] {
   const q = f.query.trim().toLowerCase();
   return members.filter((m) => {

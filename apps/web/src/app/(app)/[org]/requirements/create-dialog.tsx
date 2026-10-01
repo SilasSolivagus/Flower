@@ -3,13 +3,14 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { FormError } from '@/components/form-error';
+import { MemberPicker } from '@/components/member-picker';
 import { OptionMultiSelect } from '@/components/option-multi-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { activePeople, canListMembers } from '@/features/members/model';
+import { activePeople, canListMembers, pickerOptions } from '@/features/members/model';
 import { api } from '@/lib/api';
 import { requirementKeys, useApiMutation, useFields, useMembers, useOrg } from '@/lib/queries';
 import type { RequirementListItem } from '@/lib/types';
@@ -21,12 +22,12 @@ export function CreateRequirementDialog({ org, productId, open, onOpenChange }: 
   const orgQ = useOrg(org);
   const members = useMembers(org, canListMembers(orgQ.data?.me));
   const [title, setTitle] = useState('');
-  const [requester, setRequester] = useState(NONE);
+  const [requester, setRequester] = useState<string | null>(null);
   const [priority, setPriority] = useState(NONE);
   const [platforms, setPlatforms] = useState<string[]>([]);
   const reset = () => {
     setTitle('');
-    setRequester(NONE);
+    setRequester(null);
     setPriority(NONE);
     setPlatforms([]);
   };
@@ -36,7 +37,7 @@ export function CreateRequirementDialog({ org, productId, open, onOpenChange }: 
         method: 'POST',
         body: {
           title,
-          requesterMemberId: requester === NONE ? null : requester,
+          requesterMemberId: requester,
           fields: { ...(priority !== NONE && { priority: [priority] }), ...(platforms.length > 0 && { platform: platforms }) },
         },
       }),
@@ -74,19 +75,7 @@ export function CreateRequirementDialog({ org, productId, open, onOpenChange }: 
           {people.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <Label>提出人</Label>
-              <Select value={requester} onValueChange={setRequester}>
-                <SelectTrigger aria-label="提出人">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>不填</SelectItem>
-                  {people.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.displayName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MemberPicker label="提出人" className="w-full" noneLabel="不填" options={pickerOptions(people, null)} value={requester} onChange={setRequester} modal />
             </div>
           )}
           <div className="flex gap-4">

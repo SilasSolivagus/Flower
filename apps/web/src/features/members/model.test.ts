@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Invitation, Member } from '@/lib/types';
-import { activePeople, canListMembers, filterMembers, invitationState, memberKind } from './model';
+import { activePeople, canListMembers, filterMembers, filterPickerOptions, invitationState, memberKind, pickerOptions } from './model';
 
 const m = (over: Partial<Member>): Member => ({
   id: 'x', kind: 'human', displayName: '成员', email: null, department: null, orgRole: 'member', status: 'active',
@@ -43,6 +43,32 @@ describe('可访问成员列表', () => {
 describe('可选为负责人的成员', () => {
   it('只保留在职真人', () => {
     expect(activePeople(all).map((x) => x.id)).toEqual(['1', '2']);
+  });
+});
+
+describe('成员选择框', () => {
+  const people = activePeople(all);
+
+  it('当前值指向已离开的成员时保留在选项末尾', () => {
+    expect(pickerOptions(people, { id: '4', displayName: '沈知' }).map((o) => o.id)).toEqual(['1', '2', '4']);
+    expect(pickerOptions(people, { id: '1', displayName: '林澄' }).map((o) => o.id)).toEqual(['1', '2']);
+    expect(pickerOptions(people, null)).toEqual([
+      { id: '1', displayName: '林澄', email: 'lin@example.com', department: null },
+      { id: '2', displayName: '王总', email: null, department: '商务部' },
+    ]);
+  });
+
+  it('按姓名、邮箱、部门过滤，忽略大小写与空白；姓名以关键词开头的排在前面', () => {
+    const opts = [
+      { id: 'a', displayName: '王小林' },
+      { id: 'b', displayName: '林澄', email: 'lin@example.com' },
+      { id: 'c', displayName: '赵六', department: '林业部' },
+      { id: 'd', displayName: '钱七' },
+    ];
+    expect(filterPickerOptions(opts, '林').map((o) => o.id)).toEqual(['b', 'a', 'c']);
+    expect(filterPickerOptions(opts, ' LIN ').map((o) => o.id)).toEqual(['b']);
+    expect(filterPickerOptions(opts, '')).toHaveLength(4);
+    expect(filterPickerOptions(opts, '不存在')).toEqual([]);
   });
 });
 
