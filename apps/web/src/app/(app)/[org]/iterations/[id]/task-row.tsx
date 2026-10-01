@@ -78,7 +78,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
             <Star className={cn('size-4', t.starred ? 'fill-amber-400 text-amber-500' : 'text-muted-foreground')} aria-hidden="true" />
           </Button>
         </TableCell>
-        <TableCell className="max-w-0">
+        <TableCell className="overflow-hidden">
           <div className="flex min-w-0 items-center gap-2">
             <Input
               key={fieldKey('alias', t.alias)}
@@ -156,7 +156,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
               aria-label={`工期 ${label}`}
               defaultValue={t.planDays ?? ''}
               disabled={disabled}
-              className="h-8 w-16"
+              className="h-8 w-20"
               onBlur={(e) => saveNumber(parseHalfDays(e.target.value, 0.5, '工期'), t.planDays, 'planDays', (v) => ({ planDays: v }))}
             />
           </div>
@@ -173,7 +173,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
               defaultValue={t.progressOverride ?? ''}
               placeholder="自动"
               disabled={disabled}
-              className="h-8 w-16"
+              className="h-8 w-20"
               onBlur={(e) => saveNumber(parseProgress(e.target.value), t.progressOverride, 'progressOverride', (v) => ({ progress: v }))}
             />
             <div
@@ -209,7 +209,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
               defaultValue={t.delayDays ?? ''}
               placeholder="0"
               disabled={disabled}
-              className="h-8 w-16"
+              className="h-8 w-20"
               onBlur={(e) => saveNumber(parseHalfDays(e.target.value, 0, '延期'), t.delayDays, 'delayDays', (v) => ({ delayDays: v }))}
             />
           </div>
