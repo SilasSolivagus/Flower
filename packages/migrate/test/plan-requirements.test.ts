@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { legacyUuid } from '../src/ids';
 import { buildImportPlan } from '../src/plan';
 import type { ImportOptions } from '../src/plan-types';
 import { makeLegacyData, messyLegacyData, planeReq, reviewedMapping } from './fixtures';
@@ -331,14 +332,18 @@ describe('导入计划：一个字段写了多人、代签写法、工具账号'
     );
   });
 
-  it('多值字段每人一条：开发分配与会签签字', () => {
+  it('多值字段每人一条：开发分配与会签签字；第一人沿用原 id，重导时 id 稳定', () => {
     const x2 = byLegacyKey('X002');
     expect(rows.requirementAssignments.filter((a) => a.requirementId === x2.id).map((a) => a.memberId).sort()).toEqual([member('王五'), member('赵六')].sort());
+    const firstAssignment = rows.requirementAssignments.find((a) => a.id === legacyUuid('pan123/assignment', 'plane:d3'))!;
+    expect(firstAssignment).toMatchObject({ requirementId: x2.id, memberId: member('王五') });
     const x1 = byLegacyKey('X001');
     const design = rows.checkItemResults.find((c) => c.targetId === x1.id && c.itemKey === 'design_signoff')!;
     const rule2 = rows.checkItemSignoffs.filter((s) => s.resultId === design.id && s.signerRuleIndex === 2);
     expect(rule2.map((s) => s.signerMemberId).sort()).toEqual([member('李四'), member('张三')].sort());
     expect(new Set(rule2.map((s) => s.id)).size).toBe(2);
+    const firstSignoff = rule2.find((s) => s.id === legacyUuid('pan123/signoff', 'push:3'))!;
+    expect(firstSignoff).toMatchObject({ signerMemberId: member('张三') });
     expect(report.personSplits).toEqual(
       expect.arrayContaining([
         { raw: '王五、赵六', people: ['王五', '赵六'], singleRefs: 0, multiRefs: 1 },

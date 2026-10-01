@@ -25,5 +25,6 @@ describe('对账报告', () => {
     expect(md).toContain('| 王五、赵六 | 王五、赵六 | 0 | 1 |');
     expect(md).toMatch(/\| p_lisi \| 李四 \| [^\n]*产品经理-李四\(小李\)[^\n]*\|/);
     expect(md).toContain('| 代饶总 by 张三 | 1 |');
+    expect(md).toContain('会签栏的代签按被代签人签字、实际操作人记为代签人导入，不列入本节。');
   });
 });

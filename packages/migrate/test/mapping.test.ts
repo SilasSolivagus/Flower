@@ -70,6 +70,12 @@ describe('建议对照表', () => {
     expect(r2.people('王五、查无此人').map((p) => p.displayName)).toEqual(['王五']);
     expect([...r2.unmapped.people]).toEqual(['查无此人']);
   });
+
+  it('代签写法的实际操作人是多人写法时按人拆开，代签只计一次', () => {
+    const r3 = new Resolver(m);
+    expect(r3.people('代饶总 by 张三、李四').map((p) => p.displayName)).toEqual(['张三', '李四']);
+    expect([...r3.proxies]).toEqual([['代饶总 by 张三、李四', 1]]);
+  });
 });
 
 describe('迭代 ignore 列表', () => {

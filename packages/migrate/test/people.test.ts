@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { type PersonEntry, Resolver } from '../src/mapping';
 import { suggestMapping } from '../src/suggest';
-import { makeLegacyData, messyLegacyData } from './fixtures';
+import { makeLegacyData, messyLegacyData, planeReq } from './fixtures';
 
 describe('人员对照表：多人写法、头衔与昵称、非人员写法', () => {
   const m = suggestMapping(messyLegacyData(), null);
@@ -36,6 +36,38 @@ describe('人员对照表：多人写法、头衔与昵称、非人员写法', (
     expect(r.person('data-sync')).toMatchObject({ kind: 'agent', functionTags: [] });
     expect(r.person('model-v4-flash')).toMatchObject({ kind: 'agent', functionTags: [] });
     expect(r.person('张三')?.kind).toBe('human');
+  });
+
+  it('suggest 对自身输出再运行一次，people 与第一次相同（幂等）', () => {
+    const data = messyLegacyData();
+    const first = suggestMapping(data, null);
+    const second = suggestMapping(data, first);
+    expect(second.people).toEqual(first.people);
+  });
+
+  it('两字短名同时匹配两个三字姓名的后两字时不合并', () => {
+    const data = messyLegacyData();
+    data.plane.requirements.push(planeReq({ id: 'X099', title: '另一个候选', owner: '王小雨', created_at: '2026-03-08T08:00:00Z' }));
+    const m2 = suggestMapping(data, null);
+    const r2 = new Resolver(m2);
+    expect(r2.person('小雨')?.displayName).toBe('小雨');
+    expect(r2.person('周小雨')?.displayName).toBe('周小雨');
+    expect(r2.person('王小雨')?.displayName).toBe('王小雨');
+  });
+});
+
+describe('人员对照表：多人写法与代签写法别名混合的旧条目', () => {
+  it('旧版对照表里一个条目同时有多人写法别名和代签写法别名时整条删除', () => {
+    const entry: PersonEntry = {
+      key: 'p_old_mixed', displayName: '混合条目', email: null, orgRole: 'member', productRole: null,
+      functionTags: [], aliases: ['王五、赵六', '代饶总 by 张三'], mentions: 2,
+    };
+    const old = suggestMapping(makeLegacyData(), null);
+    old.people.people.push(entry);
+
+    const m = suggestMapping(messyLegacyData(), old);
+    const keys = m.people.people.map((p) => p.key);
+    expect(keys).not.toContain('p_old_mixed');
   });
 });
 

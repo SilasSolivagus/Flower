@@ -58,6 +58,8 @@ export function renderReport(r: ReconReport): string {
     table(['key', '名称', '其他写法'], r.personMerges.map((x) => [x.key, x.displayName, x.variants.join('、')])),
     '### 代签写法（按实际操作人导入）',
     '',
+    '会签栏的代签按被代签人签字、实际操作人记为代签人导入，不列入本节。',
+    '',
     table(['原写法', '次数'], r.proxies.map((x) => [x.raw, x.refs])),
     '## 跳过的数据',
     '',
