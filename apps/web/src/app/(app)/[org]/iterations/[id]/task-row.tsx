@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { ConfirmAction } from '@/components/confirm-action';
 import { FormError } from '@/components/form-error';
+import { MemberPicker } from '@/components/member-picker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { type ParsedNumber, parseHalfDays, parseProgress } from '@/features/gantt/model';
+import { pickerOptions } from '@/features/members/model';
 import { ApiError, api } from '@/lib/api';
 import { TASK_FLAG_LABEL, TASK_STATUS_LABEL } from '@/lib/labels';
 import { taskMutationKeys, useApiMutation } from '@/lib/queries';
@@ -60,13 +62,6 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
   const error = localError ?? patch.error;
   const label = t.title;
   const disabled = !t.canEdit;
-  // 负责人下拉：在职真人成员；当前负责人已离开时也保留在选项里
-  const options = people
-    ? [
-        ...people.map((p) => ({ id: p.id, displayName: p.displayName })),
-        ...(t.assignee && !people.some((p) => p.id === t.assignee!.id) ? [t.assignee] : []),
-      ]
-    : null;
 
   return (
     <>
@@ -111,20 +106,16 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
           </div>
         </TableCell>
         <TableCell>
-          {options ? (
-            <Select value={t.assignee?.id ?? NONE} disabled={disabled} onValueChange={(v) => save({ assigneeMemberId: v === NONE ? null : v })}>
-              <SelectTrigger className="h-8 w-full" aria-label={`负责人 ${label}`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>未指派</SelectItem>
-                {options.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.displayName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {people ? (
+            <MemberPicker
+              label={`负责人 ${label}`}
+              className="h-8 w-full"
+              noneLabel="未指派"
+              options={pickerOptions(people, t.assignee)}
+              value={t.assignee?.id ?? null}
+              disabled={disabled}
+              onChange={(id) => save({ assigneeMemberId: id })}
+            />
           ) : (
             <span className="text-[13px]">{t.assignee?.displayName ?? '未指派'}</span>
           )}

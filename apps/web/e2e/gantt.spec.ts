@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { createIteration, createProduct, createRequirement, createTask, FAIL_500, login, OWNER, setupInstance } from './helpers';
+import { createIteration, createMember, createProduct, createRequirement, createTask, FAIL_500, login, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -73,6 +73,27 @@ test('甘特页签：保存一个字段时，同一行正在编辑的另一个�
   await ganttRefetched;
   await expect(note).toHaveValue('等前端联调完成');
   await expect(alias).toHaveValue('联调-别名');
+});
+
+test('甘特页签：任务负责人用搜索选择', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const iterationId = await createIteration(request, productId, '迭代0105', '2026-01-05', '2026-01-16');
+  await createTask(request, { iterationId, title: '联调' });
+  for (let i = 1; i <= 20; i++) await createMember(request, `开发${String(i).padStart(2, '0')}`);
+  await createMember(request, '测试丙');
+
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/iterations/${iterationId}?tab=gantt`);
+  const assignee = page.getByRole('combobox', { name: '负责人 联调' });
+  await expect(assignee).toHaveText('未指派');
+  await assignee.click();
+  await page.getByRole('textbox', { name: '搜索负责人 联调' }).fill('测试');
+  const saved = taskSaved(page);
+  await page.getByRole('option', { name: '测试丙' }).click();
+  expect((await saved).ok()).toBeTruthy();
+  await expect(assignee).toHaveText('测试丙');
+  await page.reload();
+  await expect(page.getByRole('combobox', { name: '负责人 联调' })).toHaveText('测试丙');
 });
 
 test('甘特页签：每个迭代最多 10 个重点任务；新增与删除不挂需求的任务', async ({ page, request }) => {

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { createMember, createProduct, createRequirement, login, OWNER, setupInstance } from './helpers';
+import { createMember, createProduct, createRequirement, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -77,4 +77,22 @@ test('新建需求与阻塞项：提出人、阻塞项负责人用搜索选择',
   await expect(page.getByText('已创建 PAN-2')).toBeVisible();
   await page.goto('/acme/requirements/PAN-2');
   await expect(page.getByRole('region', { name: '属性' }).getByRole('combobox', { name: '提出人', exact: true })).toHaveText('客户甲');
+});
+
+test('需求列表：负责人筛选可以搜索', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const designer = await createMember(request, '设计师甲');
+  for (let i = 1; i <= 12; i++) await createMember(request, `成员${String(i).padStart(2, '0')}`);
+  await ok(request.post(`/api/v1/orgs/acme/products/${productId}/requirements`, { data: { title: '设计师负责的需求', ownerMemberId: designer } }));
+  await createRequirement(request, productId, '没人负责的需求');
+
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto('/acme/requirements');
+  await expect(page.getByText('没人负责的需求')).toBeVisible();
+  await page.getByRole('combobox', { name: '负责人', exact: true }).click();
+  await page.getByRole('textbox', { name: '搜索负责人' }).fill('设计');
+  await page.getByRole('option', { name: '设计师甲' }).click();
+  await expect(page.getByText('设计师负责的需求')).toBeVisible();
+  await expect(page.getByText('没人负责的需求')).toHaveCount(0);
+  await expect(page).toHaveURL(/owner=/);
 });
