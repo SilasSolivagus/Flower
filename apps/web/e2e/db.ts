@@ -5,7 +5,12 @@ import postgres from 'postgres';
 const ADMIN = 'postgres://flower_admin:flower_admin@localhost:54329';
 export const E2E_DB = 'flower_e2e';
 export const E2E_APP_PASSWORD = 'flower_app_test';
-export const E2E_APP_URL = `postgres://flower_app:${E2E_APP_PASSWORD}@localhost:54329/${E2E_DB}`;
+/**
+ * 应用连接用 IP 而不是 localhost：next dev 启动后会解析 telemetry.nextjs.org 等外部域名，
+ * DNS 不通时每次 getaddrinfo 占住 libuv 线程池的一个线程约 30 秒。连接池新建连接时解析
+ * localhost 要排在它们后面，第一个需要第二条连接的请求就会挂起到超时。
+ */
+export const E2E_APP_URL = `postgres://flower_app:${E2E_APP_PASSWORD}@127.0.0.1:54329/${E2E_DB}`;
 const REPO = path.resolve(__dirname, '../../..');
 
 /** 删除并重建 flower_e2e，再用 core 的迁移 CLI 迁移。仅在 global-setup 中、任何 spec 触碰服务端之前调用一次。 */
