@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./workflow-schema": "./src/definitions/workflow-schema.ts",
     "./schedule": "./src/tasks/schedule.ts",
+    "./markdown": "./src/documents/markdown.ts",
     "./testing": "./test/db.ts",
     "./testing/factories": "./test/factories.ts",
     "./testing/global-setup": "./test/global-setup.ts"
@@ -19,6 +20,7 @@
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.1",
+    "diff": "9.0.0",
     "drizzle-orm": "^0.45.3",
     "postgres": "^3.4.9",
     "uuidv7": "^1.2.1",
