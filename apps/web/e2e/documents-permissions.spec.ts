@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { acceptInvite, createDocument, createProduct, json, login, ok, OWNER, PNG_1PX_BASE64, presetTemplateId, readToken, setupInstance } from './helpers';
+import { acceptInvite, createDocument, createProduct, expectNoPageOverflow, FAIL_500, json, login, ok, OWNER, PNG_1PX_BASE64, presetTemplateId, readToken, setupInstance } from './helpers';
 
 const PNG = Buffer.from(PNG_1PX_BASE64, 'base64');
 
@@ -90,4 +90,23 @@ test('文档模板：组织管理员维护模板与必填小节，提交评审�
   await productDialog.getByRole('button', { name: '保存模板' }).click();
   await expect(member.getByRole('tabpanel').getByRole('row', { name: /轻量 PRD/ })).toBeVisible();
   await ctx.close();
+});
+
+test('文档模板设置页：1440 与 760 宽度下不横向滚动，关键控件在视口内；加载失败显示重试', async ({ page, request }) => {
+  await createProduct(request);
+  await login(page, OWNER.email, OWNER.password);
+  for (const width of [1440, 760]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/acme/settings/templates');
+    await expect(page.getByRole('button', { name: '新建模板' })).toBeInViewport({ ratio: 1 });
+    await expectNoPageOverflow(page);
+  }
+
+  const listUrl = '**/api/v1/orgs/acme/templates*';
+  await page.route(listUrl, (route) => route.fulfill(FAIL_500));
+  await page.goto('/acme/settings/templates');
+  await expect(page.getByText('加载模板失败，请重试。')).toBeVisible({ timeout: 15_000 });
+  await page.unroute(listUrl);
+  await page.getByRole('button', { name: '重试' }).click();
+  await expect(page.getByRole('button', { name: '新建模板' })).toBeVisible();
 });

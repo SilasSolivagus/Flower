@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { applyReviewWorkflow, createMember, createProduct, createRequirement, login, ok, OWNER, setupInstance } from './helpers';
+import { applyPrdWorkflow, applyReviewWorkflow, createDocument, createMember, createProduct, createRequirement, expectNoPageOverflow, FAIL_500, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -46,4 +46,28 @@ test('评审表：流程没有检查项时给出提示', async ({ page, request 
   await login(page, OWNER.email, OWNER.password);
   await page.goto('/acme/reviews');
   await expect(page.getByText('这个产品的流程没有配置检查项')).toBeVisible();
+});
+
+test('PRD 评审表：1440 与 760 宽度下不横向滚动，关键内容在视口内；加载失败显示重试', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  await applyPrdWorkflow(request, productId);
+  const doc = await createDocument(request, productId, { title: '分片上传', externalUrl: 'https://doc.weixin.qq.com/doc/w3_SP' });
+  await ok(request.post(`/api/v1/orgs/acme/documents/${doc.id}/transitions`, { data: { to: 'review' } }));
+  await login(page, OWNER.email, OWNER.password);
+
+  for (const width of [1440, 760]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/acme/reviews');
+    const section = page.getByRole('region', { name: 'PRD 评审' });
+    await expect(section.getByRole('row', { name: new RegExp(doc.displayKey) })).toBeInViewport({ ratio: 1 });
+    await expectNoPageOverflow(page);
+  }
+
+  const queueUrl = `**/api/v1/orgs/acme/products/${productId}/document-reviews`;
+  await page.route(queueUrl, (route) => route.fulfill(FAIL_500));
+  await page.goto('/acme/reviews');
+  await expect(page.getByText('加载 PRD 评审失败，请重试。')).toBeVisible({ timeout: 15_000 });
+  await page.unroute(queueUrl);
+  await page.getByRole('button', { name: '重试' }).click();
+  await expect(page.getByRole('region', { name: 'PRD 评审' }).getByRole('row', { name: new RegExp(doc.displayKey) })).toBeVisible();
 });
