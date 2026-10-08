@@ -26,7 +26,7 @@ PR 会跑 GitHub Actions CI（`.github/workflows/ci.yml`）：类型检查 + web
 | 重导后让测试账号重新加入组织（清单 `.local-data/test-accounts.json`：`[{"email","orgRole","functionTags"}]`，不含密码） | `pnpm --filter @flower/migrate legacy rejoin --org-slug pan123 --owner-email <你的账号邮箱> --accounts "$PWD/.local-data/test-accounts.json"` |
 | 真实数据性能测量（需先导入 pan123） | `pnpm --filter @flower/migrate build && node --disable-warning=ExperimentalWarning --env-file=apps/web/.env.local packages/migrate/dist/cli.mjs perf --org-slug pan123 --owner-email <邮箱>` |
 
-首次开发：`cp .env.example apps/web/.env.local`，填入 `FLOWER_SECRET_KEY`（`openssl rand -base64 48`）。
+首次开发：`cp .env.example apps/web/.env.local`，填入 `FLOWER_SECRET_KEY`（`openssl rand -base64 48`）。PRD 图片附件默认存在 apps/web/.flower-storage/（已忽略），可用 FLOWER_STORAGE_DIR 改到别处；迁移导入时用 --storage 指向同一个目录。
 
 `pnpm test` 会把集群里 `flower_app` 角色的密码改成测试固定值 `flower_app_test`；测试跑完后、`pnpm dev` 之前先执行一次 `pnpm db:migrate` 把密码改回 `apps/web/.env.local` 里配置的值。
 

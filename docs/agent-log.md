@@ -20,33 +20,22 @@
 
 ## 记录
 
-### 2026-10-08 · 本地 · P2-A Task 15：prd 系统页面、修订、附件与评论迁移为变更 PRD
-- 分支 / PR：`feat/p2a-change-prd`
+### 2026-10-09 · 本地 · P2-A 变更 PRD
+- 分支 / PR：`feat/p2a-change-prd`，PR TBD
 - 做了什么：
-  - `packages/migrate` 读取 prd 库未删除的页面、修订、附件、评论；新增 `plan-documents.ts`，按创建时间编号生成 Flower 文档与修订，正文里的 `/api/files/…` 改为附件网址、`data:image` 内嵌图片抽成附件；评论导入为未定位；页面关联的需求写入 `change_document_id` 并按 PRD 状态改写「PRD」检查项。预置模板一并导入。
-  - 关联的需求不在导入范围内时不算问题，列入报告的「未匹配的需求关联」与「跳过的数据」。
-  - `writeImport` 写入四张新表（`current_revision_id` 分两段写），数据库提交后把附件文件写入存储；导出目录缺文件时计为缺失、不中断。`--replace` 先清空文档的当前修订再按外键顺序删除。导入后 `products.document_seq` 为最大文档编号。
-  - CLI 新增 `--uploads`、`--storage`；CLAUDE.md 导入命令同步。
-  - 评审修正：内嵌图片与旧附件文件（给了 `--uploads` 时在计划阶段读取）按 core 的 `sniffImage` 与 10 MB 上限校验，按嗅探出的类型保存；不合格、缺失或键跳出导出目录的不建附件，正文与各版修订中的引用换成「[图片未迁移]」并列入报告；写入阶段只复制计划接受的文件。
-- 怎么验证的：migrate 单测（含导入后新建 PRD 编号为最大编号 + 1、有新文档/评论/需求关联后 replace 数量回到导入时、缺附件文件不中断）；`pnpm typecheck`；`pnpm test`；pan123 真实数据 `--dry-run` 0 个问题。
-- 留给对方：附件文件尚未从服务器导出，Task 17 正式导入前需要用户同意后导出。
-
-### 2026-10-08 · 本地 · P2-A Task 14：文档模板设置、需求挂 PRD、PRD 评审表、等我签字链接
-- 分支 / PR：`feat/p2a-change-prd`
-- 做了什么：
-  - 新增 `TemplateEditor` 组件（`apps/web/src/components/template-editor.tsx`），组织设置新页 `/[org]/settings/templates` 与产品设置新页签「文档模板」共用：列出模板、必填小节、启用开关；对话框可从正文提取二级标题为小节、手动增删小节。
-  - 需求详情新增 `PrdCard`：没挂 PRD 时可新建（复用 `CreateDocumentDialog`）或按编号关联已有 PRD；挂了 PRD 时显示状态、来源，可移出。挂了 PRD 的需求详情额外渲染一份「PRD 检查项」（复用 `CheckItems`，`basePath` 指向文档的检查接口）。
-  - 评审页新增 `DocumentReviews`（PRD 评审表），产品的流程没有作用于 PRD 的检查项时不显示。
-  - 工作台「等我签字」链接：`signatureHref` 按 `documentId` 是否存在分流到需求详情或 PRD 详情，修掉 PRD 签字行点进去 404 的问题。
-  - 导航设置分组加「文档模板」入口。
-  - 所有用到的后端路由、核心类型（`TemplateSection`、`RequirementDetail.changeDocument`/`documentCheckItems`、`Workbench.signatures`）、`CheckItems` 的 `locked` 态渲染均为 Task 2–13 已完成的部分，本任务没有改动 `packages/core` 或服务端路由。
+  - 数据模型：documents、document_revisions、document_templates、attachments（RLS），products.document_seq，requirements.change_document_id 外键。
+  - Flower 内 PRD（BlockNote，自动保存与乐观锁，同一作者 5 分钟内合并修订，按小节对比与恢复，划词评论与已失效标记）与外部 PRD（链接、状态、覆盖需求、会签、评论）；三种导入；模板与必填小节；图片附件存本地卷。
+  - 「PRD」检查项改为作用于需求、跟随 PRD 状态；PRD 上的会签结果覆盖的需求共享；等我签字与 PRD 评审表包含评审中的 PRD。
+  - 迁移：prd 系统页面、修订、附件、评论；123plane 与 push 的 PRD 链接导入为外部 PRD。
 - 怎么验证的：
-  - `pnpm --filter @flower/web exec vitest run src/features`：先确认 `sectionsFromBody`、`signatureHref`、导航「文档模板」三处失败，实现后 17 files / 90 tests 全过。
-  - `pnpm --filter @flower/web typecheck`、`pnpm --filter @flower/web lint --max-warnings 0`：均无错误无警告。
-  - `pnpm test`（`pnpm db:up` 之后）：core 307、web 152、migrate 89 全过。
-  - `pnpm --filter @flower/web e2e` 全量 84 条：83 passed、1 skipped（`editor-perf.spec.ts` 的本地大文档基线测试，与本任务无关，默认跳过）；新增的 `documents-prd-flow.spec.ts`、`documents-permissions.spec.ts` 均通过。
-  - `pnpm db:migrate` 已在测试后执行，恢复 `flower_app` 密码。
-- 留给对方：无
+  - `pnpm test`：core 309、web 154、migrate 110，全部通过；typecheck 通过；web lint 0 错误 0 警告。
+  - 全量 e2e：91 passed、1 skipped（`editor-perf.spec.ts`，需要 `EDITOR_BENCH`）、0 failed，跑了两次；`./scripts/smoke.sh` 通过。
+  - 迁移对账（Task 17，2026-10-09，`--as-of 2026-09-29 --replace`，用户已确认）：prd 系统 11 份未删除页面（104 条修订、98 个附件 + 6 张内嵌图片、3 条评论、0 条需求关联）；外部 PRD 192 份（关联需求 242 条）；「PRD」检查项改写 100 条；读只读 SQL 复查与报告一致。
+  - 大文档性能复测（Task 1 基线 vs 真实数据）与 1440px / 760px 界面复验结论均见 `docs/p2a-validation.md`。
+- 留给对方：
+  - 本机 DNS 不可达时，e2e 应用的数据库连接改用 `127.0.0.1`，否则 `getaddrinfo` 会阻塞约 30 秒。
+  - 留观的非阻塞项：编辑器保存后 `setQueryData` 不比对版本号，可能多弹一次冲突提示；SVG 粘贴为 `data:` 图片保存会 400；迁移工具按姓名回退匹配成员、需求关联覆盖写入、导入中途存储错误、标题裁剪、仅统计 `merged` 的需求个数几处小问题；`setCheckItemState` 加锁未排除软删除的 PRD。
+  - P2-B 范围见计划「留给 P2-B」一行。
 
 ### 2026-10-08 · 本地 · 合并服务端成员校验（PR #9），P1 收尾
 - 分支 / PR：`docs/progress-after-p9`

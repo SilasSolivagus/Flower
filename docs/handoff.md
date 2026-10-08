@@ -1,6 +1,6 @@
 # Flower 交接文档
 
-更新：2026-09-30。新会话接手时先读这份，再读下面列出的 spec 和计划。最近谁做了什么，看 `docs/agent-log.md`。
+更新：2026-10-09。新会话接手时先读这份，再读下面列出的 spec 和计划。最近谁做了什么，看 `docs/agent-log.md`。
 
 ## 项目是什么
 
@@ -25,6 +25,9 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
 | `docs/superpowers/plans/2026-09-30-flower-p1b2-gantt-workbench.md` | P1-B2 计划：任务与甘特、人员负载、批量评审表、工作台、需求分配、统一错误状态（已完成） |
 | `docs/p1b-comparison.md` | P1-B 日常操作新旧对比（8 项操作的步数与结论） |
 | `docs/p1b-validation.md` | P1-B 真实数据验证记录与人工验收清单 |
+| `docs/superpowers/specs/2026-10-08-flower-p2a-change-prd-design.md` | P2-A 设计（变更 PRD，已确认） |
+| `docs/superpowers/plans/2026-10-08-flower-p2a-change-prd.md` | P2-A 计划（已完成） |
+| `docs/p2a-validation.md` | P2-A 真实数据验证记录与人工验收清单 |
 | `docs/story-map/flower-story-map.html` | 用户故事地图（在线版：https://claude.ai/artifact/TsrYHNpBZ2TLc6uq6suadu） |
 | 视觉样稿 | https://claude.ai/artifact/DgxTagCVRUGsKbvZSm9XPL （最上面一行"定稿"：A 配色 + C 密度） |
 | `docs/diagrams/` | 服务器现状图、目标架构草案 |
@@ -56,12 +59,21 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
   - 云端审查后补修：两个同名的不同人不再被合并（按邮箱区分；多人共用一个写法时导入报问题、拒绝写入）；`rejoin` 会把账号绑定到导入时已有的同邮箱成员。用新代码对 pan123 试跑：0 个阻止写入的问题，没有多人共用写法，本地数据无需重导。
 - **服务端成员校验：已完成，已合并（PR #9，merge commit `b573e7a`）**。写入需求负责人、提出人、任务负责人、需求分配成员、阻塞项负责人、会签「指定成员」时，必须是本组织在职的人类成员（`assertAssignableMember`），只校验本次新设置的值。
 - **P1 阶段全部完成**：PR #4、#6、#7、#8、#9、#10 均已合并。
+- **P2-A 变更 PRD：已完成，待合并**（分支 `feat/p2a-change-prd`）。
+  - Flower 内 PRD（BlockNote 编辑、自动保存与乐观锁冲突提示、同一作者 5 分钟内合并修订、按小节对比与恢复、划词评论与已失效标记）与外部 PRD（链接、状态、覆盖需求、会签、整篇评论）；外部 PRD 可通过粘贴正文、Markdown、Word 三种方式转为 Flower 文档。
+  - 文档模板与必填小节（组织级、产品级可覆盖）；图片附件存本地卷（`FLOWER_STORAGE_DIR`）。
+  - 「PRD」检查项改为作用于需求、跟随 PRD 状态自动同步；PRD 上的会签结果在其覆盖的需求间共享；工作台「等我签字」与评审表的 PRD 评审区块已打通。
+  - 迁移结果：prd 系统 11 份未删除页面（104 条修订、98 个附件 + 6 张内嵌图片抽成附件、3 条评论、0 条需求关联）；123plane 与 push 的 PRD 链接导入为外部 PRD 192 份（关联需求 242 条）；「PRD」检查项改写 100 条。详见 `docs/p2a-validation.md`。
 
 ## 下一步
 
-1. 规划 P2（文档）：变更 PRD（覆盖多条需求）与模块文档（按功能点分节，变更上线后合入），与需求和「PRD 状态」检查项打通。先列出需要用户拍板的设计问题，再写计划。
-2. 用户按 `docs/p1b-validation.md`「P1-B2」第 3、4 节与「P1-C」第 2 节在本地 pan123 上验收和试用，问题记在对应位置。
-3. 下次 `--replace` 重导前先跑 `--dry-run`：真实数据如果出现同名的不同人，会报「多人共用这个写法」，需要先在 `people.json` 里区分；重导后执行一次 `legacy rejoin`。
+1. 合并 P2-A（分支 `feat/p2a-change-prd`）。
+2. 用户按 `docs/p2a-validation.md` 第 5 节在本地 pan123 上验收。
+3. 规划 P2-B：模块文档、影响声明、人工合入（含 `merged` 状态的流转）、`[[双链]]` 与反向链接；编辑器内高亮评论锚点；非图片附件（PDF 等）；PRD 的「未读评论」进工作台；外部平台内容自动抓取（这五项是 P2-A 计划「留给 P2-B」一行列出的范围，后四项是 P2-A 的最小实现边界）。
+4. 用户按 `docs/p1b-validation.md`「P1-B2」第 3、4 节与「P1-C」第 2 节在本地 pan123 上验收和试用，问题记在对应位置。
+5. 下次 `--replace` 重导前先跑 `--dry-run`：真实数据如果出现同名的不同人，会报「多人共用这个写法」，需要先在 `people.json` 里区分；重导后执行一次 `legacy rejoin`。
+
+P2-A 验证中记下的留观项（非阻塞）：编辑器保存后 `setQueryData` 不比对版本号，极端情况下会多弹一次冲突提示，且重试计数只在成功时清零；把 SVG 粘贴为 `data:` 图片时保存返回 400（用户需自行删除该图片）；迁移工具的几处小问题（按姓名回退匹配成员、需求关联覆盖写入、导入中途的存储错误、标题裁剪、仅统计 `merged` 的需求个数）；`setCheckItemState` 的加锁没有排除软删除的 PRD（目前还没有删除入口）。
 
 ## 生产数据副本
 
@@ -70,6 +82,8 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
 - 对照表 `mapping/`；
 - 对账报告 `reports/`；
 - 测试账号清单 `test-accounts.md`（含共用密码，只在本地）与供 `legacy rejoin` 使用的 `test-accounts.json`（只有邮箱、角色、职能标签）；每次 `--replace` 重导后执行一次 `rejoin`，命令见 `CLAUDE.md`；
+- `prd_uploads/`：从服务器只读导出的 PRD 附件原文件；
+- `perf/`：大文档性能测量用的旧 PRD 正文；
 
 这些文件含员工个人信息。导入命令见 `CLAUDE.md`，本次导入使用的是 `--as-of 2026-09-29`。
 
