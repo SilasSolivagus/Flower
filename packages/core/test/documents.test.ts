@@ -10,6 +10,7 @@ import {
   getRevision,
   listDocuments,
   listRevisions,
+  MAX_MARKDOWN_CHARS,
   restoreRevision,
   saveDocumentContent,
   transitionDocument,
@@ -127,14 +128,34 @@ describe('保存、修订与恢复', () => {
     expect(await saveDocumentContent(t.db, editor, d.id, { baseVersion: 4, markdown: '恢复后再改' })).toMatchObject({ revisionNumber: 4, merged: false });
   });
 
-  it('正文不能内嵌 data: 图片；外部 PRD 不能保存正文；只读成员不能保存', async () => {
+  it('正文不能内嵌 data: 图片；正文过长；外部 PRD 不能保存正文；只读成员与只读 Token 不能保存', async () => {
     const d = await createDocument(t.db, editor, pan, { title: '校验' });
     await expect(saveDocumentContent(t.db, editor, d.id, { baseVersion: 1, markdown: '![](data:image/png;base64,AAAA)' })).rejects.toMatchObject({
       message: '正文中不能内嵌图片数据，请上传图片',
     });
+    await expect(saveDocumentContent(t.db, editor, d.id, { baseVersion: 1, markdown: 'x'.repeat(MAX_MARKDOWN_CHARS + 1) })).rejects.toMatchObject({ code: 'invalid' });
     await expect(saveDocumentContent(t.db, viewer, d.id, { baseVersion: 1, markdown: 'x' })).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(saveDocumentContent(t.db, readOnlyToken(owner), d.id, { baseVersion: 1, markdown: 'x' })).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(restoreRevision(t.db, readOnlyToken(owner), d.id, { number: 1, baseVersion: 1 })).rejects.toMatchObject({ code: 'forbidden' });
     const ext = await createDocument(t.db, editor, pan, { title: '外部', externalUrl: 'https://docs.qq.com/doc/zz' });
     await expect(saveDocumentContent(t.db, editor, ext.id, { baseVersion: 1, markdown: 'x' })).rejects.toMatchObject({ code: 'invalid' });
+  });
+
+  it('同一作者 4 分钟内仍合并为一版', async () => {
+    const d = await createDocument(t.db, editor, pan, { title: '合并边界测试' });
+    await saveDocumentContent(t.db, editor, d.id, { baseVersion: 1, markdown: '第一稿' });
+    await ageLatestRevision(d.id, 4);
+    expect(await saveDocumentContent(t.db, editor, d.id, { baseVersion: 2, markdown: '第二稿' })).toMatchObject({ version: 3, revisionNumber: 1, merged: true });
+  });
+
+  it('改名通过 updateDocument 走修订与版本号；按旧版本号保存被拒绝', async () => {
+    const d = await createDocument(t.db, editor, pan, { title: '改名测试' });
+    await saveDocumentContent(t.db, editor, d.id, { baseVersion: 1, markdown: '正文内容' });
+    await ageLatestRevision(d.id, 6);
+    const renamed = await updateDocument(t.db, editor, d.id, { title: '改名测试（新）' });
+    expect(renamed).toMatchObject({ title: '改名测试（新）', version: 3, revisionNumber: 2 });
+    expect(await getRevision(t.db, viewer, d.id, renamed.revisionNumber!)).toMatchObject({ title: '改名测试（新）', markdown: '正文内容' });
+    await expect(saveDocumentContent(t.db, editor, d.id, { baseVersion: 1, markdown: '旧版本号' })).rejects.toMatchObject({ code: 'conflict', details: { version: 3 } });
   });
 });
 
@@ -151,6 +172,12 @@ describe('状态流转与转换', () => {
     await saveDocumentContent(t.db, editor, d.id, { baseVersion: 1, markdown: filled });
     expect(await transitionDocument(t.db, editor, d.id, { to: 'review' })).toMatchObject({ status: 'review', transitions: ['draft', 'approved', 'discarded'] });
     await expect(transitionDocument(t.db, viewer, d.id, { to: 'approved' })).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(transitionDocument(t.db, readOnlyToken(owner), d.id, { to: 'approved' })).rejects.toMatchObject({ code: 'forbidden' });
+  });
+
+  it('外部 PRD 从草稿改为评审中不检查必填小节', async () => {
+    const d = await createDocument(t.db, editor, pan, { title: '外部评审', externalUrl: 'https://docs.qq.com/doc/ext-review' });
+    expect(await transitionDocument(t.db, editor, d.id, { to: 'review' })).toMatchObject({ status: 'review' });
   });
 
   it('外部 PRD 修改链接；转为 Flower 文档后保留原链接、生成第 1 版，不再是外部', async () => {
@@ -163,5 +190,15 @@ describe('状态流转与转换', () => {
     expect(after).toMatchObject({ source: 'native', externalUrl: 'https://abc.feishu.cn/docx/2', markdown: '## 背景\n\n从飞书粘贴', revisionNumber: 1 });
     await expect(convertExternalDocument(t.db, editor, d.id, { baseVersion: 2, markdown: 'x' })).rejects.toMatchObject({ message: '只有外部 PRD 可以转为 Flower 文档' });
     await expect(createDocument(t.db, editor, pan, { title: '同链接', externalUrl: 'https://abc.feishu.cn/docx/2' })).rejects.toMatchObject({ code: 'conflict' });
+  });
+
+  it('两个外部 PRD 同时改到同一网址，第二个返回 409', async () => {
+    const a = await createDocument(t.db, editor, pan, { title: '网址甲', externalUrl: 'https://docs.qq.com/doc/race-a' });
+    const b = await createDocument(t.db, editor, pan, { title: '网址乙', externalUrl: 'https://docs.qq.com/doc/race-b' });
+    const target = 'https://docs.qq.com/doc/race-target';
+    const results = await Promise.allSettled([updateDocument(t.db, editor, a.id, { externalUrl: target }), updateDocument(t.db, editor, b.id, { externalUrl: target })]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    expect(rejected.reason).toMatchObject({ code: 'conflict' });
   });
 });

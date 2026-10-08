@@ -305,7 +305,19 @@ export async function updateDocument(
     }
     const changes = (['title', 'ownerMemberId', 'externalUrl'] as const).map((field) => ({ field, old: cur[field], new: next[field] })).filter((c) => c.old !== c.new);
     if (changes.length > 0) {
-      await tx.update(documents).set({ ...next, updatedAt: new Date() }).where(eq(documents.id, id));
+      const extra: { version?: number; currentRevisionId?: string } = {};
+      if (next.title !== cur.title && cur.source === 'native') {
+        const [curRev] = cur.currentRevisionId ? await tx.select().from(documentRevisions).where(eq(documentRevisions.id, cur.currentRevisionId)) : [];
+        const rev = await writeRevision(tx, actor, cur, { title: next.title, markdown: curRev?.snapshot.markdown ?? '' }, { summary: null, allowMerge: true });
+        extra.version = cur.version + 1;
+        extra.currentRevisionId = rev.id;
+      }
+      try {
+        await tx.update(documents).set({ ...next, ...extra, updatedAt: new Date() }).where(eq(documents.id, id));
+      } catch (e) {
+        if (isUniqueViolation(e)) throw new AppError('conflict', '该网址已对应其他 PRD');
+        throw e;
+      }
       await recordEvent(tx, { orgId: actor.orgId, productId: cur.productId, type: 'document.updated', subjectType: 'document', subjectId: id, actor, payload: { changes } });
     }
     return documentDetailInTx(tx, actor, id);
