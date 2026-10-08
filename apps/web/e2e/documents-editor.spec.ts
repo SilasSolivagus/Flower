@@ -128,6 +128,25 @@ test('输入后一秒内站内跳走：立即补发保存，回到 PRD 时内容
   await expect(page.getByRole('region', { name: '正文' })).toContainText('跳走之前写的');
 });
 
+test('保存成功后只更新缓存里的版本号与正文，不重新拉取整篇 PRD', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const doc = await createDocument(request, productId, { title: '不重拉', templateId: await presetTemplateId(request, productId) });
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/documents/${doc.displayKey}`);
+  const body = page.getByRole('region', { name: '正文' });
+  await expect(body).toContainText('1. 背景介绍');
+  let detailGets = 0;
+  page.on('request', (r) => {
+    if (r.method() === 'GET' && r.url().endsWith(`/api/v1/orgs/acme/documents/${doc.displayKey}`)) detailGets += 1;
+  });
+  const revisions = page.waitForResponse((r) => r.url().endsWith(`/documents/${doc.id}/revisions`) && r.request().method() === 'GET');
+  expect((await typeAtEnd(page, doc.id, '只更新缓存')).ok()).toBeTruthy();
+  await revisions;
+  await expect(body.getByRole('status')).toHaveText('已保存');
+  await page.waitForTimeout(500);
+  expect(detailGets).toBe(0);
+});
+
 test('外部 PRD：链接卡片、改状态、指定负责人、覆盖需求的关联与移出', async ({ page, request }) => {
   const productId = await createProduct(request);
   await createRequirement(request, productId, '分片上传');

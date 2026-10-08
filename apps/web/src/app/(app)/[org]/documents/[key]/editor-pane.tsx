@@ -17,6 +17,7 @@ import type { Attachment, DocumentDetail } from '@/lib/types';
 import { AnchorCommentDialog } from './comments';
 
 type SaveResult = { version: number; revisionNumber: number };
+type Saved = SaveResult & { markdown: string };
 
 // BlockNote 只在浏览器里运行
 const DocumentBodyEditor = dynamic(() => import('@/features/documents/editor/body-editor').then((m) => m.DocumentBodyEditor), {
@@ -45,7 +46,7 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
   // 粘贴进来的内嵌图片已转存的附件网址（data: → 附件网址），同一张图只上传一次
   const uploaded = useRef(new Map<string, string>());
   // 在途的保存请求：卸载时补发的保存要等它返回、用它的新版本号
-  const lastSave = useRef<Promise<SaveResult> | null>(null);
+  const lastSave = useRef<Promise<Saved> | null>(null);
   const [state, setState] = useState<SaveState>('saved');
   const qc = useQueryClient();
   const container = useRef<HTMLDivElement>(null);
@@ -65,10 +66,19 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
   const save = useApiMutation(
     (markdown: string) =>
       // 内嵌图片先转存为附件，正文里只存附件网址；baseVersion 在上传完成后再读，期间改标题沿用的版本号也算在内
-      (lastSave.current = uploadDataImages(org, doc.id, markdown, uploaded.current).then((md) =>
-        api<SaveResult>(`/orgs/${org}/documents/${doc.id}/content`, { method: 'PUT', body: { baseVersion: version.current, markdown: md } }),
-      )),
-    { silentError: true, invalidate: [qk.document(org, doc.displayKey), qk.documentRevisions(org, doc.id)] },
+      (lastSave.current = uploadDataImages(org, doc.id, markdown, uploaded.current).then(async (md) => ({
+        ...(await api<SaveResult>(`/orgs/${org}/documents/${doc.id}/content`, { method: 'PUT', body: { baseVersion: version.current, markdown: md } })),
+        markdown: md,
+      }))),
+    {
+      silentError: true,
+      invalidate: [qk.documentRevisions(org, doc.id)],
+      // 只把这次保存的结果写进缓存里的详情，不重新拉取整篇正文
+      onSuccess: (r) =>
+        qc.setQueryData<{ document: DocumentDetail }>(qk.document(org, doc.displayKey), (old) =>
+          old ? { document: { ...old.document, markdown: r.markdown, version: r.version, revisionNumber: r.revisionNumber } } : old,
+        ),
+    },
   );
   useImperativeHandle(ref, () => ({
     onRenamed: (v) => {
