@@ -1,7 +1,7 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useRef, useState } from 'react';
 import { EditableTitle } from '@/components/editable-title';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
@@ -9,16 +9,21 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api';
 import { documentKeys, useApiMutation, useDocument } from '@/lib/queries';
 import type { DocumentDetail } from '@/lib/types';
+import { ImportDialog } from '../import-dialog';
 import { DocumentComments } from './comments';
 import { EditorPane, type EditorPaneHandle } from './editor-pane';
 import { ExternalCard } from './external-card';
 import { SidePanel } from './side-panel';
 
-export default function DocumentPage() {
+function DocumentPage() {
   const { org, key } = useParams<{ org: string; key: string }>();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const q = useDocument(org, decodeURIComponent(key));
   const d = q.data;
   const editor = useRef<EditorPaneHandle>(null);
+  const [converting, setConverting] = useState(false);
   // 正文被外部替换（冲突后重新加载、恢复版本、导入）时加一，让编辑器按最新正文重新挂载
   const [epoch, setEpoch] = useState(0);
   const reload = async () => {
@@ -40,6 +45,12 @@ export default function DocumentPage() {
   }
   if (!d) return <Skeleton className="h-64" />;
   const canEdit = d.myRole !== 'viewer';
+  // 新建对话框选「导入」后带着 ?import=1 跳过来
+  const importOpen = canEdit && (converting || searchParams.get('import') === '1');
+  const closeImport = () => {
+    setConverting(false);
+    if (searchParams.get('import')) router.replace(pathname);
+  };
 
   return (
     <>
@@ -49,11 +60,29 @@ export default function DocumentPage() {
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-w-0 flex-col gap-4">
-          {d.source === 'native' ? <EditorPane key={`${d.id}:${epoch}`} ref={editor} org={org} doc={d} onReload={() => void reload()} /> : <ExternalCard org={org} doc={d} />}
+          {d.source === 'native' ? <EditorPane key={`${d.id}:${epoch}`} ref={editor} org={org} doc={d} onReload={() => void reload()} /> : <ExternalCard org={org} doc={d} onConvert={() => setConverting(true)} />}
           <DocumentComments org={org} doc={d} />
         </div>
         <SidePanel org={org} doc={d} onReload={() => void reload()} />
       </div>
+      <ImportDialog
+        org={org}
+        doc={d}
+        open={importOpen}
+        onOpenChange={(o) => !o && closeImport()}
+        onImported={() => {
+          closeImport();
+          void reload();
+        }}
+      />
     </>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense>
+      <DocumentPage />
+    </Suspense>
   );
 }

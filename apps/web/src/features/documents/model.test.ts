@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clipContext, documentFilterToApiQuery, documentFilterToSearch, documentHref, groupThreads, parseDocumentFilter, parseRequirementKeys, saveStateLabel, sourceLabel } from './model';
+import { base64ToBytes, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, findDataImages, groupThreads, importSummary, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sourceLabel } from './model';
 
 describe('PRD 列表筛选', () => {
   it('地址栏 ↔ 筛选；无效的状态与来源被忽略', () => {
@@ -48,5 +48,25 @@ describe('评论', () => {
       ['b', []],
       ['x1', []],
     ]);
+  });
+});
+
+describe('导入与图片', () => {
+  const md = '## 背景\n\n![a](data:image/png;base64,iVBORw0K)\n\n![b](data:image/png;base64,iVBORw0K)\n\n![c](https://wdcdn.qpic.cn/x.png)\n\n![d](data:image/svg+xml;base64,PHN2Zz4=)\n\n## 需求\n\n- 分片';
+
+  it('找出可上传的 data: 图片（去重，SVG 不算），统计外部图片', () => {
+    expect(findDataImages(md)).toEqual([{ src: 'data:image/png;base64,iVBORw0K', mime: 'image/png', base64: 'iVBORw0K' }]);
+    expect(countRemoteImages(md)).toBe(1);
+    expect(importSummary(md)).toEqual({ chars: md.length, sections: 2, images: 1, remoteImages: 1 });
+  });
+
+  it('按映射替换图片网址，其余不变', () => {
+    const out = replaceImageSources(md, new Map([['data:image/png;base64,iVBORw0K', '/api/v1/orgs/acme/attachments/1']]));
+    expect(out.match(/\/api\/v1\/orgs\/acme\/attachments\/1/g)).toHaveLength(2);
+    expect(out).toContain('![c](https://wdcdn.qpic.cn/x.png)');
+  });
+
+  it('base64 → 字节', () => {
+    expect([...base64ToBytes('iVBORw==')]).toEqual([0x89, 0x50, 0x4e, 0x47]);
   });
 });

@@ -1,4 +1,4 @@
-import { DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider } from '@flower/core/markdown';
+import { DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, splitSections } from '@flower/core/markdown';
 import type { DocumentComment } from '@/lib/types';
 
 export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
@@ -87,3 +87,38 @@ export function groupThreads(comments: DocumentComment[]): Thread[] {
 
 export const SECTION_CHANGE_LABEL = { added: '新增', removed: '删除', modified: '修改' } as const;
 export const ANCHOR_STATE_LABEL = { stale: '已失效', unanchored: '未定位' } as const;
+
+export const IMPORT_LIMITS = { markdownBytes: 2 * 1024 * 1024, docxBytes: 20 * 1024 * 1024 } as const;
+
+const DATA_IMAGE = /!\[[^\]]*\]\((data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=]+))\)/g;
+const REMOTE_IMAGE = /!\[[^\]]*\]\(https?:\/\/[^)\s]+\)/g;
+
+/** 正文里可以转存为附件的 data: 图片（PNG、JPEG、GIF、WebP），按内容去重。 */
+export function findDataImages(markdown: string): Array<{ src: string; mime: string; base64: string }> {
+  const out = new Map<string, { src: string; mime: string; base64: string }>();
+  for (const m of markdown.matchAll(DATA_IMAGE)) if (!out.has(m[1]!)) out.set(m[1]!, { src: m[1]!, mime: m[2]!, base64: m[3]! });
+  return [...out.values()];
+}
+
+export function replaceImageSources(markdown: string, map: Map<string, string>): string {
+  return markdown.replace(/(!\[[^\]]*\]\()([^)\s]+)(\))/g, (all, open: string, src: string, close: string) => (map.has(src) ? `${open}${map.get(src)}${close}` : all));
+}
+
+/** 指向外部网址的图片：不抓取（需要外部平台登录），保留原链接。 */
+export const countRemoteImages = (markdown: string): number => [...markdown.matchAll(REMOTE_IMAGE)].length;
+
+export function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+export function importSummary(markdown: string): { chars: number; sections: number; images: number; remoteImages: number } {
+  return {
+    chars: markdown.length,
+    sections: splitSections(markdown).filter((s) => s.heading !== null).length,
+    images: findDataImages(markdown).length,
+    remoteImages: countRemoteImages(markdown),
+  };
+}

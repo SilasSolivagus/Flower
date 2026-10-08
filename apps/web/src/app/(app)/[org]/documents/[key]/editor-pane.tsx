@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { PrdEditorHandle } from '@/features/documents/editor/prd-editor';
 import { type SelectionAnchor, selectionAnchor } from '@/features/documents/editor/selection';
+import { uploadDataImages } from '@/features/documents/import';
 import { type SaveState, saveStateLabel } from '@/features/documents/model';
 import { ApiError, api, apiUpload } from '@/lib/api';
 import { qk, useApiMutation } from '@/lib/queries';
@@ -41,6 +42,8 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlight = useRef(false);
   const blocked = useRef(false);
+  // 粘贴进来的内嵌图片已转存的附件网址（data: → 附件网址），同一张图只上传一次
+  const uploaded = useRef(new Map<string, string>());
   // 在途的保存请求：卸载时补发的保存要等它返回、用它的新版本号
   const lastSave = useRef<Promise<SaveResult> | null>(null);
   const [state, setState] = useState<SaveState>('saved');
@@ -61,7 +64,10 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
   };
   const save = useApiMutation(
     (markdown: string) =>
-      (lastSave.current = api<SaveResult>(`/orgs/${org}/documents/${doc.id}/content`, { method: 'PUT', body: { baseVersion: version.current, markdown } })),
+      // 内嵌图片先转存为附件，正文里只存附件网址；baseVersion 在上传完成后再读，期间改标题沿用的版本号也算在内
+      (lastSave.current = uploadDataImages(org, doc.id, markdown, uploaded.current).then((md) =>
+        api<SaveResult>(`/orgs/${org}/documents/${doc.id}/content`, { method: 'PUT', body: { baseVersion: version.current, markdown: md } }),
+      )),
     { silentError: true, invalidate: [qk.document(org, doc.displayKey), qk.documentRevisions(org, doc.id)] },
   );
   useImperativeHandle(ref, () => ({
@@ -129,11 +135,15 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
       if (blocked.current || markdown === undefined) return;
       const base = inFlight.current && lastSave.current ? lastSave.current.then((r) => r.version) : Promise.resolve(version.current);
       void base
-        .then((baseVersion) => api<SaveResult>(`/orgs/${org}/documents/${doc.id}/content`, { method: 'PUT', body: { baseVersion, markdown } }))
+        .then(async (baseVersion) => {
+          const md = await uploadDataImages(org, doc.id, markdown, uploaded.current);
+          const r = await api<SaveResult>(`/orgs/${org}/documents/${doc.id}/content`, { method: 'PUT', body: { baseVersion, markdown: md } });
+          return { ...r, markdown: md };
+        })
         .then(
           (r) => {
             qc.setQueryData<{ document: DocumentDetail }>(qk.document(org, doc.displayKey), (old) =>
-              old ? { document: { ...old.document, markdown, version: r.version, revisionNumber: r.revisionNumber } } : old,
+              old ? { document: { ...old.document, markdown: r.markdown, version: r.version, revisionNumber: r.revisionNumber } } : old,
             );
             void qc.invalidateQueries({ queryKey: qk.document(org, doc.displayKey) });
             void qc.invalidateQueries({ queryKey: qk.documentRevisions(org, doc.id) });

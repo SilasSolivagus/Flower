@@ -15,7 +15,7 @@ import { documentKeys, requirementKeys, useApiMutation, useTemplates } from '@/l
 import type { DocumentDetail } from '@/lib/types';
 
 const BLANK = '__blank';
-type Mode = 'native' | 'external';
+type Mode = 'native' | 'external' | 'import';
 
 function CreateForm({
   org,
@@ -42,13 +42,17 @@ function CreateForm({
     () =>
       api<{ document: DocumentDetail }>(`/orgs/${org}/products/${productId}/documents`, {
         method: 'POST',
-        body: { title, requirementIds, ...(mode === 'external' ? { externalUrl: url } : { templateId: chosen === BLANK ? null : chosen }) },
+        body: {
+          title,
+          requirementIds,
+          ...(mode === 'external' ? { externalUrl: url } : mode === 'import' ? {} : { templateId: chosen === BLANK ? null : chosen }),
+        },
       }),
     {
       silentError: true,
       invalidate: [documentKeys(org), requirementKeys(org)],
       success: '已创建 PRD',
-      onSuccess: (d) => router.push(documentHref(org, d.document.displayKey)),
+      onSuccess: (d) => router.push(`${documentHref(org, d.document.displayKey)}${mode === 'import' ? '?import=1' : ''}`),
     },
   );
   return (
@@ -63,6 +67,7 @@ function CreateForm({
         <TabsList>
           <TabsTrigger value="native">Flower 文档</TabsTrigger>
           <TabsTrigger value="external">外部链接</TabsTrigger>
+          <TabsTrigger value="import">导入</TabsTrigger>
         </TabsList>
       </Tabs>
       <div className="flex flex-col gap-1.5">
@@ -94,12 +99,14 @@ function CreateForm({
             </SelectContent>
           </Select>
         </div>
-      ) : (
+      ) : mode === 'external' ? (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="doc-url">文档网址</Label>
           <Input id="doc-url" required type="url" placeholder="https://doc.weixin.qq.com/…" value={url} onChange={(e) => setUrl(e.target.value)} />
           <span className="text-xs text-muted-foreground">正文留在外部平台；状态流转、覆盖需求、会签与评论在 Flower 里进行。</span>
         </div>
+      ) : (
+        <p className="text-[13px] text-muted-foreground">先建一份空白 Flower 文档，下一步粘贴内容或上传 Markdown、Word 文件。</p>
       )}
       <FormError error={create.error} />
       <DialogFooter>
