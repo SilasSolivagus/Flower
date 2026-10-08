@@ -1,7 +1,8 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { type Ref, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { FormError } from '@/components/form-error';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,8 @@ import { type SaveState, saveStateLabel } from '@/features/documents/model';
 import { ApiError, api, apiUpload } from '@/lib/api';
 import { qk, useApiMutation } from '@/lib/queries';
 import type { Attachment, DocumentDetail } from '@/lib/types';
+
+type SaveResult = { version: number; revisionNumber: number };
 
 // BlockNote 只在浏览器里运行
 const DocumentBodyEditor = dynamic(() => import('@/features/documents/editor/body-editor').then((m) => m.DocumentBodyEditor), {
@@ -36,9 +39,13 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlight = useRef(false);
   const blocked = useRef(false);
+  // 在途的保存请求：卸载时补发的保存要等它返回、用它的新版本号
+  const lastSave = useRef<Promise<SaveResult> | null>(null);
   const [state, setState] = useState<SaveState>('saved');
+  const qc = useQueryClient();
   const save = useApiMutation(
-    (markdown: string) => api<{ version: number }>(`/orgs/${org}/documents/${doc.id}/content`, { method: 'PUT', body: { baseVersion: version.current, markdown } }),
+    (markdown: string) =>
+      (lastSave.current = api<SaveResult>(`/orgs/${org}/documents/${doc.id}/content`, { method: 'PUT', body: { baseVersion: version.current, markdown } })),
     { silentError: true, invalidate: [qk.document(org, doc.displayKey), qk.documentRevisions(org, doc.id)] },
   );
   useImperativeHandle(ref, () => ({
@@ -50,6 +57,7 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
 
   const flush = () => {
     timer.current = null;
+    if (blocked.current) return;
     if (inFlight.current) {
       timer.current = setTimeout(flush, AUTOSAVE_MS);
       return;
@@ -64,7 +72,12 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
         setState(timer.current ? 'dirty' : 'saved');
       },
       onError: (e) => {
-        if (e.status === 409) blocked.current = true;
+        if (e.status === 409) {
+          // 停止自动保存：清掉保存期间继续输入时排上的定时器，冲突提示与只读状态一直保持到重新加载
+          blocked.current = true;
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = null;
+        }
         setState('dirty');
       },
       onSettled: () => {
@@ -89,11 +102,30 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
     }
   };
 
-  useEffect(
+  // 卸载（站内跳转）时还有没到时间的修改：立即补发一次保存，不等结果。用 layout 清理，此时编辑器的 ref 还在。
+  // 保存成功后更新缓存里的正文与版本号，回到本页时编辑器读到的是刚保存的内容。
+  useLayoutEffect(
     () => () => {
-      if (timer.current) clearTimeout(timer.current);
+      if (!timer.current) return;
+      clearTimeout(timer.current);
+      timer.current = null;
+      const markdown = handle.current?.getMarkdown();
+      if (blocked.current || markdown === undefined) return;
+      const base = inFlight.current && lastSave.current ? lastSave.current.then((r) => r.version) : Promise.resolve(version.current);
+      void base
+        .then((baseVersion) => api<SaveResult>(`/orgs/${org}/documents/${doc.id}/content`, { method: 'PUT', body: { baseVersion, markdown } }))
+        .then(
+          (r) => {
+            qc.setQueryData<{ document: DocumentDetail }>(qk.document(org, doc.displayKey), (old) =>
+              old ? { document: { ...old.document, markdown, version: r.version, revisionNumber: r.revisionNumber } } : old,
+            );
+            void qc.invalidateQueries({ queryKey: qk.document(org, doc.displayKey) });
+            void qc.invalidateQueries({ queryKey: qk.documentRevisions(org, doc.id) });
+          },
+          () => undefined,
+        );
     },
-    [],
+    [org, doc.id, doc.displayKey, qc],
   );
   // 有未保存的修改时，关闭或刷新页面前由浏览器提示
   useEffect(() => {

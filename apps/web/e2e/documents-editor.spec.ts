@@ -19,6 +19,9 @@ test.beforeEach(async ({ request }) => {
   await setupInstance(request);
 });
 
+const AUTOSAVE_MS = 1000;
+const isSave = (docId: string) => (r: { url(): string; method(): string }) => r.url().endsWith(`/documents/${docId}/content`) && r.method() === 'PUT';
+
 /** 在正文末尾输入一段文字，等自动保存的 PUT 返回。 */
 async function typeAtEnd(page: Page, docId: string, text: string) {
   const saved = page.waitForResponse((r) => r.url().endsWith(`/documents/${docId}/content`) && r.request().method() === 'PUT');
@@ -51,10 +54,31 @@ test('两个窗口同时编辑：后保存的一方看到冲突提示，重新�
   await expect(other.getByRole('region', { name: '正文' })).toContainText('1. 背景介绍');
 
   expect((await typeAtEnd(page, doc.id, '甲窗口写的')).ok()).toBeTruthy();
-  const conflict = await typeAtEnd(other, doc.id, '乙窗口写的');
-  expect(conflict.status()).toBe(409);
+
+  // 乙窗口的保存请求延迟 1.5 秒返回，期间继续输入，让下一次自动保存的定时器在 409 之前就排上
+  let puts = 0;
+  other.on('request', (r) => {
+    if (isSave(doc.id)(r)) puts += 1;
+  });
+  await other.route(`**/documents/${doc.id}/content`, async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.continue();
+  });
+  const conflict = other.waitForResponse((r) => isSave(doc.id)(r.request()));
+  await other.getByRole('region', { name: '正文' }).locator('.bn-block-content').last().click();
+  await other.keyboard.press('End');
+  await other.keyboard.type('乙窗口写的');
+  await other.waitForRequest(isSave(doc.id));
+  await other.keyboard.type('还在继续写');
+  expect((await conflict).status()).toBe(409);
   const alert = other.getByRole('alert').filter({ hasText: '文档已被其他人修改' });
   await expect(alert).toBeVisible();
+  // 冲突后自动保存停止：排上的定时器不再发请求，提示一直在，编辑器只读
+  await other.waitForTimeout(AUTOSAVE_MS * 2 + 500);
+  expect(puts).toBe(1);
+  await expect(alert).toBeVisible();
+  await expect(other.locator('.bn-editor')).toHaveAttribute('contenteditable', 'false');
+  await other.unroute(`**/documents/${doc.id}/content`);
   await alert.getByRole('button', { name: '重新加载' }).click();
   await expect(other.getByRole('region', { name: '正文' })).toContainText('甲窗口写的');
   await expect(other.getByRole('region', { name: '正文' })).not.toContainText('乙窗口写的');
@@ -82,6 +106,26 @@ test('改标题后继续编辑正文：自动保存沿用改名后的版本，�
   await expect(page.getByRole('alert').filter({ hasText: '文档已被其他人修改' })).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole('region', { name: '正文' })).toContainText('改名之后写的');
+});
+
+test('输入后一秒内站内跳走：立即补发保存，回到 PRD 时内容还在', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const doc = await createDocument(request, productId, { title: '跳走前', templateId: await presetTemplateId(request, productId) });
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/documents/${doc.displayKey}`);
+  await expect(page.getByRole('region', { name: '正文' })).toContainText('1. 背景介绍');
+
+  const saved = page.waitForResponse((r) => isSave(doc.id)(r.request()));
+  await page.getByRole('region', { name: '正文' }).locator('.bn-block-content').last().click();
+  await page.keyboard.press('End');
+  await page.keyboard.type('跳走之前写的');
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '文档', exact: true }).click();
+  expect((await saved).ok()).toBeTruthy();
+
+  await page.getByRole('link', { name: '跳走前' }).click();
+  await expect(page.getByRole('region', { name: '正文' })).toContainText('跳走之前写的');
+  await page.reload();
+  await expect(page.getByRole('region', { name: '正文' })).toContainText('跳走之前写的');
 });
 
 test('外部 PRD：链接卡片、改状态、指定负责人、覆盖需求的关联与移出', async ({ page, request }) => {
