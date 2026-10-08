@@ -132,7 +132,7 @@ export function Revisions({ org, doc, onRestored, saveEditor }: { org: string; d
                       </Button>
                     }
                     title={`恢复到第 ${r.number} 版？`}
-                    description="会以这一版的内容新建一版，之前的版本都保留。编辑器里还没保存的修改会被丢弃。"
+                    description="会以这一版的内容新建一版，之前的版本都保留。编辑器里还没保存的修改会先存成一版，再被替换。"
                     confirmLabel="恢复"
                     onConfirm={() => restore.mutate(r.number)}
                   />
