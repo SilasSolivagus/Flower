@@ -2,6 +2,7 @@ import type { LegacyData } from './legacy-types';
 import type { Mapping } from './mapping';
 import { buildBase } from './plan-base';
 import { buildDocumentTemplates, buildPrdDocuments } from './plan-documents';
+import { buildExternalDocuments } from './plan-external';
 import { buildRequirements } from './plan-requirements';
 import { type ImportOptions, type ImportPlan, INSERT_ORDER, PlanContext } from './plan-types';
 
@@ -11,6 +12,7 @@ export function buildImportPlan(data: LegacyData, mapping: Mapping, opts: Import
   buildRequirements(ctx);
   buildDocumentTemplates(ctx);
   buildPrdDocuments(ctx);
+  buildExternalDocuments(ctx);
   const { report, rows, resolver } = ctx;
   const unmapped: Array<[string, Set<string>]> = [
     ['人员对照表缺少', resolver.unmapped.people],
@@ -50,6 +52,8 @@ export function buildImportPlan(data: LegacyData, mapping: Mapping, opts: Import
     'prd.pageVersions': prd.pageVersions.length,
     'prd.attachments': prd.attachments.length,
     'prd.comments': prd.comments.length,
+    'plane.prdLinks': plane.counts.prdLinks,
+    'push.prdUrls': push.counts.prdUrls,
   };
   report.targetCounts = Object.fromEntries(INSERT_ORDER.map((k) => [k, rows[k].length]));
   report.deferred.push(
@@ -68,8 +72,6 @@ export function buildImportPlan(data: LegacyData, mapping: Mapping, opts: Import
       reason: '页面已在 prd 系统中删除',
     },
     { what: 'prd 页面关联的需求在 123plane 与 push 中都不存在', count: report.documents.unmatchedLinks.length, reason: '关联对象已不存在，PRD 照常导入、不挂需求' },
-    { what: '123plane 外部 PRD 链接', count: plane.counts.prdLinks, reason: 'spec §7.2：外部 PRD 链接不迁移' },
-    { what: 'push 外部 PRD 链接', count: push.counts.prdUrls, reason: 'spec §7.2：外部 PRD 链接不迁移' },
     { what: '123plane 权限配置（role_permissions / user_permission_overrides）', count: plane.counts.rolePermissions + plane.counts.userPermissionOverrides, reason: 'spec §7.2：从未生效，不迁移' },
     { what: '123plane 通知队列与同步收发件箱', count: plane.counts.notificationQueue + plane.counts.syncInbox + plane.counts.syncOutbox, reason: 'spec §7.2：不迁移' },
     { what: 'push 中已标记合并的需求', count: report.matching.pushMergedSkipped, reason: 'push 内已合并进其他需求' },

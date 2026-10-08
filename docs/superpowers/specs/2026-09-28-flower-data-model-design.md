@@ -376,7 +376,7 @@ push 主状态映射到检查项与迭代：评审中 → 检查项 in_progress�
 **PRD**
 
 - 外部 PRD 链接迁移为外部 PRD（2026-10-08 修改，原决定为不迁移）：123plane 的 prd_link 与 push 的 prd_url 按规范化网址去重，建成 `source = external` 的变更 PRD 并挂到对应需求；两边网址不一致时以 123plane 为准，差异写入对账报告。详见 `2026-10-08-flower-p2a-change-prd-design.md` §6。
-- 123plane 的 prd_status 迁移为"PRD"检查项的手工状态，不附链接。
+- 123plane 的 prd_status 迁移为"PRD"检查项的状态；需求挂上 PRD（prd 系统页面或外部链接）后，该项改为跟随 PRD 状态，改写前后不同的列入对账报告（P2-A）。
 - prd 系统的 11 份未删除页面 → 变更 PRD 正文文档，连同 114 条修订、99 个附件、6 条评论（anchor_state = unanchored）。
 
 **迭代与发布版本**
