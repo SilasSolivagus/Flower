@@ -96,6 +96,18 @@ describe('纯文本与文本引用定位', () => {
     expect(locateQuote(DOC, { quote: '已经删掉的句子', prefix: '', suffix: '' })).toBeNull();
     expect(locateQuote(DOC, { quote: '   ', prefix: '', suffix: '' })).toBeNull();
   });
+
+  it('同一小节内出现两次的引用，按前后文打分取最匹配的一次（而不是误判到打分更低的另一小节）', () => {
+    const multi = ['## 甲', '', '苹果很甜。苹果很贵。', '', '## 乙', '', '苹果很贵。'].join('\n');
+    // “苹果”在「甲」节内出现两次：第一次上下文不匹配（得分 1），第二次上下文完全匹配（得分 5）；
+    // 「乙」节只出现一次，得分 2——介于两者之间。只有在「甲」节内部正确遍历并比较两次出现的分数，
+    // 才会选中「甲」节的第二次出现（总分 5）而不是误把「乙」节（总分 2）当作最佳匹配。
+    expect(locateQuote(multi, { quote: '苹果', prefix: '很甜。', suffix: '很贵' })).toEqual({ sectionHeading: '甲' });
+  });
+
+  it('引用跨越两个小节边界时找不到完整匹配，返回 null（锚点按小节边界分别查找，不跨节拼接）', () => {
+    expect(locateQuote(DOC, { quote: '分片上传断点续传', prefix: '', suffix: '' })).toBeNull();
+  });
 });
 
 describe('外部网址', () => {
@@ -115,6 +127,10 @@ describe('外部网址', () => {
     expect(['doc.weixin.qq.com', 'docs.qq.com', 'abc.feishu.cn', 'x.larksuite.com', 'www.notion.so', 'team.notion.site', 'demo.yuque.com', 'docs.google.com', 'example.com'].map(detectProvider)).toEqual([
       'wecom', 'tencent_docs', 'feishu', 'feishu', 'notion', 'notion', 'yuque', 'google_docs', 'other',
     ]);
+  });
+
+  it('飞书的 larkoffice.com 域名也识别为 feishu', () => {
+    expect(detectProvider('team.larkoffice.com')).toBe('feishu');
   });
 });
 
