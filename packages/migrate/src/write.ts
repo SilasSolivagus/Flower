@@ -118,3 +118,10 @@ export async function writeImport(
   }
   return { filesWritten, filesMissing };
 }
+
+/** 导入结束时关于附件文件的输出。--replace 只删数据库中的行，组织原先在应用里上传的文件留在存储目录，不再被引用。 */
+export function fileSummary(storageDir: string | undefined, files: { filesWritten: number; filesMissing: number }, replace: boolean): string[] {
+  const lines = [storageDir ? `附件文件：写入 ${files.filesWritten} 个，缺失 ${files.filesMissing} 个。` : `未指定 --storage，附件文件 ${files.filesMissing} 个没有写入。`];
+  if (replace) lines.push('注意：--replace 只删除数据库中的数据，附件存储目录里原有的文件不会清理，没有引用的旧文件会留在那里。');
+  return lines;
+}

@@ -11,7 +11,7 @@ import { buildPerfCases, measure } from './perf';
 import { type RejoinEntry, rejoinAccounts } from './rejoin';
 import { renderReport } from './report';
 import { suggestMapping } from './suggest';
-import { writeImport } from './write';
+import { fileSummary, writeImport } from './write';
 
 const USAGE = `用法：
   suggest --plane <123plane.db> --push <push.db> --prd-url <postgres url> --mapping <目录>
@@ -149,7 +149,7 @@ async function main(): Promise<void> {
   try {
     const storageDir = v.storage ?? process.env.FLOWER_STORAGE_DIR;
     const files = await writeImport(db, plan, { replace: v.replace!, storage: storageDir ? createLocalStorage(storageDir) : undefined, uploadsDir: v.uploads });
-    console.log(storageDir ? `附件文件：写入 ${files.filesWritten} 个，缺失 ${files.filesMissing} 个。` : `未指定 --storage，附件文件 ${files.filesMissing} 个没有写入。`);
+    for (const line of fileSummary(storageDir, files, v.replace!)) console.log(line);
   } finally {
     await close();
   }

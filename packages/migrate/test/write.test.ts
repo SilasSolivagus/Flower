@@ -36,7 +36,7 @@ import { and, eq, isNotNull } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildImportPlan } from '../src/plan';
 import type { ImportOptions } from '../src/plan-types';
-import { writeImport } from '../src/write';
+import { fileSummary, writeImport } from '../src/write';
 import { INLINE_PNG, LEGACY_FILE, makeLegacyData, reviewedMapping, withPrdPages } from './fixtures';
 
 let t: Awaited<ReturnType<typeof createTestDb>>;
@@ -194,5 +194,15 @@ describe('写入数据库', () => {
       const rows = await t.adminDb.select().from(attachments).where(eq(attachments.orgId, actor.orgId));
       expect(rows.map((r) => r.filename)).toEqual([expect.stringMatching(/^inline-/)]);
     }
+  });
+});
+
+describe('附件文件输出', () => {
+  it('--replace 时提示存储目录里原有的文件不会清理', () => {
+    expect(fileSummary('/srv/storage', { filesWritten: 3, filesMissing: 1 }, false)).toEqual(['附件文件：写入 3 个，缺失 1 个。']);
+    expect(fileSummary(undefined, { filesWritten: 0, filesMissing: 2 }, true)).toEqual([
+      '未指定 --storage，附件文件 2 个没有写入。',
+      '注意：--replace 只删除数据库中的数据，附件存储目录里原有的文件不会清理，没有引用的旧文件会留在那里。',
+    ]);
   });
 });
