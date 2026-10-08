@@ -5,7 +5,7 @@ import { type ReactNode, useId } from 'react';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
-import { requirementHref, showOrgBadge, taskHref } from '@/features/workbench/model';
+import { requirementHref, showOrgBadge, signatureHref, taskHref } from '@/features/workbench/model';
 import { useWorkbench } from '@/lib/queries';
 import type { Workbench } from '@/lib/types';
 
@@ -64,7 +64,7 @@ function Sections({ data }: { data: Workbench }) {
       <Section title="等我签字" total={data.signatures.total} shown={data.signatures.items.length} empty="没有等你签字的检查项">
         {data.signatures.items.map((s) => (
           <li key={`${s.requirementId ?? s.documentId}-${s.itemKey}-${s.ruleIndex}`}>
-            <Link href={requirementHref(s.org, s.displayKey)} className={ROW}>
+            <Link href={signatureHref(s)} className={ROW}>
               <OrgBadge show={badge} name={s.org.name} />
               <span className="font-mono text-muted-foreground">{s.displayKey}</span>
               <span className="flex-1 truncate">{s.title}</span>

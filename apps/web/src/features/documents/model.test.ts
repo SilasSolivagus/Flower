@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { base64ToBytes, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, findDataImages, groupThreads, importSummary, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sourceLabel } from './model';
+import { base64ToBytes, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, findDataImages, groupThreads, importSummary, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
 
 describe('PRD 列表筛选', () => {
   it('地址栏 ↔ 筛选；无效的状态与来源被忽略', () => {
@@ -68,5 +68,14 @@ describe('导入与图片', () => {
 
   it('base64 → 字节', () => {
     expect([...base64ToBytes('iVBORw==')]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  });
+});
+
+describe('模板', () => {
+  it('从正文提取二级标题作为小节，默认选填', () => {
+    expect(sectionsFromBody('# 标题\n\n## 1. 背景\n\n### 1.1 细节\n\n## 2. 方案\n')).toEqual([
+      { heading: '1. 背景', required: false },
+      { heading: '2. 方案', required: false },
+    ]);
   });
 });

@@ -18,6 +18,7 @@ describe('buildNav', () => {
       '/acme/settings/products',
       '/acme/settings/workflows',
       '/acme/settings/fields',
+      '/acme/settings/templates',
       '/acme/settings/agents',
       '/acme/settings/general',
     ]);
@@ -34,6 +35,7 @@ describe('buildNav', () => {
     expect(activeNavKey('/acme', 'acme')).toBe('home');
     expect(activeNavKey('/acme/settings/members', 'acme')).toBe('members');
     expect(activeNavKey('/acme/settings/workflows/abc', 'acme')).toBe('workflows');
+    expect(activeNavKey('/acme/settings/templates', 'acme')).toBe('templates');
     expect(activeNavKey('/acme/settings/products/1', 'acme')).toBe('products');
     expect(activeNavKey('/acme/requirements', 'acme')).toBe('requirements');
     expect(activeNavKey('/acme/requirements/PAN-12', 'acme')).toBe('requirements');

@@ -27,6 +27,7 @@ import { CHECK_STATE_LABEL } from '@/lib/labels';
 import { qk, requirementKeys, useProducts, useRequirement, useReviewQueue } from '@/lib/queries';
 import type { CheckState, ReviewFilterState, ReviewQueue } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { DocumentReviews } from './document-reviews';
 
 const ANY = 'any';
 
@@ -251,6 +252,7 @@ export default function ReviewsPage() {
         }
       />
       {body}
+      {product && <DocumentReviews org={org} productId={product.id} />}
     </>
   );
 }

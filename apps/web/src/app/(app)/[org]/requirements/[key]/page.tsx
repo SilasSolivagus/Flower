@@ -10,12 +10,13 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
-import { qk, requirementKeys, useApiMutation, useRequirement } from '@/lib/queries';
+import { documentKeys, qk, requirementKeys, useApiMutation, useRequirement } from '@/lib/queries';
 import { Blockers } from './blockers';
 import { Comments } from './comments';
 import { FieldsPanel } from './fields-panel';
 import { History } from './history';
 import { Assignments } from './assignments';
+import { PrdCard } from './prd-card';
 import { Relations } from './relations';
 import { Releases } from './releases';
 import { SideLists } from './side-lists';
@@ -94,6 +95,15 @@ export default function RequirementPage() {
             )}
           </section>
           <CheckItems items={r.checkItems} canEdit={canEdit} basePath={`/orgs/${org}/requirements/${r.id}/checks`} invalidate={[requirementKeys(org), qk.workbench]} />
+          {r.changeDocument && (
+            <CheckItems
+              title="PRD 检查项"
+              items={r.documentCheckItems}
+              canEdit={canEdit}
+              basePath={`/orgs/${org}/documents/${r.changeDocument.id}/checks`}
+              invalidate={[requirementKeys(org), documentKeys(org), qk.workbench]}
+            />
+          )}
           <Blockers org={org} requirement={r} />
           <Relations org={org} requirement={r} />
           <Comments org={org} requirementId={r.id} />
@@ -101,6 +111,7 @@ export default function RequirementPage() {
         </div>
         <div className="flex flex-col gap-4">
           <StatusPanel org={org} requirement={r} />
+          <PrdCard org={org} requirement={r} />
           <FieldsPanel org={org} requirement={r} />
           <Assignments org={org} requirement={r} />
           <SideLists requirement={r} />

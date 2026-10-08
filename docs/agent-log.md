@@ -20,6 +20,23 @@
 
 ## 记录
 
+### 2026-10-08 · 本地 · P2-A Task 14：文档模板设置、需求挂 PRD、PRD 评审表、等我签字链接
+- 分支 / PR：`feat/p2a-change-prd`
+- 做了什么：
+  - 新增 `TemplateEditor` 组件（`apps/web/src/components/template-editor.tsx`），组织设置新页 `/[org]/settings/templates` 与产品设置新页签「文档模板」共用：列出模板、必填小节、启用开关；对话框可从正文提取二级标题为小节、手动增删小节。
+  - 需求详情新增 `PrdCard`：没挂 PRD 时可新建（复用 `CreateDocumentDialog`）或按编号关联已有 PRD；挂了 PRD 时显示状态、来源，可移出。挂了 PRD 的需求详情额外渲染一份「PRD 检查项」（复用 `CheckItems`，`basePath` 指向文档的检查接口）。
+  - 评审页新增 `DocumentReviews`（PRD 评审表），产品的流程没有作用于 PRD 的检查项时不显示。
+  - 工作台「等我签字」链接：`signatureHref` 按 `documentId` 是否存在分流到需求详情或 PRD 详情，修掉 PRD 签字行点进去 404 的问题。
+  - 导航设置分组加「文档模板」入口。
+  - 所有用到的后端路由、核心类型（`TemplateSection`、`RequirementDetail.changeDocument`/`documentCheckItems`、`Workbench.signatures`）、`CheckItems` 的 `locked` 态渲染均为 Task 2–13 已完成的部分，本任务没有改动 `packages/core` 或服务端路由。
+- 怎么验证的：
+  - `pnpm --filter @flower/web exec vitest run src/features`：先确认 `sectionsFromBody`、`signatureHref`、导航「文档模板」三处失败，实现后 17 files / 90 tests 全过。
+  - `pnpm --filter @flower/web typecheck`、`pnpm --filter @flower/web lint --max-warnings 0`：均无错误无警告。
+  - `pnpm test`（`pnpm db:up` 之后）：core 307、web 152、migrate 89 全过。
+  - `pnpm --filter @flower/web e2e` 全量 84 条：83 passed、1 skipped（`editor-perf.spec.ts` 的本地大文档基线测试，与本任务无关，默认跳过）；新增的 `documents-prd-flow.spec.ts`、`documents-permissions.spec.ts` 均通过。
+  - `pnpm db:migrate` 已在测试后执行，恢复 `flower_app` 密码。
+- 留给对方：无
+
 ### 2026-10-08 · 本地 · 合并服务端成员校验（PR #9），P1 收尾
 - 分支 / PR：`docs/progress-after-p9`
 - 做了什么：

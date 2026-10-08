@@ -11,6 +11,7 @@ const SETTINGS: Array<[string, string, NavIcon]> = [
   ['products', '产品', 'box'],
   ['workflows', '流程模板', 'flow'],
   ['fields', '字段字典', 'sliders'],
+  ['templates', '文档模板', 'doc'],
   ['agents', 'Agent 与 Token', 'bot'],
   ['general', '组织信息', 'building'],
 ];

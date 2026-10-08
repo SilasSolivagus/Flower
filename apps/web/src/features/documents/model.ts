@@ -1,4 +1,4 @@
-import { DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, splitSections } from '@flower/core/markdown';
+import { DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, splitSections, type TemplateSection } from '@flower/core/markdown';
 import type { DocumentComment } from '@/lib/types';
 
 export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
@@ -121,4 +121,11 @@ export function importSummary(markdown: string): { chars: number; sections: numb
     images: findDataImages(markdown).length,
     remoteImages: countRemoteImages(markdown),
   };
+}
+
+/** 模板编辑时「从正文提取小节」：正文里的二级标题，默认选填。 */
+export function sectionsFromBody(body: string): TemplateSection[] {
+  return splitSections(body)
+    .filter((s) => s.level === 2 && s.heading)
+    .map((s) => ({ heading: s.heading!, required: false }));
 }
