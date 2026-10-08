@@ -6,6 +6,7 @@ import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
+import { assertAssignableMember } from '../requirements/context';
 import { validateWorkflowBody, type WorkflowBody } from './workflow-schema';
 
 export type WorkflowDefinitionView = {
@@ -69,6 +70,24 @@ async function validateOrThrow(tx: Tx, body: unknown, productId: string | null):
   const r = validateWorkflowBody(body, { fieldKeys: await fieldKeysFor(tx, productId) });
   if (!r.ok) throw new AppError('invalid', '流程定义有误', r.issues);
   return r.body;
+}
+
+/**
+ * 会签「指定成员」必须是本组织在职的人类成员。只校验相对上一版新加入的成员：
+ * 已有的签字人后来离开了组织，不应挡住与他无关的修改（产品管理员仍可代签，或在这一版里换人）。
+ */
+async function assertMemberSigners(tx: Tx, body: WorkflowBody, previous: WorkflowBody | null): Promise<void> {
+  const memberRefs = (b: WorkflowBody) => b.checkItems.flatMap((c) => (c.signers ?? []).filter((s) => s.by === 'member').map((s) => ({ item: c, ref: s.ref })));
+  const before = new Set(previous ? memberRefs(previous).map((x) => x.ref) : []);
+  for (const { item, ref } of memberRefs(body)) {
+    if (before.has(ref)) continue;
+    try {
+      await assertAssignableMember(tx, ref);
+    } catch (e) {
+      if (e instanceof AppError) throw new AppError('invalid', `检查项「${item.label}」的指定签字人：${e.message}`);
+      throw e;
+    }
+  }
 }
 
 async function loadDefinition(tx: Tx, id: string): Promise<DefRow> {
@@ -151,6 +170,7 @@ export async function createWorkflowTemplate(
   const name = assertWorkflowName(input.name);
   return withOrg(db, actor.orgId, async (tx) => {
     const body = await validateOrThrow(tx, input.body, null);
+    await assertMemberSigners(tx, body, null);
     const [d] = await tx.insert(workflowDefinitions).values({ orgId: actor.orgId, name }).returning();
     const v = await insertVersion(tx, actor, d!, body, input.note ?? null);
     return { definition: await definitionView(tx, await loadDefinition(tx, d!.id)), version: versionView(v) };
@@ -215,6 +235,10 @@ export async function publishWorkflowVersion(
     const d = await loadDefinition(tx, definitionId);
     await requireManage(tx, actor, d);
     const body = await validateOrThrow(tx, input.body, d.productId);
+    const [current] = d.currentVersionId
+      ? await tx.select({ body: workflowVersions.body }).from(workflowVersions).where(eq(workflowVersions.id, d.currentVersionId))
+      : [];
+    await assertMemberSigners(tx, body, (current?.body as WorkflowBody | undefined) ?? null);
     return versionView(await insertVersion(tx, actor, d, body, input.note ?? null));
   });
 }
