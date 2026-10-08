@@ -1,7 +1,7 @@
 import type { OrgRole } from '@/lib/types';
 
 export type NavIcon = 'home' | 'grid' | 'list' | 'cycle' | 'review' | 'doc' | 'users' | 'tag' | 'box' | 'flow' | 'sliders' | 'bot' | 'building';
-export type NavItem = { key: string; label: string; href?: string; icon: NavIcon; phase?: 'P1' | 'P2' };
+export type NavItem = { key: string; label: string; href?: string; icon: NavIcon };
 
 export const isOrgAdminRole = (role: OrgRole): boolean => role === 'owner' || role === 'admin';
 
@@ -23,7 +23,7 @@ export function buildNav(org: string, orgRole: OrgRole): { main: NavItem[]; sett
       { key: 'requirements', label: '需求', href: `/${org}/requirements`, icon: 'list' },
       { key: 'iterations', label: '迭代', href: `/${org}/iterations`, icon: 'cycle' },
       { key: 'reviews', label: '评审', href: `/${org}/reviews`, icon: 'review' },
-      { key: 'documents', label: '文档', icon: 'doc', phase: 'P2' },
+      { key: 'documents', label: '文档', href: `/${org}/documents`, icon: 'doc' },
     ],
     settings: isOrgAdminRole(orgRole)
       ? SETTINGS.map(([key, label, icon]) => ({ key, label, icon, href: `/${org}/settings/${key}` }))
@@ -37,6 +37,7 @@ export function activeNavKey(pathname: string, org: string): string {
   if (/^\/iterations(\/|$)/.test(rest)) return 'iterations';
   if (/^\/workload(\/|$)/.test(rest)) return 'iterations';
   if (/^\/reviews(\/|$)/.test(rest)) return 'reviews';
+  if (/^\/documents(\/|$)/.test(rest)) return 'documents';
   if (/^\/overview(\/|$)/.test(rest)) return 'overview';
   const m = /^\/settings\/([^/]+)/.exec(rest);
   return m ? m[1]! : 'home';

@@ -22,7 +22,7 @@ test.describe('初始化与登录', () => {
     await page.getByRole('link', { name: '进入组织' }).click();
     await page.waitForURL('**/acme-cloud');
     await expect(page.getByRole('navigation', { name: '主导航' }).getByText('成员')).toBeVisible();
-    await expect(page.getByText('P2').first()).toBeVisible();
+    await expect(page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '文档', exact: true })).toBeVisible();
   });
 
   test('登录失败提示、登录成功、退出登录', async ({ page, request }) => {

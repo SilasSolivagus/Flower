@@ -51,7 +51,6 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       <span aria-disabled="true" className={cn(cls, 'cursor-not-allowed text-muted-foreground opacity-60')}>
         <Icon className="size-4" aria-hidden="true" />
         <span className="flex-1">{item.label}</span>
-        <span className="rounded-sm border px-1.5 font-mono text-[10px]">{item.phase}</span>
       </span>
     );
   }

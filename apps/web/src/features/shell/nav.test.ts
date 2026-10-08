@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { activeNavKey, buildNav, isOrgAdminRole } from './nav';
 
 describe('buildNav', () => {
-  it('管理员看到设置分组，未完成模块带阶段标签且没有链接', () => {
+  it('管理员看到设置分组，各导航项都有链接', () => {
     const nav = buildNav('acme', 'admin');
-    expect(nav.main.map((i) => [i.label, i.phase ?? null, i.href ?? null])).toEqual([
-      ['工作台', null, '/acme'],
-      ['概览', null, '/acme/overview'],
-      ['需求', null, '/acme/requirements'],
-      ['迭代', null, '/acme/iterations'],
-      ['评审', null, '/acme/reviews'],
-      ['文档', 'P2', null],
+    expect(nav.main.map((i) => [i.label, i.href ?? null])).toEqual([
+      ['工作台', '/acme'],
+      ['概览', '/acme/overview'],
+      ['需求', '/acme/requirements'],
+      ['迭代', '/acme/iterations'],
+      ['评审', '/acme/reviews'],
+      ['文档', '/acme/documents'],
     ]);
     expect(nav.settings.map((i) => i.href)).toEqual([
       '/acme/settings/members',
@@ -42,5 +42,7 @@ describe('buildNav', () => {
     expect(activeNavKey('/acme/workload', 'acme')).toBe('iterations');
     expect(activeNavKey('/acme/reviews', 'acme')).toBe('reviews');
     expect(activeNavKey('/acme/overview', 'acme')).toBe('overview');
+    expect(activeNavKey('/acme/documents', 'acme')).toBe('documents');
+    expect(activeNavKey('/acme/documents/PAN-PRD-1', 'acme')).toBe('documents');
   });
 });
