@@ -20,6 +20,19 @@
 
 ## 记录
 
+### 2026-10-01 · 本地 · P1-C：界面测试后的修复
+- 分支 / PR：`feat/p1c-polish`
+- 做了什么：
+  - migrate：人员对照表拆分多人写法、合并头衔 / 昵称 / 短名 / 邮箱前缀写法、工具账号建为 Agent（`people.ts`）；导入时单值字段取第一人、多值字段每人一条，代签写法按实际操作人；对账报告增加人员三节，并补一行说明会签栏的代签不计入「代签写法」节。pan123 经用户确认后重导。新增 `rejoin` 命令，检查成员是否已在组织后才写入，避免重复加入报错。
+  - web：共享的可搜索成员选择框 `MemberPicker`，替换 9 处成员下拉；甘特任务表固定列宽；窄宽度布局；迭代详情页签写入地址栏；发布版本页签批量关联需求（core `linkRequirementsToRelease`、接口 `POST /orgs/:org/releases/:id/requirements`）。
+  - 共享件：e2e `helpers.ts` 新增 `expectNoPageOverflow`、`textFits`；`features/members/model.ts` 新增 `pickerOptions`、`filterPickerOptions`。
+  - 最终审查后的修复（3 个提交）：批量关联需求去重后排序，避免并发重叠批次死锁（`8f82d76`）；发布版本关联对话框状态只存版本 id、渲染时从查询结果取版本，避免显示过期的已关联状态（`391fae4`）；迁移测试补齐 id 稳定性、suggest 幂等与报告说明的测试缺口（`d53c262`）。Task 11 的完整验证与 pan123 复验在这三个提交之后进行，覆盖的是最终代码。
+- 怎么验证的：`pnpm typecheck`、`pnpm --filter @flower/web lint --max-warnings 0`、`pnpm test`（core 253、web 136、migrate 86）、完整端到端测试（65 个）、`./scripts/smoke.sh` 全部通过；pan123 复验见 `docs/p1b-validation.md`「P1-C」。
+- 留给对方：
+  - 布局守护用例在 `e2e/layout.spec.ts`；以后新增表格或卡片网格的页面，照样在 1440 与 800 宽度下加 `expectNoPageOverflow`。
+  - 几处留观的小问题：`MemberPicker` 搜索结果为空时，搜索框的 `aria-controls` 仍指向一个未渲染的 listbox id；成员抽屉里「产品角色」下拉文字「默认（编辑）」在窄宽度下略被截断；发布版本关联对话框新增的刷新校验 e2e 用例会多等约 11 秒（等待查询 `staleTime` 过期触发真实重取）。
+  - 留给后续阶段的项见 P1-C 计划「设计决定」表最后一行：角色词或占位写法的统一处理规则；任务支持多个负责人（需要改表）；评审表筛选写入地址栏。
+
 ### 2026-09-30 · 云端 · 审查 P1-B2（PR #7）：四个重点均无问题，未改代码
 - 分支 / PR：`feat/p1b2-gantt-workbench`（PR #7）
 - 做了什么：按要求审查四个重点，都没有发现需要修的问题，本次只追加这条记录。
