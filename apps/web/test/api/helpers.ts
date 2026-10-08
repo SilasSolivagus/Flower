@@ -1,9 +1,14 @@
+import { mkdtempSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createLocalStorage } from '@flower/core';
 import { createTestDb } from '@flower/core/testing';
 import { type App, createApi } from '@/server/api';
 
 export async function makeApp(): Promise<{ app: App; cleanup: () => Promise<void> }> {
   const t = await createTestDb();
-  const app = createApi({ db: t.db, secureCookies: false, publicUrl: 'http://localhost:3000' });
+  const storage = createLocalStorage(mkdtempSync(path.join(os.tmpdir(), 'flower-api-storage-')));
+  const app = createApi({ db: t.db, secureCookies: false, publicUrl: 'http://localhost:3000', storage });
   return { app, cleanup: t.cleanup };
 }
 
@@ -43,4 +48,21 @@ export async function initAndLogin(app: App): Promise<string> {
   });
   if (r.status !== 201) throw new Error(`初始化失败：${JSON.stringify(r.body)}`);
   return sessionFrom(r.res);
+}
+
+/** multipart 上传一个文件（字段名 file）。 */
+export async function upload(
+  app: App,
+  pathname: string,
+  opts: { session?: string; token?: string; file: Blob; filename: string },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<{ status: number; body: any }> {
+  const form = new FormData();
+  form.set('file', opts.file, opts.filename);
+  const headers: Record<string, string> = {};
+  if (opts.session) headers.cookie = `flower_session=${opts.session}`;
+  if (opts.token) headers.authorization = `Bearer ${opts.token}`;
+  const res = await app.request(`/api/v1${pathname}`, { method: 'POST', headers, body: form });
+  const text = await res.text();
+  return { status: res.status, body: text ? JSON.parse(text) : null };
 }

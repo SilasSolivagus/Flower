@@ -40,9 +40,19 @@ echo "4b. 页面可以访问"
 env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY curl -fs -o /dev/null -w '%{http_code}' http://localhost:3900/login | grep -q '200'
 env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY curl -fs http://localhost:3900/login | grep -q '<title>Flower</title>'
 
+echo "4c. 图片写入存储卷"
+jget() { node -e "let s='';process.stdin.on('data',(d)=>(s+=d)).on('end',()=>console.log(JSON.parse(s)$1))"; }
+PRODUCT_ID="$(curl -fs -b "$JAR" -H 'content-type: application/json' -d '{"name":"冒烟产品","key":"SMK"}' "$BASE/orgs/smoke/products" | jget .product.id)"
+DOC_ID="$(curl -fs -b "$JAR" -H 'content-type: application/json' -d '{"title":"冒烟 PRD"}' "$BASE/orgs/smoke/products/$PRODUCT_ID/documents" | jget .document.id)"
+PNG="$(mktemp)"
+printf '\x89PNG\r\n\x1a\n\x00\x00\x00\x0d' > "$PNG"
+ATT_URL="$(curl -fs -b "$JAR" -F "file=@$PNG;filename=smoke.png" "$BASE/orgs/smoke/documents/$DOC_ID/attachments" | jget .attachment.url)"
+rm -f "$PNG"
+curl -fs -b "$JAR" -o /dev/null "http://localhost:3900$ATT_URL"
+
 echo "5. 重启后数据仍在，迁移可重复执行"
-docker compose restart flower >/dev/null
-docker compose up -d --wait >/dev/null
+docker compose up -d --force-recreate --wait flower >/dev/null
 curl -fs "$BASE/setup/status" | grep -q '"initialized":true'
+curl -fs -b "$JAR" -o /dev/null "http://localhost:3900$ATT_URL"
 
 echo "冒烟测试通过"

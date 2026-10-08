@@ -72,3 +72,28 @@ export function sessionMeta(c: Context): { ip: string | null; userAgent: string 
     userAgent: c.req.header('user-agent') ?? null,
   };
 }
+
+/** 逗号分隔的查询参数 → 去空白后的列表；空时为 undefined。 */
+export const csvParam = (v: string | undefined): string[] | undefined => {
+  const list = v?.split(',').map((s) => s.trim()).filter(Boolean);
+  return list?.length ? list : undefined;
+};
+
+/**
+ * 读取 multipart 上传的 file 字段。Content-Length 明显超过上限时不读请求体直接拒绝；
+ * 文件本身的大小与类型由服务函数按文件头再校验一次。
+ */
+export async function readUpload(c: Context, maxBytes: number, tooLarge: string): Promise<{ filename: string; bytes: Uint8Array }> {
+  const contentType = (c.req.header('content-type') ?? '').toLowerCase();
+  if (!contentType.startsWith('multipart/form-data')) throw new AppError('invalid', '请求必须使用 multipart/form-data');
+  if (Number(c.req.header('content-length') ?? '0') > maxBytes + 64 * 1024) throw new AppError('invalid', tooLarge);
+  let body: Record<string, string | File>;
+  try {
+    body = (await c.req.parseBody()) as Record<string, string | File>;
+  } catch {
+    throw new AppError('invalid', '上传内容无法解析');
+  }
+  const file = body.file;
+  if (!(file instanceof File)) throw new AppError('invalid', '缺少文件');
+  return { filename: file.name, bytes: new Uint8Array(await file.arrayBuffer()) };
+}
