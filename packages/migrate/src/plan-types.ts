@@ -92,6 +92,10 @@ export type ReconReport = {
     linkedRequirements: number;
     /** 关联的需求不在导入范围内（两个旧系统里都没有）：PRD 照常导入、不挂需求。 */
     unmatchedLinks: Array<{ document: string; requirement: string }>;
+    /** 不能抽成附件、已从正文删去（换成「[图片未迁移]」）的内嵌图片：所在 PRD 与原因。 */
+    droppedImages: Array<{ document: string; reason: string }>;
+    /** 旧附件键为绝对路径或会跳出导出目录，不读取。 */
+    invalidFileKeys: number;
     /** 导出目录里缺少的旧附件文件数；没给导出目录时为 null。 */
     missingFiles: number | null;
     externalImages: number;
@@ -166,6 +170,8 @@ export class PlanContext {
         comments: 0,
         linkedRequirements: 0,
         unmatchedLinks: [],
+        droppedImages: [],
+        invalidFileKeys: 0,
         missingFiles: opts.availableUploads ? 0 : null,
         externalImages: 0,
         brokenImageRefs: 0,

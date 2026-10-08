@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { legacyUuid } from '../src/ids';
 import { buildImportPlan } from '../src/plan';
+import { checkImage, resolveUpload } from '../src/plan-documents';
 import type { ImportOptions } from '../src/plan-types';
 import { renderReport } from '../src/report';
 import { INLINE_PNG, LEGACY_FILE, reviewedMapping, withPrdPages } from './fixtures';
@@ -86,5 +87,31 @@ describe('导入计划：prd 页面', () => {
     const d = withPrdPages();
     const p = buildImportPlan(d, reviewedMapping(d), { ...OPTS, availableUploads: undefined });
     expect(p.report.documents.missingFiles).toBeNull();
+  });
+
+  it('内嵌图片按内容嗅探：SVG、声明类型与内容不符的不抽出，从正文删去并列入报告', () => {
+    const d = withPrdPages();
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>').toString('base64');
+    d.prd.pages[1]!.markdown = `## 背景\n\n![图一](data:image/svg+xml;base64,${svg})\n\n![图二](data:image/jpeg;base64,${INLINE_PNG})\n\n正文`;
+    const p = buildImportPlan(d, reviewedMapping(d), OPTS);
+    expect(p.report.problems).toEqual([]);
+    const doc2 = p.rows.documents.find((x) => x.legacyKey === 'prd:pg2')!;
+    const current = p.rows.documentRevisions.find((r) => r.id === doc2.currentRevisionId)!.snapshot.markdown;
+    expect(current).toBe('## 背景\n\n[图片未迁移]\n\n[图片未迁移]\n\n正文');
+    expect(p.rows.attachments.filter((a) => a.targetId === doc2.id)).toEqual([]);
+    expect(p.report.documents.inlineImages).toBe(1);
+    expect(p.report.documents.droppedImages).toEqual([
+      { document: 'PAN-PRD-2', reason: '不是支持的图片格式（只支持 PNG、JPEG、GIF、WebP）' },
+      { document: 'PAN-PRD-2', reason: '声明的类型 image/jpeg 与内容（image/png）不符' },
+    ]);
+    expect(renderReport(p.report)).toContain('| 内嵌图片未迁移（正文中换成「[图片未迁移]」） | 2 |');
+  });
+
+  it('图片校验：超过 10 MB 拒绝；导出目录里的键不能是绝对路径或跳出目录', () => {
+    const png = Buffer.from(INLINE_PNG, 'base64');
+    expect(checkImage(png, 'image/png')).toBeNull();
+    expect(checkImage(Buffer.concat([png, Buffer.alloc(10 * 1024 * 1024)]), 'image/png')).toBe('超过 10 MB');
+    expect(resolveUpload('/data/uploads', LEGACY_FILE)).toBe(`/data/uploads/${LEGACY_FILE}`);
+    for (const bad of ['../x.png', '/etc/passwd', 'a/../../x.png', '', '.']) expect(resolveUpload('/data/uploads', bad)).toBeNull();
   });
 });

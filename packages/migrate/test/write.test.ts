@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -132,7 +132,7 @@ describe('写入数据库', () => {
     const storage = createLocalStorage(mkdtempSync(path.join(os.tmpdir(), 'flower-storage-')));
     const data = withPrdPages();
     const plan = buildImportPlan(data, reviewedMapping(data), { ...opts, orgSlug: 'prd123', availableUploads: new Set([LEGACY_FILE]) });
-    expect(await writeImport(t.adminDb, plan, { replace: false, storage, uploadsDir: uploads })).toEqual({ filesWritten: 2, filesMissing: 0 });
+    expect(await writeImport(t.adminDb, plan, { replace: false, storage, uploadsDir: uploads })).toEqual({ filesWritten: 2, filesMissing: 0, filesInvalid: 0, rejected: [] });
     const actor = (await resolveActor(t.db, opts.owner!.accountId, 'prd123'))!;
     const doc = await getDocumentByKey(t.db, actor, 'PAN-PRD-1');
     expect(doc).toMatchObject({ source: 'native', status: 'launched', revisionNumber: 3, requirements: [{ displayKey: 'PAN-1' }] });
@@ -149,8 +149,8 @@ describe('写入数据库', () => {
     const data = withPrdPages();
     const plan = buildImportPlan(data, reviewedMapping(data), { ...opts, orgSlug: 'prd-missing', availableUploads: new Set() });
     expect(plan.report.documents.missingFiles).toBe(1);
-    expect(await writeImport(t.adminDb, plan, { replace: false, storage, uploadsDir: mkdtempSync(path.join(os.tmpdir(), 'prd-uploads-')) })).toEqual({ filesWritten: 1, filesMissing: 1 });
-    expect(await writeImport(t.adminDb, plan, { replace: true })).toEqual({ filesWritten: 0, filesMissing: 2 });
+    expect(await writeImport(t.adminDb, plan, { replace: false, storage, uploadsDir: mkdtempSync(path.join(os.tmpdir(), 'prd-uploads-')) })).toEqual({ filesWritten: 1, filesMissing: 1, filesInvalid: 0, rejected: [] });
+    expect(await writeImport(t.adminDb, plan, { replace: true })).toEqual({ filesWritten: 0, filesMissing: 2, filesInvalid: 0, rejected: [] });
   });
 
   it('导入后新建的 PRD 编号接着导入的最大编号；有了新文档、评论与需求关联后仍可 replace，数量回到导入时', async () => {
@@ -176,5 +176,36 @@ describe('写入数据库', () => {
     expect(await t.adminDb.select().from(requirements).where(and(eq(requirements.orgId, actor.orgId), isNotNull(requirements.changeDocumentId)))).toHaveLength(1);
     const after = (await resolveActor(t.db, opts.owner!.accountId, 'prd-replace'))!;
     expect((await createDocument(t.db, after, product!.id, { title: '覆盖后新建的 PRD' })).displayKey).toBe('PAN-PRD-3');
+  });
+
+  it('旧附件文件内容不是支持的图片时不写入存储，列为不合格', async () => {
+    const uploads = mkdtempSync(path.join(os.tmpdir(), 'prd-uploads-'));
+    writeFileSync(path.join(uploads, LEGACY_FILE), '<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+    const storage = createLocalStorage(mkdtempSync(path.join(os.tmpdir(), 'flower-storage-')));
+    const data = withPrdPages();
+    const plan = buildImportPlan(data, reviewedMapping(data), { ...opts, orgSlug: 'prd-rejected', availableUploads: new Set([LEGACY_FILE]) });
+    const legacy = plan.rows.attachments.find((a) => a.filename === '截图.png')!;
+    expect(await writeImport(t.adminDb, plan, { replace: false, storage, uploadsDir: uploads })).toEqual({
+      filesWritten: 1,
+      filesMissing: 0,
+      filesInvalid: 0,
+      rejected: [{ document: 'PAN-PRD-1', storageKey: legacy.storageKey, reason: '不是支持的图片格式（只支持 PNG、JPEG、GIF、WebP）' }],
+    });
+    expect(await storage.get(legacy.storageKey)).toBeNull();
+  });
+
+  it('旧附件键跳出导出目录时不读取，计为无效', async () => {
+    const parent = mkdtempSync(path.join(os.tmpdir(), 'prd-parent-'));
+    const uploads = path.join(parent, 'uploads');
+    mkdirSync(uploads);
+    writeFileSync(path.join(parent, 'outside.png'), Buffer.from(INLINE_PNG, 'base64'));
+    const storage = createLocalStorage(mkdtempSync(path.join(os.tmpdir(), 'flower-storage-')));
+    const data = withPrdPages();
+    data.prd.attachments[0]!.storage_key = '../outside.png';
+    const plan = buildImportPlan(data, reviewedMapping(data), { ...opts, orgSlug: 'prd-escape', availableUploads: new Set() });
+    expect(plan.report.documents).toMatchObject({ invalidFileKeys: 1, missingFiles: 0 });
+    const legacy = plan.rows.attachments.find((a) => a.filename === '截图.png')!;
+    expect(await writeImport(t.adminDb, plan, { replace: false, storage, uploadsDir: uploads })).toEqual({ filesWritten: 1, filesMissing: 0, filesInvalid: 1, rejected: [] });
+    expect(await storage.get(legacy.storageKey)).toBeNull();
   });
 });

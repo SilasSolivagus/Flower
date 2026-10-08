@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
-import path from 'node:path';
 import * as core from '@flower/core';
 import type { Db, FileStorage, Tx } from '@flower/core';
 import { eq, sql } from 'drizzle-orm';
 import type { PgTable } from 'drizzle-orm/pg-core';
+import { checkImage, resolveUpload } from './plan-documents';
 import { type ImportPlan, type ImportRows, INSERT_ORDER } from './plan-types';
 
 const TABLES: Record<keyof ImportRows, PgTable> = {
@@ -41,6 +41,15 @@ const TABLES: Record<keyof ImportRows, PgTable> = {
 };
 const CHUNK = 500;
 
+/** 附件文件写入结果：rejected 为内容不是支持的图片或超过 10 MB 而没有写入的旧附件文件。 */
+export type WriteFilesResult = {
+  filesWritten: number;
+  filesMissing: number;
+  /** 旧附件键为绝对路径或会跳出导出目录，没有读取。 */
+  filesInvalid: number;
+  rejected: Array<{ document: string; storageKey: string; reason: string }>;
+};
+
 /** 删除一个组织的全部租户数据（以 flower_admin 执行，不受 RLS 与 domain_events 只追加的限制）。 */
 export async function deleteOrgData(tx: Tx, orgId: string): Promise<void> {
   await tx.update(core.documents).set({ currentRevisionId: null }).where(eq(core.documents.orgId, orgId));
@@ -62,7 +71,7 @@ export async function writeImport(
   adminDb: Db,
   plan: ImportPlan,
   opts: { replace: boolean; storage?: FileStorage; uploadsDir?: string },
-): Promise<{ filesWritten: number; filesMissing: number }> {
+): Promise<WriteFilesResult> {
   if (plan.report.problems.length > 0) throw new Error(`导入计划有 ${plan.report.problems.length} 个问题，拒绝写入。请先处理对账报告中的问题。`);
   const org = plan.rows.organizations[0]!;
   await adminDb.transaction(async (tx) => {
@@ -98,20 +107,35 @@ export async function writeImport(
     }
   });
   // 数据库提交后再写文件：键由来源确定，重复导入覆盖同一个文件
-  let filesWritten = 0;
-  let filesMissing = 0;
-  if (opts.storage) {
-    for (const f of plan.files) {
-      let bytes: Uint8Array | null = null;
-      if ('base64' in f.from) bytes = Buffer.from(f.from.base64, 'base64');
-      else if (opts.uploadsDir && existsSync(path.join(opts.uploadsDir, f.from.legacyKey))) bytes = readFileSync(path.join(opts.uploadsDir, f.from.legacyKey));
-      if (!bytes) {
-        filesMissing += 1;
+  const result: WriteFilesResult = { filesWritten: 0, filesMissing: 0, filesInvalid: 0, rejected: [] };
+  if (!opts.storage) return { ...result, filesMissing: plan.files.length };
+  const attachmentByKey = new Map(plan.rows.attachments.map((a) => [a.storageKey, a]));
+  const productKey = plan.rows.products[0]?.key;
+  const documentKey = (documentId: string) => `${productKey}-PRD-${plan.rows.documents.find((d) => d.id === documentId)?.number}`;
+  for (const f of plan.files) {
+    let bytes: Uint8Array | null = null;
+    if ('base64' in f.from) bytes = Buffer.from(f.from.base64, 'base64');
+    else {
+      const file = opts.uploadsDir ? resolveUpload(opts.uploadsDir, f.from.legacyKey) : null;
+      if (opts.uploadsDir && !file) {
+        result.filesInvalid += 1;
         continue;
       }
-      await opts.storage.put(f.storageKey, bytes);
-      filesWritten += 1;
+      if (file && existsSync(file)) bytes = readFileSync(file);
+      // 旧附件按内容再校验一次，与应用上传的约束一致；内嵌图片在计划阶段已校验
+      const att = attachmentByKey.get(f.storageKey)!;
+      const reason = bytes ? checkImage(bytes, att.mime) : null;
+      if (reason) {
+        result.rejected.push({ document: documentKey(att.targetId), storageKey: f.storageKey, reason });
+        continue;
+      }
     }
-  } else filesMissing = plan.files.length;
-  return { filesWritten, filesMissing };
+    if (!bytes) {
+      result.filesMissing += 1;
+      continue;
+    }
+    await opts.storage.put(f.storageKey, bytes);
+    result.filesWritten += 1;
+  }
+  return result;
 }

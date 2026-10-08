@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { accounts, type Actor, createDb, createLocalStorage, type Db, listProducts, resolveActor } from '@flower/core';
@@ -149,7 +149,18 @@ async function main(): Promise<void> {
   try {
     const storageDir = v.storage ?? process.env.FLOWER_STORAGE_DIR;
     const files = await writeImport(db, plan, { replace: v.replace!, storage: storageDir ? createLocalStorage(storageDir) : undefined, uploadsDir: v.uploads });
-    console.log(storageDir ? `附件文件：写入 ${files.filesWritten} 个，缺失 ${files.filesMissing} 个。` : `未指定 --storage，附件文件 ${files.filesMissing} 个没有写入。`);
+    console.log(
+      storageDir
+        ? `附件文件：写入 ${files.filesWritten} 个，缺失 ${files.filesMissing} 个，键无效 ${files.filesInvalid} 个，内容不合格 ${files.rejected.length} 个。`
+        : `未指定 --storage，附件文件 ${files.filesMissing} 个没有写入。`,
+    );
+    if (files.rejected.length > 0) {
+      appendFileSync(
+        path.join(out, 'migration-report.md'),
+        ['', '## 附件文件写入（内容不合格，没有写入存储）', '', '| PRD | 存储键 | 原因 |', '|---|---|---|', ...files.rejected.map((x) => `| ${x.document} | ${x.storageKey} | ${x.reason} |`), ''].join('\n'),
+      );
+      console.log(`内容不合格的附件文件已列在 ${path.join(out, 'migration-report.md')} 末尾。`);
+    }
   } finally {
     await close();
   }

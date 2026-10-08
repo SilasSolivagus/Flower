@@ -1,15 +1,35 @@
 import { createHash } from 'node:crypto';
-import { type CheckState, type DocumentStatus, PRESET_TEMPLATE, prdCheckState } from '@flower/core';
+import path from 'node:path';
+import { type CheckState, type DocumentStatus, IMAGE_MAX_BYTES, IMAGE_TYPES, type ImageMime, PRESET_TEMPLATE, prdCheckState, sniffImage } from '@flower/core';
 import type { PrdPage } from './legacy-types';
 import type { PlanContext } from './plan-types';
 
 /** prd 系统的 prd_meta.status → 变更 PRD 状态（设计 §6）。 */
 export const PRD_PAGE_STATUS: Record<string, DocumentStatus> = { draft: 'draft', review: 'review', approved: 'approved', in_dev: 'approved', launched: 'launched' };
-const IMAGE_EXT: Record<string, string> = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 const FILE_REF = /\/api\/files\/([0-9a-f-]{36}\.[a-z]+)/g;
-const DATA_IMAGE = /data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=]+)/g;
+/** 内嵌图片：带不带 `![…](…)` 外壳都匹配，不能抽出时连外壳一起换成占位文字。 */
+const DATA_IMAGE = /(!\[[^\]]*\]\()?data:(image\/[\w.+-]+);base64,([A-Za-z0-9+/=]+)(\))?/g;
+export const DROPPED_IMAGE = '[图片未迁移]';
 const REMOTE_IMAGE = /!\[[^\]]*\]\(https?:\/\//g;
 const RELATIVE_IMAGE = /!\[[^\]]*\]\((?!https?:\/\/|\/|data:)[^)]+\)/g;
+
+/** 判断图片字节能否作为附件导入（与应用上传的约束一致）：按内容嗅探类型，需与声明的类型相同，且不超过 10 MB。 */
+export function checkImage(bytes: Uint8Array, declared: string): string | null {
+  const sniffed = sniffImage(bytes);
+  if (!sniffed) return '不是支持的图片格式（只支持 PNG、JPEG、GIF、WebP）';
+  if (sniffed !== declared) return `声明的类型 ${declared} 与内容（${sniffed}）不符`;
+  if (bytes.byteLength > IMAGE_MAX_BYTES) return '超过 10 MB';
+  return null;
+}
+
+/** 旧附件文件在导出目录里的路径；键为绝对路径或会跳出导出目录时返回 null，不读取。 */
+export function resolveUpload(dir: string, key: string): string | null {
+  if (!key || path.isAbsolute(key)) return null;
+  const root = path.resolve(dir);
+  const full = path.resolve(root, key);
+  const rel = path.relative(root, full);
+  return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? full : null;
+}
 
 export const attachmentUrl = (ctx: PlanContext, id: string): string => `/api/v1/orgs/${ctx.opts.orgSlug}/attachments/${id}`;
 
@@ -82,44 +102,53 @@ export function buildPrdDocuments(ctx: PlanContext): void {
       ctx.problem(`prd 页面状态「${p.status}」没有对应的 PRD 状态`);
       return;
     }
-    const inline = new Map<string, string>();
+    const inline = new Map<string, { dropped: true } | { dropped: false; attId: string }>();
     const rewrite = (markdown: string): string =>
       markdown
         .replace(FILE_REF, (all, key: string) => {
           const att = legacyAttachmentId.get(key);
           return att ? attachmentUrl(ctx, att) : all;
         })
-        .replace(DATA_IMAGE, (_all, mime: string, base64: string) => {
+        .replace(DATA_IMAGE, (_all, open: string | undefined, mime: string, base64: string, close: string | undefined) => {
           const sha = createHash('sha1').update(base64).digest('hex');
-          let attId = inline.get(sha);
-          if (!attId) {
-            attId = ctx.id('attachment', `inline:${p.id}:${sha}`);
-            inline.set(sha, attId);
-            const storageKey = `${orgId}/${attId}.${IMAGE_EXT[mime]}`;
-            rows.attachments.push({
-              id: attId,
-              orgId,
-              targetType: 'document',
-              targetId: id,
-              storageKey,
-              filename: `inline-${sha.slice(0, 8)}.${IMAGE_EXT[mime]}`,
-              mime,
-              sizeBytes: Buffer.from(base64, 'base64').byteLength,
-              width: null,
-              height: null,
-              uploaderMemberId: member(p.created_by),
-              createdAt: ctx.time(p.created_at),
-            });
-            ctx.files.push({ storageKey, from: { base64 } });
-            docs.inlineImages += 1;
+          let result = inline.get(sha);
+          if (!result) {
+            const bytes = Buffer.from(base64, 'base64');
+            const reason = checkImage(bytes, mime);
+            if (reason) {
+              result = { dropped: true };
+              docs.droppedImages.push({ document: documentKey, reason });
+            } else {
+              const attId = ctx.id('attachment', `inline:${p.id}:${sha}`);
+              result = { dropped: false, attId };
+              const storageKey = `${orgId}/${attId}.${IMAGE_TYPES[mime as ImageMime]}`;
+              rows.attachments.push({
+                id: attId,
+                orgId,
+                targetType: 'document',
+                targetId: id,
+                storageKey,
+                filename: `inline-${sha.slice(0, 8)}.${IMAGE_TYPES[mime as ImageMime]}`,
+                mime,
+                sizeBytes: bytes.byteLength,
+                width: null,
+                height: null,
+                uploaderMemberId: member(p.created_by),
+                createdAt: ctx.time(p.created_at),
+              });
+              ctx.files.push({ storageKey, from: { base64 } });
+              docs.inlineImages += 1;
+            }
+            inline.set(sha, result);
           }
-          return attachmentUrl(ctx, attId);
+          if (result.dropped) return open && close ? DROPPED_IMAGE : `${open ?? ''}${DROPPED_IMAGE}${close ?? ''}`;
+          return `${open ?? ''}${attachmentUrl(ctx, result.attId)}${close ?? ''}`;
         });
 
     // 旧附件：先于内嵌图片登记，报告与文件列表里顺序稳定
     for (const a of prd.attachments.filter((x) => x.page_id === p.id)) {
       const attId = legacyAttachmentId.get(a.storage_key)!;
-      const ext = IMAGE_EXT[a.mime];
+      const ext = a.mime in IMAGE_TYPES ? IMAGE_TYPES[a.mime as ImageMime] : null;
       if (!ext) {
         ctx.problem(`prd 附件类型「${a.mime}」不是支持的图片类型`);
         continue;
@@ -141,7 +170,8 @@ export function buildPrdDocuments(ctx: PlanContext): void {
       });
       ctx.files.push({ storageKey, from: { legacyKey: a.storage_key } });
       docs.attachments += 1;
-      if (ctx.opts.availableUploads && !ctx.opts.availableUploads.has(a.storage_key)) docs.missingFiles = (docs.missingFiles ?? 0) + 1;
+      if (!resolveUpload('/uploads', a.storage_key)) docs.invalidFileKeys += 1;
+      else if (ctx.opts.availableUploads && !ctx.opts.availableUploads.has(a.storage_key)) docs.missingFiles = (docs.missingFiles ?? 0) + 1;
     }
 
     const snaps = prd.pageVersions
