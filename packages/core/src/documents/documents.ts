@@ -10,6 +10,7 @@ import { assertAssignableMember, memberNames } from '../requirements/context';
 import type { CheckItemView } from '../requirements/detail';
 import { assertTitle, productKeyOf, displayKey as requirementDisplayKey, type MemberRef } from '../requirements/requirements';
 import { orgToday } from '../tasks/tasks';
+import { reanchorDocumentComments } from './comments';
 import type { DocumentStatus, ExternalProvider, RevisionSnapshot } from './constants';
 import {
   canTransition,
@@ -335,6 +336,7 @@ export async function saveDocumentContent(db: Db, actor: Actor, id: string, inpu
     const rev = await writeRevision(tx, actor, doc, { title, markdown }, { summary: null, allowMerge: true });
     const version = doc.version + 1;
     await tx.update(documents).set({ title, version, currentRevisionId: rev.id, updatedAt: new Date() }).where(eq(documents.id, id));
+    await reanchorDocumentComments(tx, id, markdown);
     await recordEvent(tx, {
       orgId: actor.orgId,
       productId: doc.productId,
@@ -398,6 +400,7 @@ export async function restoreRevision(db: Db, actor: Actor, id: string, input: {
     const rev = await writeRevision(tx, actor, doc, target.snapshot, { summary: `恢复到第 ${input.number} 版`, allowMerge: false });
     const version = doc.version + 1;
     await tx.update(documents).set({ title: target.snapshot.title, version, currentRevisionId: rev.id, updatedAt: new Date() }).where(eq(documents.id, id));
+    await reanchorDocumentComments(tx, id, target.snapshot.markdown);
     await recordEvent(tx, {
       orgId: actor.orgId,
       productId: doc.productId,

@@ -52,3 +52,4 @@ export * from './storage';
 export * from './documents/templates';
 export * from './documents/attachments';
 export * from './documents/documents';
+export * from './documents/comments';
