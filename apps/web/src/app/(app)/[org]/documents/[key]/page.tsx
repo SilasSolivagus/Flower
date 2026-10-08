@@ -31,6 +31,8 @@ function DocumentPage() {
     if ((await q.refetch()).isError) return;
     setEpoch((e) => e + 1);
   };
+  // 恢复版本、改状态之前先保存编辑器里没到时间的修改；返回编辑器的版本号，外部 PRD 没有编辑器时为 null
+  const saveEditor = async () => (editor.current ? editor.current.saveNow() : null);
   const patch = useApiMutation(
     async (body: { title: string }) => {
       const r = await api<{ document: DocumentDetail }>(`/orgs/${org}/documents/${d!.id}`, { method: 'PATCH', body });
@@ -64,7 +66,7 @@ function DocumentPage() {
           {d.source === 'native' ? <EditorPane key={`${d.id}:${epoch}`} ref={editor} org={org} doc={d} onReload={() => void reload()} /> : <ExternalCard org={org} doc={d} onConvert={() => setConverting(true)} />}
           <DocumentComments org={org} doc={d} />
         </div>
-        <SidePanel org={org} doc={d} onReload={() => void reload()} />
+        <SidePanel org={org} doc={d} onReload={() => void reload()} saveEditor={saveEditor} />
       </div>
       <ImportDialog
         org={org}

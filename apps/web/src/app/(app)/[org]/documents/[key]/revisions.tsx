@@ -82,15 +82,22 @@ function DiffDialog({ org, docId, revisions, initial, onClose }: { org: string; 
 }
 
 /** 修订记录：版本列表（作者、时间、摘要），与上一版对比（对话框里可任选两版），恢复到旧版本（新建一版）。 */
-export function Revisions({ org, doc, onRestored }: { org: string; doc: DocumentDetail; onRestored: () => void }) {
+export function Revisions({ org, doc, onRestored, saveEditor }: { org: string; doc: DocumentDetail; onRestored: () => void; saveEditor: () => Promise<number | null> }) {
   const canEdit = doc.myRole !== 'viewer';
   const list = useDocumentRevisions(org, doc.id);
   const [diff, setDiff] = useState<{ from: number; to: number } | null>(null);
-  const restore = useApiMutation((number: number) => api(`/orgs/${org}/documents/${doc.id}/restore`, { method: 'POST', body: { number, baseVersion: doc.version } }), {
-    invalidate: [documentKeys(org)],
-    success: '已恢复',
-    onSuccess: () => onRestored(),
-  });
+  const restore = useApiMutation(
+    async (number: number) => {
+      // 用编辑器的版本号（含刚自动保存与改标题沿用的），缓存里的 doc.version 可能还没刷新
+      const baseVersion = (await saveEditor()) ?? doc.version;
+      return api(`/orgs/${org}/documents/${doc.id}/restore`, { method: 'POST', body: { number, baseVersion } });
+    },
+    {
+      invalidate: [documentKeys(org)],
+      success: '已恢复',
+      onSuccess: () => onRestored(),
+    },
+  );
   return (
     <section className="rounded-md border bg-card p-4" aria-labelledby="doc-revisions-title">
       <h2 id="doc-revisions-title" className="mb-2 text-sm font-semibold">

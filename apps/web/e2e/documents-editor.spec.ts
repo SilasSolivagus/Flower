@@ -8,6 +8,7 @@ import {
   createRequirement,
   expectNoPageOverflow,
   FAIL_500,
+  json,
   login,
   ok,
   OWNER,
@@ -176,6 +177,32 @@ test('冲突后重新加载时取数失败：编辑器不重新挂载，冲突�
   await alert.getByRole('button', { name: '重新加载' }).click();
   await expect(page.getByRole('region', { name: '正文' })).toContainText('别处写的');
   await expect(page.getByRole('alert').filter({ hasText: '文档已被其他人修改' })).toHaveCount(0);
+});
+
+test('刚输入就提交评审：先保存编辑器里的内容，必填小节按最新正文检查', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const tpl = await json<{ template: { id: string } }>(
+    request.post('/api/v1/orgs/acme/templates', { data: { name: '轻量', body: '## 背景\n\n待填\n', sections: [{ heading: '背景', required: true }] } }),
+  );
+  const doc = await createDocument(request, productId, { title: '提交前保存', templateId: tpl.template.id });
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/documents/${doc.displayKey}`);
+  const body = page.getByRole('region', { name: '正文' });
+  // 保存请求晚 1.5 秒才发到服务端：即使自动保存的定时器已经触发，没等它完成就提交评审也会读到旧正文
+  await page.route(`**/documents/${doc.id}/content`, async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.continue();
+  });
+  await body.getByText('待填').click();
+  await page.keyboard.press('End');
+  await page.keyboard.type('上传慢');
+  const side = page.getByRole('complementary');
+  const moved = page.waitForResponse((r) => r.url().endsWith(`/documents/${doc.id}/transitions`));
+  await side.getByRole('button', { name: '改为评审中' }).click();
+  expect((await moved).status()).toBe(200);
+  await expect(side.getByRole('button', { name: '改为评审中' })).toHaveCount(0);
+  await expect(side.getByRole('alert')).toHaveCount(0);
+  await expect(body.getByRole('status')).toHaveText('已保存');
 });
 
 test('外部 PRD：链接卡片、改状态、指定负责人、覆盖需求的关联与移出', async ({ page, request }) => {

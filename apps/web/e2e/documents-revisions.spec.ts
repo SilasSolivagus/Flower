@@ -46,6 +46,39 @@ test('修订记录：任选两版按小节对比，恢复到旧版本', async ({
   await expect(page.getByRole('alert').filter({ hasText: '文档已被其他人修改' })).toHaveCount(0);
 });
 
+test('自动保存的响应还没回来时恢复旧版本：等保存完成、用编辑器的版本号，不误报冲突', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const doc = await createDocument(request, productId, { title: '恢复竞态', externalUrl: 'https://docs.qq.com/doc/race' });
+  await ok(request.post(`/api/v1/orgs/acme/documents/${doc.id}/convert`, { data: { baseVersion: 1, markdown: '## 背景\n\n第一版' } }));
+  await ok(request.put(`/api/v1/orgs/acme/documents/${doc.id}/content`, { data: { baseVersion: 2, markdown: '## 背景\n\n第二版' } }));
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/documents/${doc.displayKey}`);
+  const body = page.getByRole('region', { name: '正文' });
+  const revs = page.getByRole('complementary').getByRole('region', { name: '修订记录' });
+  await expect(revs.getByRole('listitem')).toHaveCount(2);
+
+  // 保存请求先到达服务端，响应过 1.5 秒才回到页面
+  const isSave = (r: { url(): string; method(): string }) => r.url().endsWith(`/documents/${doc.id}/content`) && r.method() === 'PUT';
+  await page.route(`**/documents/${doc.id}/content`, async (route) => {
+    const res = await route.fetch();
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.fulfill({ response: res });
+  });
+  const sent = page.waitForRequest(isSave);
+  await body.locator('.bn-block-content').last().click();
+  await page.keyboard.press('End');
+  await page.keyboard.type('恢复之前写的');
+  await sent;
+  const restored = page.waitForResponse((r) => r.url().endsWith(`/documents/${doc.id}/restore`));
+  await revs.getByRole('button', { name: '恢复第 1 版' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: '恢复' }).click();
+  expect((await restored).status()).toBe(200);
+  await expect(body).toContainText('第一版');
+  await expect(body).not.toContainText('第二版');
+  await expect(revs.getByRole('listitem').first()).toContainText('恢复到第 1 版');
+  await expect(page.getByRole('alert').filter({ hasText: '文档已被其他人修改' })).toHaveCount(0);
+});
+
 test('评论：选中文字评论，原文改动后标为已失效；整篇评论、回复、标为已解决', async ({ page, request }) => {
   const productId = await createProduct(request);
   const doc = await createDocument(request, productId, { title: '评论', externalUrl: 'https://docs.qq.com/doc/cmt' });

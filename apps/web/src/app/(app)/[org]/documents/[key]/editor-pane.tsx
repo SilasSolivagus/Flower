@@ -30,6 +30,8 @@ export const AUTOSAVE_MS = 1000;
 export type EditorPaneHandle = {
   /** 本页改标题成功后调用：服务端为原生 PRD 改标题会把版本号加一，紧接在当前版本之后时沿用，否则留给下次保存报冲突。 */
   onRenamed: (version: number) => void;
+  /** 等在途的保存返回，并立即保存没到时间的修改，返回编辑器当前的版本号。恢复版本、改状态之前调用。 */
+  saveNow: () => Promise<number>;
 };
 
 /**
@@ -47,6 +49,8 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
   const uploaded = useRef(new Map<string, string>());
   // 在途的保存请求：卸载时补发的保存要等它返回、用它的新版本号
   const lastSave = useRef<Promise<Saved> | null>(null);
+  // 在途保存的完成（成功或失败、回调都已执行）
+  const settled = useRef<Promise<void>>(Promise.resolve());
   const [state, setState] = useState<SaveState>('saved');
   const qc = useQueryClient();
   const container = useRef<HTMLDivElement>(null);
@@ -80,43 +84,56 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
         ),
     },
   );
+  const conflict = save.error instanceof ApiError && save.error.status === 409;
+
+  const flush = (): Promise<void> => {
+    timer.current = null;
+    if (blocked.current) return settled.current;
+    if (inFlight.current) {
+      timer.current = setTimeout(flush, AUTOSAVE_MS);
+      return settled.current;
+    }
+    const markdown = handle.current?.getMarkdown();
+    if (markdown === undefined) return settled.current;
+    inFlight.current = true;
+    setState('saving');
+    settled.current = new Promise((resolve) =>
+      save.mutate(markdown, {
+        onSuccess: (r) => {
+          version.current = r.version;
+          setState(timer.current ? 'dirty' : 'saved');
+        },
+        onError: (e) => {
+          if (e.status === 409) {
+            // 停止自动保存：清掉保存期间继续输入时排上的定时器，冲突提示与只读状态一直保持到重新加载
+            blocked.current = true;
+            if (timer.current) clearTimeout(timer.current);
+            timer.current = null;
+          }
+          setState('dirty');
+        },
+        onSettled: () => {
+          inFlight.current = false;
+          resolve();
+        },
+      }),
+    );
+    return settled.current;
+  };
+
   useImperativeHandle(ref, () => ({
     onRenamed: (v) => {
       if (v === version.current + 1) version.current = v;
     },
+    saveNow: async () => {
+      await settled.current;
+      if (timer.current) {
+        clearTimeout(timer.current);
+        await flush();
+      }
+      return version.current;
+    },
   }));
-  const conflict = save.error instanceof ApiError && save.error.status === 409;
-
-  const flush = () => {
-    timer.current = null;
-    if (blocked.current) return;
-    if (inFlight.current) {
-      timer.current = setTimeout(flush, AUTOSAVE_MS);
-      return;
-    }
-    const markdown = handle.current?.getMarkdown();
-    if (markdown === undefined) return;
-    inFlight.current = true;
-    setState('saving');
-    save.mutate(markdown, {
-      onSuccess: (r) => {
-        version.current = r.version;
-        setState(timer.current ? 'dirty' : 'saved');
-      },
-      onError: (e) => {
-        if (e.status === 409) {
-          // 停止自动保存：清掉保存期间继续输入时排上的定时器，冲突提示与只读状态一直保持到重新加载
-          blocked.current = true;
-          if (timer.current) clearTimeout(timer.current);
-          timer.current = null;
-        }
-        setState('dirty');
-      },
-      onSettled: () => {
-        inFlight.current = false;
-      },
-    });
-  };
 
   const onDirty = () => {
     if (!editable || blocked.current) return;

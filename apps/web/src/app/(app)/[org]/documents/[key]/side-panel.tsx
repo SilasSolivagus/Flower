@@ -19,17 +19,24 @@ import { Revisions } from './revisions';
 
 const CARD = 'rounded-md border bg-card p-4';
 
-export function SidePanel({ org, doc, onReload }: { org: string; doc: DocumentDetail; onReload: () => void }) {
+export function SidePanel({ org, doc, onReload, saveEditor }: { org: string; doc: DocumentDetail; onReload: () => void; saveEditor: () => Promise<number | null> }) {
   const canEdit = doc.myRole !== 'viewer';
   const orgQ = useOrg(org);
   const members = useMembers(org, canListMembers(orgQ.data?.me));
   const invalidate = [documentKeys(org), requirementKeys(org), qk.workbench];
   const [keys, setKeys] = useState('');
-  const move = useApiMutation((to: DocumentStatus) => api(`/orgs/${org}/documents/${doc.id}/transitions`, { method: 'POST', body: { to } }), {
-    silentError: true,
-    invalidate,
-    success: '已更新状态',
-  });
+  const move = useApiMutation(
+    async (to: DocumentStatus) => {
+      // 必填小节按服务端正文校验，先把编辑器里没到时间的修改存上
+      await saveEditor();
+      return api(`/orgs/${org}/documents/${doc.id}/transitions`, { method: 'POST', body: { to } });
+    },
+    {
+      silentError: true,
+      invalidate,
+      success: '已更新状态',
+    },
+  );
   const setOwner = useApiMutation((ownerMemberId: string | null) => api(`/orgs/${org}/documents/${doc.id}`, { method: 'PATCH', body: { ownerMemberId } }), {
     invalidate: [documentKeys(org)],
     success: '已保存',
@@ -130,7 +137,7 @@ export function SidePanel({ org, doc, onReload }: { org: string; doc: DocumentDe
 
       <CheckItems items={doc.checkItems} canEdit={canEdit} basePath={`/orgs/${org}/documents/${doc.id}/checks`} invalidate={invalidate} />
 
-      {doc.source === 'native' && <Revisions org={org} doc={doc} onRestored={onReload} />}
+      {doc.source === 'native' && <Revisions org={org} doc={doc} onRestored={onReload} saveEditor={saveEditor} />}
 
       {doc.source === 'native' && doc.externalUrl && (
         <p className="break-all text-[12px] text-muted-foreground">
