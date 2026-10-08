@@ -51,6 +51,9 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
   const lastSave = useRef<Promise<Saved> | null>(null);
   // 在途保存的完成（成功或失败、回调都已执行）
   const settled = useRef<Promise<void>>(Promise.resolve());
+  // 非冲突的保存失败后自动重试一次；重试期间不显示错误
+  const retried = useRef(false);
+  const [retrying, setRetrying] = useState(false);
   const [state, setState] = useState<SaveState>('saved');
   const qc = useQueryClient();
   const container = useRef<HTMLDivElement>(null);
@@ -101,6 +104,8 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
       save.mutate(markdown, {
         onSuccess: (r) => {
           version.current = r.version;
+          retried.current = false;
+          setRetrying(false);
           setState(timer.current ? 'dirty' : 'saved');
         },
         onError: (e) => {
@@ -109,6 +114,12 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
             blocked.current = true;
             if (timer.current) clearTimeout(timer.current);
             timer.current = null;
+          } else if (!retried.current) {
+            retried.current = true;
+            setRetrying(true);
+            if (!timer.current) timer.current = setTimeout(flush, AUTOSAVE_MS);
+          } else {
+            setRetrying(false);
           }
           setState('dirty');
         },
@@ -202,7 +213,7 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
           </Button>
         </div>
       )}
-      {save.error && !conflict && (
+      {save.error && !conflict && !retrying && (
         <div className="px-4 pt-3">
           <FormError error={save.error} />
         </div>

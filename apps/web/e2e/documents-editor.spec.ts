@@ -205,6 +205,35 @@ test('刚输入就提交评审：先保存编辑器里的内容，必填小节�
   await expect(body.getByRole('status')).toHaveText('已保存');
 });
 
+test('保存失败（非冲突）后自动重试一次：重试成功不显示错误，再失败才显示', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const doc = await createDocument(request, productId, { title: '重试', templateId: await presetTemplateId(request, productId) });
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/documents/${doc.displayKey}`);
+  const body = page.getByRole('region', { name: '正文' });
+  await expect(body).toContainText('1. 背景介绍');
+
+  let failures = 1;
+  await page.route(`**/documents/${doc.id}/content`, async (route) => {
+    if (failures > 0) {
+      failures -= 1;
+      await route.fulfill(FAIL_500);
+    } else await route.continue();
+  });
+  const retried = page.waitForResponse((r) => isSave(doc.id)(r.request()) && r.status() === 200);
+  expect((await typeAtEnd(page, doc.id, '第一次失败')).status()).toBe(500);
+  await retried;
+  await expect(body.getByRole('status')).toHaveText('已保存');
+  await expect(body.getByRole('alert')).toHaveCount(0);
+
+  failures = 2;
+  const second = page.waitForResponse((r) => isSave(doc.id)(r.request()) && failures === 0);
+  expect((await typeAtEnd(page, doc.id, '两次都失败')).status()).toBe(500);
+  expect((await second).status()).toBe(500);
+  await expect(body.getByRole('alert')).toContainText('服务器错误');
+  await expect(body.getByRole('status')).toHaveText('未保存');
+});
+
 test('外部 PRD：链接卡片、改状态、指定负责人、覆盖需求的关联与移出', async ({ page, request }) => {
   const productId = await createProduct(request);
   await createRequirement(request, productId, '分片上传');
