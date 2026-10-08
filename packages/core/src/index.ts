@@ -51,3 +51,4 @@ export * from './workbench/workbench';
 export * from './storage';
 export * from './documents/templates';
 export * from './documents/attachments';
+export * from './documents/documents';
