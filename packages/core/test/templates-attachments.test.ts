@@ -117,4 +117,16 @@ describe('图片附件', () => {
       message: '附件文件不存在',
     });
   });
+
+  it('本地存储：合法键可以写入读出；非法键（路径穿越、绝对路径、空字符串）一律拒绝', async () => {
+    const storage = createLocalStorage(mkdtempSync(path.join(os.tmpdir(), 'flower-storage-key-')));
+    const key = '0196b2b4-0000-7000-8000-000000000001/0196b2b4-0000-7000-8000-000000000002.png';
+    await storage.put(key, PNG);
+    expect([...(await storage.get(key))!]).toEqual([...PNG]);
+    const bad = ['../x', 'a/../../etc/passwd', '/etc/passwd', ''];
+    for (const k of bad) {
+      await expect(storage.put(k, PNG)).rejects.toThrow('非法的存储键');
+      await expect(storage.get(k)).rejects.toThrow('非法的存储键');
+    }
+  });
 });
