@@ -104,9 +104,9 @@ export function reviewStateOf(states: CheckState[]): ReviewState {
   return 'in_progress';
 }
 
-/** 需求的评审是否已经开始：任一需求检查项不在它的默认状态。 */
+/** 需求的评审是否已经开始：任一需求检查项不在它的默认状态。跟随 PRD 状态的 auto 项不算（挂上 PRD 不等于开始评审）。 */
 export function reviewStarted(items: CheckItem[], checks: Record<string, CheckState>): boolean {
-  return items.some((c) => c.scope === 'requirement' && checks[c.key] !== undefined && checks[c.key] !== c.defaultState);
+  return items.some((c) => c.scope === 'requirement' && !c.auto && checks[c.key] !== undefined && checks[c.key] !== c.defaultState);
 }
 
 /**

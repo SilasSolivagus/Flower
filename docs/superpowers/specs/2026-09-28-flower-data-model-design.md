@@ -98,7 +98,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
                  type: "single" | "signoff",
                  signers?: [{ by: "function_tag" | "member" | "product_role", ref }],
                  signoffRule?: "all" | "any",
-                 auto?: "prd_status",                 // 由系统自动更新，不可手改
+                 auto?: "prd_status",                 // 作用于需求的普通检查项；需求被 PRD 覆盖时跟随 PRD 状态、不可手改（P2-A）
                  defaultState: CheckState }],
 }
 // CheckState 固定：not_started | in_progress | passed | rejected | not_needed

@@ -105,6 +105,7 @@ export async function setCheckItemState(
     const item = body.checkItems.find((c) => c.key === itemKey && c.scope === 'requirement');
     if (!item) throw new AppError('not_found', '检查项不存在');
     if (item.type === 'signoff') throw new AppError('invalid', '会签检查项的状态由签字结果决定');
+    if (item.auto === 'prd_status' && cur.changeDocumentId) throw new AppError('invalid', '「PRD」检查项跟随所挂 PRD 的状态，不能手动修改');
     const result = await ensureResult(tx, actor.orgId, requirementId, itemKey, item.defaultState);
     const note = input.note === undefined ? result.note : input.note?.trim() || null;
     const now = new Date();

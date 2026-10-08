@@ -88,3 +88,37 @@ export function reviewWorkflow(designTagId: string, bossMemberId: string): Workf
     ],
   };
 }
+
+/**
+ * 带 PRD 联动的流程：「PRD」是作用于需求、跟随 PRD 状态的普通检查项；「PRD 评审」是挂在 PRD 上、由设计标签会签的检查项，
+ * 流转到「开发中」需要它通过。PRD 相关测试与端到端 helper 共用同一结构。
+ */
+export function prdWorkflow(designTagId: string): WorkflowBody {
+  return {
+    states: [
+      { key: 'backlog', label: '收集', color: '#94a3b8', order: 1, group: '', category: 'backlog' },
+      { key: 'doing', label: '开发中', color: '#f59e0b', order: 2, group: '', category: 'started' },
+      { key: 'done', label: '已上线', color: '#10b981', order: 3, group: '', category: 'completed' },
+    ],
+    initial: 'backlog',
+    transitions: [
+      { from: '*', to: 'backlog', conditions: [] },
+      { from: '*', to: 'doing', conditions: [{ type: 'check_item', item: 'prd_review', in: ['passed'] }] },
+      { from: '*', to: 'done', conditions: [] },
+    ],
+    actionGates: [],
+    checkItems: [
+      { key: 'feasibility', label: '可行性', scope: 'requirement', type: 'single', defaultState: 'not_started' },
+      { key: 'prd', label: 'PRD', scope: 'requirement', type: 'single', auto: 'prd_status', defaultState: 'not_started' },
+      {
+        key: 'prd_review',
+        label: 'PRD 评审',
+        scope: 'document',
+        type: 'signoff',
+        signers: [{ by: 'function_tag', ref: designTagId }],
+        signoffRule: 'all',
+        defaultState: 'not_started',
+      },
+    ],
+  };
+}

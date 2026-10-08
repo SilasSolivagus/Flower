@@ -11,6 +11,7 @@ import type { CheckItemView } from '../requirements/detail';
 import { assertTitle, productKeyOf, displayKey as requirementDisplayKey, type MemberRef } from '../requirements/requirements';
 import { orgToday } from '../tasks/tasks';
 import { reanchorDocumentComments } from './comments';
+import { linkRequirementsTx, syncPrdCheck } from './coverage';
 import type { DocumentStatus, ExternalProvider, RevisionSnapshot } from './constants';
 import {
   canTransition,
@@ -178,7 +179,7 @@ export async function createDocument(
   db: Db,
   actor: Actor,
   productId: string,
-  input: { title: string; ownerMemberId?: string | null; templateId?: string | null; externalUrl?: string | null },
+  input: { title: string; ownerMemberId?: string | null; templateId?: string | null; externalUrl?: string | null; requirementIds?: string[] },
 ): Promise<DocumentDetail> {
   const title = assertTitle(input.title);
   const wantsExternal = !!input.externalUrl?.trim();
@@ -238,6 +239,7 @@ export async function createDocument(
       actor,
       payload: { number: doc.number, title, source: doc.source, externalUrl: doc.externalUrl, templateId },
     });
+    if (input.requirementIds?.length) await linkRequirementsTx(tx, actor, doc.id, input.requirementIds);
     return documentDetailInTx(tx, actor, doc.id);
   });
 }
@@ -437,6 +439,13 @@ export async function transitionDocument(db: Db, actor: Actor, id: string, input
       actor,
       payload: { changes: [{ field: 'status', old: doc.status, new: input.to }] },
     });
+    const covered = await tx
+      .select({ id: requirements.id })
+      .from(requirements)
+      .where(and(eq(requirements.changeDocumentId, id), isNull(requirements.deletedAt)))
+      .orderBy(asc(requirements.id))
+      .for('update');
+    await syncPrdCheck(tx, actor, { id, productId: doc.productId, status: input.to }, covered.map((r) => r.id));
     return documentDetailInTx(tx, actor, id);
   });
 }

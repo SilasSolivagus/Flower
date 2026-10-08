@@ -86,10 +86,14 @@ export function validateWorkflowBody(
     if (c.type === 'single' && (c.signers?.length || c.signoffRule)) {
       issues.push({ path, message: '普通检查项不能设置签字人或会签规则' });
     }
-    if (c.auto === 'prd_status' && c.scope !== 'document') {
-      issues.push({ path: `${path}.auto`, message: '自动同步 PRD 状态的检查项作用范围必须是 PRD' });
+    if (c.auto === 'prd_status' && (c.scope !== 'requirement' || c.type !== 'single')) {
+      issues.push({ path: `${path}.auto`, message: '自动同步 PRD 状态的检查项必须作用于需求，且为普通检查项' });
     }
   });
+
+  if (b.checkItems.filter((c) => c.auto === 'prd_status').length > 1) {
+    issues.push({ path: 'checkItems', message: '最多只能有一个自动同步 PRD 状态的检查项' });
+  }
 
   const fieldKeys = new Set(ctx.fieldKeys);
   const checkConditions = (conds: Condition[], path: string) =>

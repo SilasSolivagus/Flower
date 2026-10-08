@@ -53,3 +53,4 @@ export * from './documents/templates';
 export * from './documents/attachments';
 export * from './documents/documents';
 export * from './documents/comments';
+export * from './documents/coverage';

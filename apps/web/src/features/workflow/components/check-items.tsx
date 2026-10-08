@@ -47,7 +47,7 @@ export function CheckItems({
             <span className="font-mono text-xs text-muted-foreground">{c.key}</span>
             <span className="text-xs text-muted-foreground">
               {c.scope === 'document' ? '作用于 PRD' : '作用于需求'} · {c.type === 'signoff' ? `会签（${c.signoffRule === 'all' ? '全部通过' : '任一通过'}）` : '普通'}
-              {c.auto === 'prd_status' && ' · 自动同步 PRD 状态'}
+              {c.auto === 'prd_status' && ' · 跟随 PRD 状态'}
             </span>
             <span className="flex-1 truncate text-xs text-muted-foreground">{c.signers?.map(signerLabel).join('、')}</span>
             <ConfirmAction
@@ -111,7 +111,11 @@ export function CheckItems({
                 <Select
                   value={draft.type}
                   onValueChange={(v) =>
-                    setDraft(v === 'signoff' ? { ...draft, type: 'signoff', signers: [], signoffRule: 'all' } : { ...draft, type: 'single', signers: undefined, signoffRule: undefined })
+                    setDraft(
+                      v === 'signoff'
+                        ? { ...draft, type: 'signoff', signers: [], signoffRule: 'all', auto: undefined }
+                        : { ...draft, type: 'single', signers: undefined, signoffRule: undefined, auto: undefined },
+                    )
                   }
                 >
                   <SelectTrigger id="ci-type">
@@ -124,10 +128,10 @@ export function CheckItems({
                 </Select>
               </div>
             </div>
-            {draft.scope === 'document' && (
+            {draft.scope === 'requirement' && draft.type === 'single' && (
               <label className="flex items-center gap-2 text-[13px]">
                 <Checkbox checked={draft.auto === 'prd_status'} onCheckedChange={(v) => setDraft({ ...draft, auto: v ? 'prd_status' : undefined })} />
-                由 PRD 模块自动同步状态（不可手动修改）
+                跟随 PRD 状态（需求挂上 PRD 后由系统更新，不能手改）
               </label>
             )}
             {draft.type === 'signoff' && (
