@@ -27,7 +27,8 @@ function DocumentPage() {
   // 正文被外部替换（冲突后重新加载、恢复版本、导入）时加一，让编辑器按最新正文重新挂载
   const [epoch, setEpoch] = useState(0);
   const reload = async () => {
-    await q.refetch();
+    // 取数失败时不重新挂载编辑器，免得它用旧正文覆盖掉错误提示前的状态
+    if ((await q.refetch()).isError) return;
     setEpoch((e) => e + 1);
   };
   const patch = useApiMutation(

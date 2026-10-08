@@ -7,6 +7,7 @@ import {
   createProduct,
   createRequirement,
   expectNoPageOverflow,
+  FAIL_500,
   login,
   ok,
   OWNER,
@@ -145,6 +146,36 @@ test('保存成功后只更新缓存里的版本号与正文，不重新拉取�
   await expect(body.getByRole('status')).toHaveText('已保存');
   await page.waitForTimeout(500);
   expect(detailGets).toBe(0);
+});
+
+test('冲突后重新加载时取数失败：编辑器不重新挂载，冲突提示保留', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const doc = await createDocument(request, productId, { title: '重载失败', templateId: await presetTemplateId(request, productId) });
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/documents/${doc.displayKey}`);
+  await expect(page.getByRole('region', { name: '正文' })).toContainText('1. 背景介绍');
+  await ok(request.put(`/api/v1/orgs/acme/documents/${doc.id}/content`, { data: { baseVersion: 1, markdown: '## 背景\n\n别处写的' } }));
+  expect((await typeAtEnd(page, doc.id, '这里写的')).status()).toBe(409);
+  const alert = page.getByRole('alert').filter({ hasText: '文档已被其他人修改' });
+  await expect(alert).toBeVisible();
+
+  const detail = `**/api/v1/orgs/acme/documents/${doc.displayKey}`;
+  let gets = 0;
+  await page.route(detail, async (route) => {
+    gets += 1;
+    await route.fulfill(FAIL_500);
+  });
+  await alert.getByRole('button', { name: '重新加载' }).click();
+  // 查询失败会自动重试两次，等三次请求都失败
+  await expect.poll(() => gets, { timeout: 15_000 }).toBe(3);
+  await page.waitForTimeout(500);
+  await expect(alert).toBeVisible();
+  await expect(page.getByRole('region', { name: '正文' })).toContainText('这里写的');
+
+  await page.unroute(detail);
+  await alert.getByRole('button', { name: '重新加载' }).click();
+  await expect(page.getByRole('region', { name: '正文' })).toContainText('别处写的');
+  await expect(page.getByRole('alert').filter({ hasText: '文档已被其他人修改' })).toHaveCount(0);
 });
 
 test('外部 PRD：链接卡片、改状态、指定负责人、覆盖需求的关联与移出', async ({ page, request }) => {
