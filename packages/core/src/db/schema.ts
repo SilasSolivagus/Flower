@@ -18,6 +18,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import type { TokenScope } from '../domain-types';
+import { DOCUMENT_STATUSES, EXTERNAL_PROVIDERS, type RevisionSnapshot, type TemplateSection } from '../documents/constants';
 import { newId } from '../ids';
 
 const id = () => uuid('id').primaryKey().$defaultFn(newId);
@@ -98,6 +99,7 @@ export const products = pgTable(
     workflowVersionId: uuid('workflow_version_id').references((): AnyPgColumn => workflowVersions.id),
     structureLevelNames: jsonb('structure_level_names').$type<string[]>(),
     requirementSeq: integer('requirement_seq').notNull().default(0),
+    documentSeq: integer('document_seq').notNull().default(0),
     createdAt: createdAt(),
     deletedAt: ts('deleted_at'),
   },
@@ -367,7 +369,7 @@ export const requirements = pgTable(
     requesterMemberId: memberRef('requester_member_id'),
     nodeId: uuid('node_id').references(() => structureNodes.id),
     iterationId: uuid('iteration_id').references(() => iterations.id),
-    changeDocumentId: uuid('change_document_id'),
+    changeDocumentId: uuid('change_document_id').references((): AnyPgColumn => documents.id),
     legacyMeta: jsonb('legacy_meta').$type<Record<string, unknown>>(),
     createdBy: memberRef('created_by'),
     createdAt: createdAt(),
@@ -380,6 +382,7 @@ export const requirements = pgTable(
     index('requirements_product_updated').on(t.productId, t.updatedAt.desc()),
     index('requirements_owner').on(t.ownerMemberId),
     index('requirements_iteration').on(t.iterationId),
+    index('requirements_change_document').on(t.changeDocumentId),
   ],
 );
 
@@ -585,4 +588,97 @@ export const entityAliases = pgTable(
     alias: text('alias').notNull(),
   },
   (t) => [uniqueIndex('entity_aliases_org_alias').on(t.orgId, t.alias)],
+);
+
+// ---------- P2-A：文档 ----------
+
+export const documentTemplates = pgTable(
+  'document_templates',
+  {
+    id: id(),
+    orgId: orgRef(),
+    productId: uuid('product_id').references(() => products.id),
+    kind: text('kind', { enum: ['change', 'module'] }).notNull().default('change'),
+    name: text('name').notNull(),
+    body: text('body').notNull().default(''),
+    sections: jsonb('sections').$type<TemplateSection[]>().notNull().default([]),
+    active: boolean('active').notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('document_templates_org_name').on(t.orgId, t.kind, t.name).where(sql`${t.productId} is null`),
+    uniqueIndex('document_templates_product_name').on(t.productId, t.kind, t.name).where(sql`${t.productId} is not null`),
+  ],
+);
+
+export const documents = pgTable(
+  'documents',
+  {
+    id: id(),
+    orgId: orgRef(),
+    productId: productRef(),
+    number: integer('number').notNull(),
+    kind: text('kind', { enum: ['change', 'module'] }).notNull().default('change'),
+    source: text('source', { enum: ['native', 'external'] }).notNull(),
+    title: text('title').notNull(),
+    ownerMemberId: memberRef('owner_member_id'),
+    templateId: uuid('template_id').references(() => documentTemplates.id),
+    nodeId: uuid('node_id').references(() => structureNodes.id),
+    status: text('status', { enum: DOCUMENT_STATUSES }).notNull().default('draft'),
+    currentRevisionId: uuid('current_revision_id').references((): AnyPgColumn => documentRevisions.id),
+    externalUrl: text('external_url'),
+    externalUrlKey: text('external_url_key'),
+    externalProvider: text('external_provider', { enum: EXTERNAL_PROVIDERS }),
+    version: integer('version').notNull().default(1),
+    legacyKey: text('legacy_key'),
+    createdBy: memberRef('created_by'),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+    deletedAt: ts('deleted_at'),
+  },
+  (t) => [
+    uniqueIndex('documents_product_number').on(t.productId, t.number),
+    uniqueIndex('documents_product_url').on(t.productId, t.externalUrlKey).where(sql`${t.externalUrlKey} is not null and ${t.deletedAt} is null`),
+    index('documents_product_updated').on(t.productId, t.updatedAt.desc()),
+    check('documents_external', sql`${t.source} <> 'external' or (${t.externalUrl} is not null and ${t.externalUrlKey} is not null and ${t.currentRevisionId} is null)`),
+  ],
+);
+
+export const documentRevisions = pgTable(
+  'document_revisions',
+  {
+    id: id(),
+    orgId: orgRef(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references((): AnyPgColumn => documents.id),
+    version: integer('version').notNull(),
+    snapshot: jsonb('snapshot').$type<RevisionSnapshot>().notNull(),
+    summary: text('summary'),
+    authorMemberId: memberRef('author_member_id'),
+    mergedFromDocumentId: uuid('merged_from_document_id'),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('document_revisions_doc_version').on(t.documentId, t.version)],
+);
+
+export const attachments = pgTable(
+  'attachments',
+  {
+    id: id(),
+    orgId: orgRef(),
+    targetType: text('target_type', { enum: ['document'] }).notNull(),
+    targetId: uuid('target_id').notNull(),
+    storageKey: text('storage_key').notNull().unique(),
+    filename: text('filename').notNull(),
+    mime: text('mime').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    width: integer('width'),
+    height: integer('height'),
+    uploaderMemberId: memberRef('uploader_member_id'),
+    createdAt: createdAt(),
+  },
+  (t) => [index('attachments_target').on(t.targetType, t.targetId)],
 );

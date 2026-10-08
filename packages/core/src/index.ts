@@ -5,6 +5,7 @@ export * from './errors';
 export * from './dates';
 export * from './domain-types';
 export * from './db/schema';
+export * from './documents/constants';
 export * from './db/client';
 export * from './db/tx';
 export * from './events';

@@ -26,7 +26,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 
 - **数据库**：PostgreSQL 17，镜像 `pgvector/pgvector:pg17`；ORM 用 drizzle。
 - **存储策略**：业务实体用关系表加外键；流程配置存为带版本的 JSON 定义（zod 校验）；运行时取值用关系表。
-- **主键**：新建数据用 UUIDv7；迁移导入的行使用由来源键 SHA-1 派生的确定性 UUID（v5 位布局），重复导入得到相同 ID。人可读编号按产品自增（如 `PAN-123`、`PRD-12`）：需求编号由 `products.requirement_seq` 以 `update … returning` 分配；P2 文档编号届时另加列或引入计数表。旧编号存 `legacy_key`。
+- **主键**：新建数据用 UUIDv7；迁移导入的行使用由来源键 SHA-1 派生的确定性 UUID（v5 位布局），重复导入得到相同 ID。人可读编号按产品自增（如 `PAN-123`、`PRD-12`）：需求编号由 `products.requirement_seq` 以 `update … returning` 分配；文档编号由 `products.document_seq` 以同样方式分配，显示为 `{product.key}-PRD-{n}`（P2-A 计划「设计决定」）。旧编号存 `legacy_key`。
 - **租户隔离**：所有租户数据表带 `org_id`。应用层在每个事务开头设置当前组织并强制过滤；Postgres 行级安全（RLS）策略用同一个值再校验一次。
 - **软删除**：业务实体带 `deleted_at`。字典选项只停用不删除。
 - **审计**：领域事件表即审计日志（见 §6.1），不另建日志表。
