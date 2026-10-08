@@ -131,8 +131,8 @@ describe('写入数据库', () => {
     writeFileSync(path.join(uploads, LEGACY_FILE), Buffer.from(INLINE_PNG, 'base64'));
     const storage = createLocalStorage(mkdtempSync(path.join(os.tmpdir(), 'flower-storage-')));
     const data = withPrdPages();
-    const plan = buildImportPlan(data, reviewedMapping(data), { ...opts, orgSlug: 'prd123', availableUploads: new Set([LEGACY_FILE]) });
-    expect(await writeImport(t.adminDb, plan, { replace: false, storage, uploadsDir: uploads })).toEqual({ filesWritten: 2, filesMissing: 0, filesInvalid: 0, rejected: [] });
+    const plan = buildImportPlan(data, reviewedMapping(data), { ...opts, orgSlug: 'prd123', uploadsDir: uploads });
+    expect(await writeImport(t.adminDb, plan, { replace: false, storage, uploadsDir: uploads })).toEqual({ filesWritten: 2, filesMissing: 0 });
     const actor = (await resolveActor(t.db, opts.owner!.accountId, 'prd123'))!;
     const doc = await getDocumentByKey(t.db, actor, 'PAN-PRD-1');
     expect(doc).toMatchObject({ source: 'native', status: 'launched', revisionNumber: 3, requirements: [{ displayKey: 'PAN-1' }] });
@@ -144,13 +144,13 @@ describe('写入数据库', () => {
     expect((await getDocumentByKey(t.db, actor, 'PAN-PRD-1')).revisionNumber).toBe(3);
   });
 
-  it('导出目录缺少旧附件文件时照常写入，计为缺失', async () => {
+  it('没给导出目录时照常写入，旧附件文件计为缺失', async () => {
     const storage = createLocalStorage(mkdtempSync(path.join(os.tmpdir(), 'flower-storage-')));
     const data = withPrdPages();
-    const plan = buildImportPlan(data, reviewedMapping(data), { ...opts, orgSlug: 'prd-missing', availableUploads: new Set() });
-    expect(plan.report.documents.missingFiles).toBe(1);
-    expect(await writeImport(t.adminDb, plan, { replace: false, storage, uploadsDir: mkdtempSync(path.join(os.tmpdir(), 'prd-uploads-')) })).toEqual({ filesWritten: 1, filesMissing: 1, filesInvalid: 0, rejected: [] });
-    expect(await writeImport(t.adminDb, plan, { replace: true })).toEqual({ filesWritten: 0, filesMissing: 2, filesInvalid: 0, rejected: [] });
+    const plan = buildImportPlan(data, reviewedMapping(data), { ...opts, orgSlug: 'prd-missing' });
+    expect(plan.report.documents.missingFiles).toBeNull();
+    expect(await writeImport(t.adminDb, plan, { replace: false, storage })).toEqual({ filesWritten: 1, filesMissing: 1 });
+    expect(await writeImport(t.adminDb, plan, { replace: true })).toEqual({ filesWritten: 0, filesMissing: 2 });
   });
 
   it('导入后新建的 PRD 编号接着导入的最大编号；有了新文档、评论与需求关联后仍可 replace，数量回到导入时', async () => {
@@ -178,34 +178,21 @@ describe('写入数据库', () => {
     expect((await createDocument(t.db, after, product!.id, { title: '覆盖后新建的 PRD' })).displayKey).toBe('PAN-PRD-3');
   });
 
-  it('旧附件文件内容不是支持的图片时不写入存储，列为不合格', async () => {
-    const uploads = mkdtempSync(path.join(os.tmpdir(), 'prd-uploads-'));
-    writeFileSync(path.join(uploads, LEGACY_FILE), '<svg xmlns="http://www.w3.org/2000/svg"></svg>');
-    const storage = createLocalStorage(mkdtempSync(path.join(os.tmpdir(), 'flower-storage-')));
-    const data = withPrdPages();
-    const plan = buildImportPlan(data, reviewedMapping(data), { ...opts, orgSlug: 'prd-rejected', availableUploads: new Set([LEGACY_FILE]) });
-    const legacy = plan.rows.attachments.find((a) => a.filename === '截图.png')!;
-    expect(await writeImport(t.adminDb, plan, { replace: false, storage, uploadsDir: uploads })).toEqual({
-      filesWritten: 1,
-      filesMissing: 0,
-      filesInvalid: 0,
-      rejected: [{ document: 'PAN-PRD-1', storageKey: legacy.storageKey, reason: '不是支持的图片格式（只支持 PNG、JPEG、GIF、WebP）' }],
-    });
-    expect(await storage.get(legacy.storageKey)).toBeNull();
-  });
-
-  it('旧附件键跳出导出目录时不读取，计为无效', async () => {
+  it('旧附件文件内容不合格或键跳出导出目录时，不建附件、不读取、不写入存储', async () => {
     const parent = mkdtempSync(path.join(os.tmpdir(), 'prd-parent-'));
     const uploads = path.join(parent, 'uploads');
     mkdirSync(uploads);
+    writeFileSync(path.join(uploads, LEGACY_FILE), '<svg xmlns="http://www.w3.org/2000/svg"></svg>');
     writeFileSync(path.join(parent, 'outside.png'), Buffer.from(INLINE_PNG, 'base64'));
-    const storage = createLocalStorage(mkdtempSync(path.join(os.tmpdir(), 'flower-storage-')));
-    const data = withPrdPages();
-    data.prd.attachments[0]!.storage_key = '../outside.png';
-    const plan = buildImportPlan(data, reviewedMapping(data), { ...opts, orgSlug: 'prd-escape', availableUploads: new Set() });
-    expect(plan.report.documents).toMatchObject({ invalidFileKeys: 1, missingFiles: 0 });
-    const legacy = plan.rows.attachments.find((a) => a.filename === '截图.png')!;
-    expect(await writeImport(t.adminDb, plan, { replace: false, storage, uploadsDir: uploads })).toEqual({ filesWritten: 1, filesMissing: 0, filesInvalid: 1, rejected: [] });
-    expect(await storage.get(legacy.storageKey)).toBeNull();
+    for (const [slug, key] of [['prd-rejected', LEGACY_FILE], ['prd-escape', '../outside.png']] as const) {
+      const storage = createLocalStorage(mkdtempSync(path.join(os.tmpdir(), 'flower-storage-')));
+      const data = withPrdPages();
+      data.prd.attachments[0]!.storage_key = key;
+      const plan = buildImportPlan(data, reviewedMapping(data), { ...opts, orgSlug: slug, uploadsDir: uploads });
+      expect(await writeImport(t.adminDb, plan, { replace: false, storage, uploadsDir: uploads })).toEqual({ filesWritten: 1, filesMissing: 0 });
+      const actor = (await resolveActor(t.db, opts.owner!.accountId, slug))!;
+      const rows = await t.adminDb.select().from(attachments).where(eq(attachments.orgId, actor.orgId));
+      expect(rows.map((r) => r.filename)).toEqual([expect.stringMatching(/^inline-/)]);
+    }
   });
 });

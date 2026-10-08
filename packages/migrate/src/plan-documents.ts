@@ -1,25 +1,25 @@
 import { createHash } from 'node:crypto';
+import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { type CheckState, type DocumentStatus, IMAGE_MAX_BYTES, IMAGE_TYPES, type ImageMime, PRESET_TEMPLATE, prdCheckState, sniffImage } from '@flower/core';
-import type { PrdPage } from './legacy-types';
+import type { PrdAttachment, PrdPage } from './legacy-types';
 import type { PlanContext } from './plan-types';
 
 /** prd 系统的 prd_meta.status → 变更 PRD 状态（设计 §6）。 */
 export const PRD_PAGE_STATUS: Record<string, DocumentStatus> = { draft: 'draft', review: 'review', approved: 'approved', in_dev: 'approved', launched: 'launched' };
-const FILE_REF = /\/api\/files\/([0-9a-f-]{36}\.[a-z]+)/g;
+/** 旧附件引用：带不带 `![…](…)` 外壳都匹配，文件不能导入时连外壳一起换成占位文字。 */
+const FILE_REF = /(!\[[^\]]*\]\()?\/api\/files\/([^)\s"']+)(\))?/g;
 /** 内嵌图片：带不带 `![…](…)` 外壳都匹配，不能抽出时连外壳一起换成占位文字。 */
 const DATA_IMAGE = /(!\[[^\]]*\]\()?data:(image\/[\w.+-]+);base64,([A-Za-z0-9+/=]+)(\))?/g;
 export const DROPPED_IMAGE = '[图片未迁移]';
 const REMOTE_IMAGE = /!\[[^\]]*\]\(https?:\/\//g;
 const RELATIVE_IMAGE = /!\[[^\]]*\]\((?!https?:\/\/|\/|data:)[^)]+\)/g;
 
-/** 判断图片字节能否作为附件导入（与应用上传的约束一致）：按内容嗅探类型，需与声明的类型相同，且不超过 10 MB。 */
-export function checkImage(bytes: Uint8Array, declared: string): string | null {
-  const sniffed = sniffImage(bytes);
-  if (!sniffed) return '不是支持的图片格式（只支持 PNG、JPEG、GIF、WebP）';
-  if (sniffed !== declared) return `声明的类型 ${declared} 与内容（${sniffed}）不符`;
-  if (bytes.byteLength > IMAGE_MAX_BYTES) return '超过 10 MB';
-  return null;
+/** 图片字节能否作为附件导入，与应用上传（uploadDocumentImage）的约束一致：不超过 10 MB，按内容嗅探出支持的类型，按嗅探出的类型保存。 */
+export function checkImage(bytes: Uint8Array): { mime: ImageMime } | { reason: string } {
+  if (bytes.byteLength > IMAGE_MAX_BYTES) return { reason: '超过 10 MB' };
+  const mime = sniffImage(bytes);
+  return mime ? { mime } : { reason: '不是支持的图片格式（只支持 PNG、JPEG、GIF、WebP）' };
 }
 
 /** 旧附件文件在导出目录里的路径；键为绝对路径或会跳出导出目录时返回 null，不读取。 */
@@ -30,6 +30,37 @@ export function resolveUpload(dir: string, key: string): string | null {
   const rel = path.relative(root, full);
   return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? full : null;
 }
+
+type LegacyFile =
+  | { ok: true; attId: string; mime: string; ext: string; sizeBytes: number }
+  | { ok: false; kind: 'invalid' | 'missing' | 'rejected' | 'problem'; reason: string };
+
+/**
+ * 旧附件能否导入。给了导出目录时读文件按内容校验，按嗅探出的类型保存；没给时按旧库登记的类型（文件缺失由报告统计）。
+ * 键为绝对路径或跳出导出目录的一律不读取。
+ */
+function judgeLegacyFile(ctx: PlanContext, a: PrdAttachment): LegacyFile {
+  const attId = ctx.id('attachment', `prd:${a.id}`);
+  const dir = ctx.opts.uploadsDir;
+  const file = resolveUpload(dir ?? '/uploads', a.storage_key);
+  if (!file) return { ok: false, kind: 'invalid', reason: '旧附件：键无效（绝对路径或跳出导出目录），未读取' };
+  if (!dir) {
+    const ext = a.mime in IMAGE_TYPES ? IMAGE_TYPES[a.mime as ImageMime] : null;
+    if (!ext) {
+      ctx.problem(`prd 附件类型「${a.mime}」不是支持的图片类型`);
+      return { ok: false, kind: 'problem', reason: '' };
+    }
+    return { ok: true, attId, mime: a.mime, ext, sizeBytes: a.size_bytes };
+  }
+  if (!statSync(file, { throwIfNoEntry: false })?.isFile()) return { ok: false, kind: 'missing', reason: '旧附件：导出目录中没有这个文件' };
+  const bytes = readFileSync(file);
+  const checked = checkImage(bytes);
+  if ('reason' in checked) return { ok: false, kind: 'rejected', reason: `旧附件：${checked.reason}` };
+  return { ok: true, attId, mime: checked.mime, ext: IMAGE_TYPES[checked.mime], sizeBytes: bytes.byteLength };
+}
+
+const imageOrPlaceholder = (open: string | undefined, close: string | undefined, url: string | null): string =>
+  url ? `${open ?? ''}${url}${close ?? ''}` : open && close ? DROPPED_IMAGE : `${open ?? ''}${DROPPED_IMAGE}${close ?? ''}`;
 
 export const attachmentUrl = (ctx: PlanContext, id: string): string => `/api/v1/orgs/${ctx.opts.orgSlug}/attachments/${id}`;
 
@@ -89,7 +120,7 @@ export function buildPrdDocuments(ctx: PlanContext): void {
     }
     return ctx.resolver.personPeek(u.email) ? ctx.memberId(u.email) : ctx.memberId(u.name ?? u.email);
   };
-  const legacyAttachmentId = new Map(prd.attachments.map((a) => [a.storage_key, ctx.id('attachment', `prd:${a.id}`)]));
+  const legacyFiles = new Map(prd.attachments.map((a) => [a.storage_key, judgeLegacyFile(ctx, a)]));
   const pages = [...prd.pages].sort(byCreated);
   const docs = report.documents;
 
@@ -105,30 +136,32 @@ export function buildPrdDocuments(ctx: PlanContext): void {
     const inline = new Map<string, { dropped: true } | { dropped: false; attId: string }>();
     const rewrite = (markdown: string): string =>
       markdown
-        .replace(FILE_REF, (all, key: string) => {
-          const att = legacyAttachmentId.get(key);
-          return att ? attachmentUrl(ctx, att) : all;
+        .replace(FILE_REF, (all, open: string | undefined, key: string, close: string | undefined) => {
+          const f = legacyFiles.get(key);
+          if (!f) return all;
+          return imageOrPlaceholder(open, close, f.ok ? attachmentUrl(ctx, f.attId) : null);
         })
-        .replace(DATA_IMAGE, (_all, open: string | undefined, mime: string, base64: string, close: string | undefined) => {
+        .replace(DATA_IMAGE, (_all, open: string | undefined, _declared: string, base64: string, close: string | undefined) => {
           const sha = createHash('sha1').update(base64).digest('hex');
           let result = inline.get(sha);
           if (!result) {
             const bytes = Buffer.from(base64, 'base64');
-            const reason = checkImage(bytes, mime);
-            if (reason) {
+            const checked = checkImage(bytes);
+            if ('reason' in checked) {
               result = { dropped: true };
-              docs.droppedImages.push({ document: documentKey, reason });
+              docs.droppedImages.push({ document: documentKey, reason: `内嵌图片：${checked.reason}` });
             } else {
+              const mime = checked.mime;
               const attId = ctx.id('attachment', `inline:${p.id}:${sha}`);
               result = { dropped: false, attId };
-              const storageKey = `${orgId}/${attId}.${IMAGE_TYPES[mime as ImageMime]}`;
+              const storageKey = `${orgId}/${attId}.${IMAGE_TYPES[mime]}`;
               rows.attachments.push({
                 id: attId,
                 orgId,
                 targetType: 'document',
                 targetId: id,
                 storageKey,
-                filename: `inline-${sha.slice(0, 8)}.${IMAGE_TYPES[mime as ImageMime]}`,
+                filename: `inline-${sha.slice(0, 8)}.${IMAGE_TYPES[mime]}`,
                 mime,
                 sizeBytes: bytes.byteLength,
                 width: null,
@@ -141,28 +174,29 @@ export function buildPrdDocuments(ctx: PlanContext): void {
             }
             inline.set(sha, result);
           }
-          if (result.dropped) return open && close ? DROPPED_IMAGE : `${open ?? ''}${DROPPED_IMAGE}${close ?? ''}`;
-          return `${open ?? ''}${attachmentUrl(ctx, result.attId)}${close ?? ''}`;
+          return imageOrPlaceholder(open, close, result.dropped ? null : attachmentUrl(ctx, result.attId));
         });
 
     // 旧附件：先于内嵌图片登记，报告与文件列表里顺序稳定
     for (const a of prd.attachments.filter((x) => x.page_id === p.id)) {
-      const attId = legacyAttachmentId.get(a.storage_key)!;
-      const ext = a.mime in IMAGE_TYPES ? IMAGE_TYPES[a.mime as ImageMime] : null;
-      if (!ext) {
-        ctx.problem(`prd 附件类型「${a.mime}」不是支持的图片类型`);
+      const f = legacyFiles.get(a.storage_key)!;
+      if (!f.ok) {
+        if (f.kind === 'problem') continue;
+        if (f.kind === 'invalid') docs.invalidFileKeys += 1;
+        if (f.kind === 'missing') docs.missingFiles = (docs.missingFiles ?? 0) + 1;
+        docs.droppedImages.push({ document: documentKey, reason: f.reason });
         continue;
       }
-      const storageKey = `${orgId}/${attId}.${ext}`;
+      const storageKey = `${orgId}/${f.attId}.${f.ext}`;
       rows.attachments.push({
-        id: attId,
+        id: f.attId,
         orgId,
         targetType: 'document',
         targetId: id,
         storageKey,
         filename: a.filename,
-        mime: a.mime,
-        sizeBytes: a.size_bytes,
+        mime: f.mime,
+        sizeBytes: f.sizeBytes,
         width: a.width,
         height: a.height,
         uploaderMemberId: member(a.uploader_id),
@@ -170,8 +204,6 @@ export function buildPrdDocuments(ctx: PlanContext): void {
       });
       ctx.files.push({ storageKey, from: { legacyKey: a.storage_key } });
       docs.attachments += 1;
-      if (!resolveUpload('/uploads', a.storage_key)) docs.invalidFileKeys += 1;
-      else if (ctx.opts.availableUploads && !ctx.opts.availableUploads.has(a.storage_key)) docs.missingFiles = (docs.missingFiles ?? 0) + 1;
     }
 
     const snaps = prd.pageVersions

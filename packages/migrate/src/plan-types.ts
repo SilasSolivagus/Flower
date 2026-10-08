@@ -11,8 +11,8 @@ export type ImportOptions = {
   productName: string;
   asOf: string;
   owner: { accountId: string; email: string; name: string } | null;
-  /** --uploads 导出目录里有的旧附件文件名；没给目录时为 undefined（报告里不统计缺失）。 */
-  availableUploads?: Set<string>;
+  /** prd_uploads 导出目录；给了时读取旧附件文件按内容校验，缺失或不合格的不导入。没给时为 undefined（报告里不统计缺失）。 */
+  uploadsDir?: string;
 };
 
 type Ins<T extends { $inferInsert: unknown }> = Array<T['$inferInsert']>;
@@ -92,7 +92,7 @@ export type ReconReport = {
     linkedRequirements: number;
     /** 关联的需求不在导入范围内（两个旧系统里都没有）：PRD 照常导入、不挂需求。 */
     unmatchedLinks: Array<{ document: string; requirement: string }>;
-    /** 不能抽成附件、已从正文删去（换成「[图片未迁移]」）的内嵌图片：所在 PRD 与原因。 */
+    /** 没有导入、正文与修订中换成「[图片未迁移]」的图片（内嵌图片与旧附件）：所在 PRD 与原因。 */
     droppedImages: Array<{ document: string; reason: string }>;
     /** 旧附件键为绝对路径或会跳出导出目录，不读取。 */
     invalidFileKeys: number;
@@ -172,7 +172,7 @@ export class PlanContext {
         unmatchedLinks: [],
         droppedImages: [],
         invalidFileKeys: 0,
-        missingFiles: opts.availableUploads ? 0 : null,
+        missingFiles: opts.uploadsDir ? 0 : null,
         externalImages: 0,
         brokenImageRefs: 0,
         external: { docs: 0, requirements: 0, shared: 0, statusCounts: {}, nonUrl: [], mismatches: [], skippedNative: [], mergedOnly: 0 },
