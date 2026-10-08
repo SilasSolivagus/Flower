@@ -82,7 +82,13 @@ export async function memberNames(tx: Tx, ids: Array<string | null>): Promise<Ma
   return new Map(rows.map((r) => [r.id, r.name]));
 }
 
-export async function assertMemberInOrg(tx: Tx, id: string): Promise<void> {
-  const [m] = await tx.select({ id: members.id }).from(members).where(eq(members.id, id));
-  if (!m) throw new AppError('not_found', '成员不存在');
+/**
+ * 写入负责人、提出人、任务负责人、需求分配、阻塞项负责人、会签「指定成员」时校验：必须是本组织在职的人类成员。
+ * 在 withOrg 事务里调用，其他组织的成员受 RLS 限制查不到，按「不存在」处理。
+ */
+export async function assertAssignableMember(tx: Tx, id: string): Promise<void> {
+  const [m] = await tx.select({ kind: members.kind, status: members.status }).from(members).where(eq(members.id, id));
+  if (!m) throw new AppError('invalid', '成员不存在或不属于本组织');
+  if (m.kind !== 'human') throw new AppError('invalid', '不能选择 Agent 成员');
+  if (m.status !== 'active') throw new AppError('invalid', '该成员已离开组织，不能选择');
 }

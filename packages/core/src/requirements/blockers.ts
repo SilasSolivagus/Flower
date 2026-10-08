@@ -6,7 +6,7 @@ import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
-import { assertMemberInOrg, loadRequirement, memberNames } from './context';
+import { assertAssignableMember, loadRequirement, memberNames } from './context';
 import type { MemberRef } from './requirements';
 
 export type BlockerView = {
@@ -48,7 +48,7 @@ export async function createBlocker(
   return withOrg(db, actor.orgId, async (tx) => {
     const req = await loadRequirement(tx, requirementId);
     await requireProductRole(tx, actor, req.productId, 'editor');
-    if (input.ownerMemberId) await assertMemberInOrg(tx, input.ownerMemberId);
+    if (input.ownerMemberId) await assertAssignableMember(tx, input.ownerMemberId);
     const [row] = await tx
       .insert(blockers)
       .values({ orgId: actor.orgId, requirementId, description, ownerMemberId: input.ownerMemberId ?? null })

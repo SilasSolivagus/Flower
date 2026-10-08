@@ -1,12 +1,12 @@
 import { eq } from 'drizzle-orm';
 import { requireProductRole } from '../access/permissions';
 import type { Db } from '../db/client';
-import { functionTags, members, requirementAssignments, requirements } from '../db/schema';
+import { functionTags, requirementAssignments, requirements } from '../db/schema';
 import { withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
 import { recordEvent } from '../events';
-import { assertPlatformOption, loadRequirement } from './context';
+import { assertAssignableMember, assertPlatformOption, loadRequirement } from './context';
 
 export type AssignmentInput = { memberId: string; functionTagId: string; platformOptionId?: string | null };
 
@@ -22,8 +22,7 @@ export async function addRequirementAssignment(db: Db, actor: Actor, requirement
   return withOrg(db, actor.orgId, async (tx) => {
     const req = await loadRequirement(tx, requirementId);
     await requireProductRole(tx, actor, req.productId, 'editor');
-    const [member] = await tx.select({ status: members.status }).from(members).where(eq(members.id, input.memberId));
-    if (!member || member.status !== 'active') throw new AppError('invalid', '只能分配给在职成员');
+    await assertAssignableMember(tx, input.memberId);
     const [tag] = await tx.select({ id: functionTags.id }).from(functionTags).where(eq(functionTags.id, input.functionTagId));
     if (!tag) throw new AppError('invalid', '职能标签不存在');
     const platformOptionId = input.platformOptionId ?? null;

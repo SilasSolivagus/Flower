@@ -8,7 +8,7 @@ import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
 import { loadIteration } from '../iterations/iterations';
-import { assertMemberInOrg, loadRequirement, memberNames } from '../requirements/context';
+import { assertAssignableMember, loadRequirement, memberNames } from '../requirements/context';
 import { displayKey, type MemberRef } from '../requirements/requirements';
 import { displayProgress, STARRED_LIMIT, TASK_FLAGS, type TaskFlag, todayInZone } from './schedule';
 
@@ -191,7 +191,7 @@ export async function createTask(db: Db, actor: Actor, input: TaskCreateInput, o
       if (it.type === 'regular' && it.productId !== productId) throw new AppError('invalid', '不能把任务放进其他产品的迭代');
       if (it.status !== 'planning' && it.status !== 'active') throw new AppError('invalid', '只能在规划中或进行中的迭代里新建任务');
     }
-    if (columns.assigneeMemberId) await assertMemberInOrg(tx, columns.assigneeMemberId);
+    if (columns.assigneeMemberId) await assertAssignableMember(tx, columns.assigneeMemberId);
     if (columns.starred) {
       if (!it) throw new AppError('invalid', '只有迭代里的任务可以标为重点');
       await assertStarredRoom(tx, it.id);
@@ -225,7 +225,7 @@ export async function updateTask(db: Db, actor: Actor, id: string, input: TaskPa
     if (columns.starred === true && peek.iterationId) await loadIteration(tx, peek.iterationId, 'update');
     const [cur] = await tx.select().from(tasks).where(eq(tasks.id, id)).for('update');
     if (!cur) throw new AppError('not_found', TASK_NOT_FOUND);
-    if (columns.assigneeMemberId && columns.assigneeMemberId !== cur.assigneeMemberId) await assertMemberInOrg(tx, columns.assigneeMemberId);
+    if (columns.assigneeMemberId && columns.assigneeMemberId !== cur.assigneeMemberId) await assertAssignableMember(tx, columns.assigneeMemberId);
     if (columns.starred === true && !cur.starred) {
       if (!cur.iterationId) throw new AppError('invalid', '只有迭代里的任务可以标为重点');
       await assertStarredRoom(tx, cur.iterationId);

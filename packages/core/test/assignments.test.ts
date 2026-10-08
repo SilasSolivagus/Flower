@@ -82,7 +82,7 @@ describe('需求分配', () => {
     await updateMember(t.db, owner, left.id, { status: 'left' });
     await expect(addRequirementAssignment(t.db, owner, reqId, { memberId: left.id, functionTagId: designTag })).rejects.toMatchObject({
       code: 'invalid',
-      message: '只能分配给在职成员',
+      message: '该成员已离开组织，不能选择',
     });
     await expect(addRequirementAssignment(t.db, owner, reqId, { memberId: designerB.memberId, functionTagId: otherOrgTag })).rejects.toMatchObject({
       code: 'invalid',

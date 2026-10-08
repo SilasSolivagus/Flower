@@ -15,7 +15,7 @@ import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
-import { assertMemberInOrg, type EffectiveField, effectiveFields, loadRequirement, memberNames, productWorkflowBody } from './context';
+import { assertAssignableMember, type EffectiveField, effectiveFields, loadRequirement, memberNames, productWorkflowBody } from './context';
 
 export type OptionRef = { id: string; key: string; label: string; color: string | null };
 export type MemberRef = { id: string; displayName: string };
@@ -219,8 +219,8 @@ export async function createRequirement(
   const description = assertDescription(input.description ?? '');
   return withOrg(db, actor.orgId, async (tx) => {
     await requireProductRole(tx, actor, productId, 'editor');
-    if (input.ownerMemberId) await assertMemberInOrg(tx, input.ownerMemberId);
-    if (input.requesterMemberId) await assertMemberInOrg(tx, input.requesterMemberId);
+    if (input.ownerMemberId) await assertAssignableMember(tx, input.ownerMemberId);
+    if (input.requesterMemberId) await assertAssignableMember(tx, input.requesterMemberId);
     if (input.nodeId) await assertNode(tx, productId, input.nodeId);
     const fields = await effectiveFields(tx, productId);
     const values: Array<[EffectiveField, string[]]> = [];
@@ -282,8 +282,8 @@ export async function updateRequirement(
       requesterMemberId: input.requesterMemberId === undefined ? cur.requesterMemberId : input.requesterMemberId,
       nodeId: input.nodeId === undefined ? cur.nodeId : input.nodeId,
     };
-    if (next.ownerMemberId && next.ownerMemberId !== cur.ownerMemberId) await assertMemberInOrg(tx, next.ownerMemberId);
-    if (next.requesterMemberId && next.requesterMemberId !== cur.requesterMemberId) await assertMemberInOrg(tx, next.requesterMemberId);
+    if (next.ownerMemberId && next.ownerMemberId !== cur.ownerMemberId) await assertAssignableMember(tx, next.ownerMemberId);
+    if (next.requesterMemberId && next.requesterMemberId !== cur.requesterMemberId) await assertAssignableMember(tx, next.requesterMemberId);
     if (next.nodeId && next.nodeId !== cur.nodeId) await assertNode(tx, cur.productId, next.nodeId);
     const changes = (Object.keys(next) as Array<keyof typeof next>)
       .map((field) => ({ field, old: cur[field], new: next[field] }))
