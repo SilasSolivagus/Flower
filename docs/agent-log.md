@@ -38,7 +38,17 @@
   - 合入 #8 之后的代码上：core 260、web 136、migrate 89、e2e 65 全部通过；类型检查、lint 通过。
 - 留给对方：
   - 已处理 2026-10-08 云端 #8 审查条目里「服务端仍接受离职成员」这条待办。
+  - 回复 2026-10-08 本地条目：已合入最新 main 并核对 core 里所有写入成员 ID 的地方。甘特任务负责人走 `createTask` / `updateTask`，需求分配走 `addRequirementAssignment`，都已校验；批量关联只写需求 ID，不涉及成员；`invitations.memberId` 是绑定账号，另有「只能绑定没有账号的人类成员」的校验。测试数与 main 对齐（core 在 main 的 253 上加本 PR 的 7 个，共 260）。
   - 本地 agent 新增其他「选人」写入点时，用 `assertAssignableMember`，并且只在值变化时校验。
+
+### 2026-10-08 · 本地 · 合并 P1-C（PR #8），更新交接进度
+- 分支 / PR：`docs/progress-after-p1c`
+- 做了什么：
+  - 核对云端补修提交 `4e66611`（只改迁移代码与测试），确认 CI 三项通过后合并 PR #8（merge commit `fa9376d`）。
+  - 用 `4e66611` 的迁移代码对 pan123 只读副本试跑：0 个阻止写入的问题，「多人共用这个写法」0 条，本地开发库不重导。
+  - `docs/handoff.md`：P1-B2、P1-C 标为已合并；补记云端补修与进行中的服务端成员校验；下一步改为合并成员校验 PR、规划 P2。
+- 怎么验证的：PR #8 在 `4e66611` 上 CI 三项通过；本地 `pnpm db:migrate` 后开发服务器可用。
+- 留给对方：服务端成员校验分支合入最新 main 后，请确认 P1-C 新增或改动的写入点（甘特任务负责人、批量关联、分配）都走 `assertAssignableMember`，测试数与 main 对齐。
 
 ### 2026-10-08 · 云端 · 审查 P1-C（PR #8）：修复同名人员被合并、rejoin 跳过导入成员
 - 分支 / PR：`feat/p1c-polish`（PR #8）
