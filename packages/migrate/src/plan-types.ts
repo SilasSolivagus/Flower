@@ -1,6 +1,6 @@
 import type * as core from '@flower/core';
 import { legacyUuid } from './ids';
-import type { LegacyData } from './legacy-types';
+import type { LegacyData, PlaneRequirement, PushRequirement } from './legacy-types';
 import { type Mapping, type PersonEntry, Resolver } from './mapping';
 import { parseLegacyTime } from './normalize';
 
@@ -11,6 +11,8 @@ export type ImportOptions = {
   productName: string;
   asOf: string;
   owner: { accountId: string; email: string; name: string } | null;
+  /** --uploads 导出目录里有的旧附件文件名；没给目录时为 undefined（报告里不统计缺失）。 */
+  availableUploads?: Set<string>;
 };
 
 type Ins<T extends { $inferInsert: unknown }> = Array<T['$inferInsert']>;
@@ -26,6 +28,10 @@ export type ImportRows = {
   fieldDefinitions: Ins<typeof core.fieldDefinitions>;
   fieldOptions: Ins<typeof core.fieldOptions>;
   structureNodes: Ins<typeof core.structureNodes>;
+  documentTemplates: Ins<typeof core.documentTemplates>;
+  documents: Ins<typeof core.documents>;
+  documentRevisions: Ins<typeof core.documentRevisions>;
+  attachments: Ins<typeof core.attachments>;
   iterations: Ins<typeof core.iterations>;
   releases: Ins<typeof core.releases>;
   requirements: Ins<typeof core.requirements>;
@@ -46,7 +52,8 @@ export type ImportRows = {
 
 export const INSERT_ORDER: Array<keyof ImportRows> = [
   'organizations', 'members', 'functionTags', 'memberFunctionTags', 'workflowDefinitions', 'workflowVersions', 'products',
-  'productMembers', 'fieldDefinitions', 'fieldOptions', 'structureNodes', 'iterations', 'releases', 'requirements', 'fieldValues',
+  'productMembers', 'fieldDefinitions', 'fieldOptions', 'structureNodes', 'iterations', 'releases',
+  'documentTemplates', 'documents', 'documentRevisions', 'attachments', 'requirements', 'fieldValues',
   'requirementAssignments', 'requirementRelations', 'stateTransitions', 'blockers', 'checkItemResults', 'checkItemSignoffs',
   'requirementReleases', 'tasks', 'comments', 'commentReads', 'entityAliases', 'domainEvents',
 ];
@@ -76,10 +83,36 @@ export type ReconReport = {
   iterations: Array<{ name: string; type: string; planeIds: string[]; pushIds: string[]; startDate: string; endDate: string; status: string; requirements: number }>;
   skipped: Array<{ what: string; count: number; reason: string }>;
   deferred: Array<{ what: string; count: number; phase: string }>;
+  documents: {
+    pages: number;
+    revisions: number;
+    attachments: number;
+    inlineImages: number;
+    comments: number;
+    linkedRequirements: number;
+    /** 关联的需求不在导入范围内（两个旧系统里都没有）：PRD 照常导入、不挂需求。 */
+    unmatchedLinks: Array<{ document: string; requirement: string }>;
+    /** 导出目录里缺少的旧附件文件数；没给导出目录时为 null。 */
+    missingFiles: number | null;
+    externalImages: number;
+    brokenImageRefs: number;
+    external: {
+      docs: number;
+      requirements: number;
+      shared: number;
+      statusCounts: Record<string, number>;
+      nonUrl: Array<{ displayKey: string; source: string; value: string }>;
+      mismatches: Array<{ displayKey: string; plane: string; push: string }>;
+      skippedNative: Array<{ displayKey: string; url: string }>;
+      mergedOnly: number;
+    };
+    prdCheckChanges: Array<{ displayKey: string; document: string; from: string; to: string }>;
+  };
   problems: string[];
 };
 
-export type ImportPlan = { rows: ImportRows; report: ReconReport };
+export type ImportFile = { storageKey: string; from: { legacyKey: string } | { base64: string } };
+export type ImportPlan = { rows: ImportRows; report: ReconReport; files: ImportFile[] };
 
 export const emptyRows = (): ImportRows => Object.fromEntries(INSERT_ORDER.map((k) => [k, []])) as unknown as ImportRows;
 
@@ -97,6 +130,10 @@ export class PlanContext {
   readonly iterationIdByKey = new Map<string, string>();
   readonly releaseIdByPlaneId = new Map<string, string>();
   workflow!: core.WorkflowBody;
+  /** 每条导入需求的来源（123plane 与 push 配对结果），外部 PRD 链接按它取原值。 */
+  readonly requirementSources: Array<{ id: string; number: number; plane: PlaneRequirement | null; push: PushRequirement | null }> = [];
+  /** 需要写进附件存储的文件。 */
+  readonly files: ImportFile[] = [];
 
   constructor(
     readonly data: LegacyData,
@@ -121,6 +158,20 @@ export class PlanContext {
       iterations: [],
       skipped: [],
       deferred: [],
+      documents: {
+        pages: 0,
+        revisions: 0,
+        attachments: 0,
+        inlineImages: 0,
+        comments: 0,
+        linkedRequirements: 0,
+        unmatchedLinks: [],
+        missingFiles: opts.availableUploads ? 0 : null,
+        externalImages: 0,
+        brokenImageRefs: 0,
+        external: { docs: 0, requirements: 0, shared: 0, statusCounts: {}, nonUrl: [], mismatches: [], skippedNative: [], mergedOnly: 0 },
+        prdCheckChanges: [],
+      },
       problems: [],
     };
   }

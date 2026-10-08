@@ -20,6 +20,16 @@
 
 ## 记录
 
+### 2026-10-08 · 本地 · P2-A Task 15：prd 系统页面、修订、附件与评论迁移为变更 PRD
+- 分支 / PR：`feat/p2a-change-prd`
+- 做了什么：
+  - `packages/migrate` 读取 prd 库未删除的页面、修订、附件、评论；新增 `plan-documents.ts`，按创建时间编号生成 Flower 文档与修订，正文里的 `/api/files/…` 改为附件网址、`data:image` 内嵌图片抽成附件；评论导入为未定位；页面关联的需求写入 `change_document_id` 并按 PRD 状态改写「PRD」检查项。预置模板一并导入。
+  - 关联的需求不在导入范围内时不算问题，列入报告的「未匹配的需求关联」与「跳过的数据」。
+  - `writeImport` 写入四张新表（`current_revision_id` 分两段写），数据库提交后把附件文件写入存储；导出目录缺文件时计为缺失、不中断。`--replace` 先清空文档的当前修订再按外键顺序删除。导入后 `products.document_seq` 为最大文档编号。
+  - CLI 新增 `--uploads`、`--storage`；CLAUDE.md 导入命令同步。
+- 怎么验证的：migrate 单测（含导入后新建 PRD 编号为最大编号 + 1、有新文档/评论/需求关联后 replace 数量回到导入时、缺附件文件不中断）；`pnpm typecheck`；`pnpm test`；pan123 真实数据 `--dry-run` 0 个问题。
+- 留给对方：附件文件尚未从服务器导出，Task 17 正式导入前需要用户同意后导出。
+
 ### 2026-10-08 · 本地 · P2-A Task 14：文档模板设置、需求挂 PRD、PRD 评审表、等我签字链接
 - 分支 / PR：`feat/p2a-change-prd`
 - 做了什么：

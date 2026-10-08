@@ -26,7 +26,7 @@ export type PlaneData = {
 };
 export type PushRequirement = {
   id: number; title: string; alias: S; requester: S; owner: S; line: S; priority: S; platforms: S; developers: S; brief: S;
-  status: S; source: S; version_id: S; created_at: S; last_edited_by: S; last_edited_at: S; plane_id: S; merged_into: number | null;
+  status: S; source: S; version_id: S; created_at: S; last_edited_by: S; last_edited_at: S; plane_id: S; prd_url: S; merged_into: number | null;
 };
 export type PushData = {
   requirements: PushRequirement[];
@@ -45,9 +45,28 @@ export type PushData = {
   autoReviews: Array<{ id: number; requirement_id: number; round: number; issue_count: number; blocking_count: number; issues: S; reviewed_by: S; reviewed_at: S }>;
   counts: { groups: number; tasks: number; taskTargets: number; pushLogs: number; settings: number; reviewObjections: number; prdUrls: number };
 };
+export type PrdUser = { id: string; email: string; name: S };
+export type PrdPage = {
+  id: string; title: string; markdown: string; version: number; status: S; owner_user_id: S; created_by: string; updated_by: string;
+  created_at: string; updated_at: string; linked_requirement_id: S;
+};
+export type PrdPageVersion = { page_id: string; version: number; title: string; markdown: string; diff_summary: S; author_id: string; created_at: string };
+export type PrdAttachment = {
+  id: string; page_id: string; uploader_id: string; storage_key: string; filename: string; mime: string; size_bytes: number;
+  width: number | null; height: number | null; created_at: string;
+};
+export type PrdComment = {
+  id: string; page_id: string; parent_comment_id: S; body_markdown: string; resolved_at: S; resolved_by: S; author_id: string; created_at: string;
+};
 export type PrdData = {
   domains: Array<{ name: string; type: S; group: S; status: string; display_order: number }>;
-  users: Array<{ email: string; name: S }>;
+  users: PrdUser[];
+  /** 未删除的页面及其下的修订、附件、评论。 */
+  pages: PrdPage[];
+  pageVersions: PrdPageVersion[];
+  attachments: PrdAttachment[];
+  comments: PrdComment[];
+  /** 含已删除页面在内的总数，用于对账报告的「跳过」。 */
   counts: { pages: number; pageVersions: number; attachments: number; comments: number };
 };
 export type LegacyData = { plane: PlaneData; push: PushData; prd: PrdData };
