@@ -3,7 +3,7 @@ import { checkItemResults, checkItemSignoffs, functionTags } from '../db/schema'
 import type { Tx } from '../db/tx';
 import type { WorkflowBody } from '../definitions/workflow-schema';
 import type { Actor, ProductRole } from '../domain-types';
-import { signerIdentity } from '../reviews/snapshot';
+import { coveredPrdStates, signerIdentity } from '../reviews/snapshot';
 import type { CheckTarget } from './check-writes';
 import { memberNames } from './context';
 import type { CheckState } from './labels';
@@ -39,7 +39,8 @@ export async function buildCheckItemViews(
   role: ProductRole,
   items: CheckItem[],
   target: CheckTarget,
-  opts: { lockedAuto: boolean },
+  /** 需求被 PRD 覆盖时 auto 项的有效状态（由 PRD 状态推出）；非空时该项显示这个状态并锁定。 */
+  opts: { autoState: CheckState | null },
 ): Promise<CheckItemView[]> {
   if (items.length === 0) return [];
   const results = await tx.select().from(checkItemResults).where(and(eq(checkItemResults.targetType, target.type), eq(checkItemResults.targetId, target.id)));
@@ -66,11 +67,12 @@ export async function buildCheckItemViews(
       ref: s.ref,
       label: s.by === 'function_tag' ? (tagName.get(s.ref) ?? '已删除的标签') : s.by === 'member' ? (names.get(s.ref) ?? '已删除的成员') : (PRODUCT_ROLE_SIGNER_LABEL[s.ref] ?? s.ref),
     }));
+    const autoState = c.auto === 'prd_status' ? opts.autoState : null;
     return {
       key: c.key,
       label: c.label,
       type: c.type,
-      state: result?.state ?? c.defaultState,
+      state: autoState ?? result?.state ?? c.defaultState,
       note: result?.note ?? null,
       meta: result?.meta ?? {},
       updatedAt: result?.updatedAt ?? null,
@@ -83,12 +85,12 @@ export async function buildCheckItemViews(
       canSign: c.type === 'signoff' && canWrite ? matchingSignerRules(c, identity) : [],
       canSignOnBehalf: c.type === 'signoff' && role === 'admin' && canWrite ? list.filter((s) => s.by === 'member' && s.ref !== actor.memberId).map((s) => s.index) : [],
       auto: c.auto === 'prd_status',
-      locked: c.auto === 'prd_status' && opts.lockedAuto,
+      locked: autoState !== null,
     };
   });
 }
 
-/** 需求的检查状态：作用于需求的项取需求自己的结果，作用于 PRD 的项取所挂 PRD 的结果（没挂 PRD 时为默认状态）。 */
+/** 需求的检查状态：作用于需求的项取需求自己的结果，作用于 PRD 的项取所挂 PRD 的结果（没挂 PRD 时为默认状态）；被覆盖时「PRD」auto 项由 PRD 状态推出。 */
 export async function requirementCheckStates(tx: Tx, body: WorkflowBody, req: { id: string; changeDocumentId: string | null }): Promise<Record<string, CheckState>> {
   const docKeys = new Set(body.checkItems.filter((c) => c.scope === 'document').map((c) => c.key));
   const own = await tx
@@ -101,5 +103,6 @@ export async function requirementCheckStates(tx: Tx, body: WorkflowBody, req: { 
         .from(checkItemResults)
         .where(and(eq(checkItemResults.targetType, 'document'), eq(checkItemResults.targetId, req.changeDocumentId)))
     : [];
-  return checkStatesFor(body, [...own.filter((r) => !docKeys.has(r.itemKey)), ...shared.filter((r) => docKeys.has(r.itemKey))]);
+  const covered = await coveredPrdStates(tx, body, [req.id]);
+  return { ...checkStatesFor(body, [...own.filter((r) => !docKeys.has(r.itemKey)), ...shared.filter((r) => docKeys.has(r.itemKey))]), ...covered.get(req.id) };
 }

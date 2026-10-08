@@ -6,7 +6,8 @@ import type { Actor } from '../src/domain-types';
 import { linkDocumentRequirements, unlinkDocumentRequirement } from '../src/documents/coverage';
 import { createDocument, getDocumentByKey, transitionDocument } from '../src/documents/documents';
 import { createRequirement } from '../src/requirements/requirements';
-import { setCheckItemState } from '../src/requirements/transitions';
+import { getRequirementByKey } from '../src/requirements/detail';
+import { setCheckItemState, transitionRequirement } from '../src/requirements/transitions';
 import { listReviewQueue } from '../src/reviews/queue';
 import { listFunctionTags } from '../src/tenancy/function-tags';
 import { createProduct, setProductRole } from '../src/tenancy/products';
@@ -102,5 +103,32 @@ describe('覆盖需求与「PRD」检查项', () => {
     const row = q.rows.find((x) => x.displayKey === r.displayKey)!;
     expect(row.cells.prd).toMatchObject({ state: 'in_progress' });
     expect(row.reviewState).toBe('passed');
+  });
+
+  it('流程后来才加上「PRD」auto 项：已覆盖需求的有效状态由 PRD 状态推出，流转、详情与评审队列都按它判断', async () => {
+    const late = (await createProduct(t.db, owner, { name: '后加', key: 'LATE' })).id;
+    const designTag = (await listFunctionTags(t.db, owner)).find((x) => x.name === '设计')!.id;
+    const full = prdWorkflow(designTag);
+    const withoutAuto = { ...full, checkItems: full.checkItems.filter((c) => c.key !== 'prd') };
+    const v1 = await createWorkflowTemplate(t.db, owner, { name: '无 PRD 项', body: withoutAuto });
+    await setProductWorkflowVersion(t.db, owner, late, v1.version.id);
+    const r = await createRequirement(t.db, owner, late, { title: '后加 auto 项' });
+    const d = await createDocument(t.db, owner, late, { title: 'E', externalUrl: 'https://doc.weixin.qq.com/doc/e', requirementIds: [r.id] });
+    await transitionDocument(t.db, owner, d.id, { to: 'review' });
+    await transitionDocument(t.db, owner, d.id, { to: 'approved' });
+    expect(await prdState(r.id)).toBeUndefined();
+
+    const gated = {
+      ...full,
+      transitions: full.transitions.map((x) => (x.to === 'done' ? { ...x, conditions: [{ type: 'check_item' as const, item: 'prd', in: ['passed' as const] }] } : x)),
+    };
+    const v2 = await createWorkflowTemplate(t.db, owner, { name: '后加 PRD 项', body: gated });
+    await setProductWorkflowVersion(t.db, owner, late, v2.version.id);
+
+    const detail = await getRequirementByKey(t.db, owner, r.displayKey);
+    expect(detail.checkItems.find((c) => c.key === 'prd')).toMatchObject({ state: 'passed', locked: true });
+    const q = await listReviewQueue(t.db, owner, late, { state: 'all' });
+    expect(q.rows.find((x) => x.displayKey === r.displayKey)!.cells.prd).toMatchObject({ state: 'passed' });
+    expect(await transitionRequirement(t.db, owner, r.id, { to: 'done' })).toEqual({ stateKey: 'done' });
   });
 });

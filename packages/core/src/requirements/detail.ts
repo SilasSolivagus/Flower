@@ -20,7 +20,7 @@ import {
 } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { DocumentStatus } from '../documents/constants';
-import { documentDisplayKey } from '../documents/markdown';
+import { documentDisplayKey, prdCheckState } from '../documents/markdown';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { joinIterationUnmet } from '../iterations/membership';
@@ -152,9 +152,9 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
       .filter((x) => x.r.productId === row.productId || otherRoles.get(x.r.productId))
       .map((x) => ({ id: x.r.id, number: x.r.number, title: x.r.title, productKey: x.productKey }));
 
-    const checkItems = await buildCheckItemViews(tx, actor, role, body.checkItems.filter((c) => c.scope === 'requirement'), { type: 'requirement', id: row.id }, { lockedAuto: !!docRow });
+    const checkItems = await buildCheckItemViews(tx, actor, role, body.checkItems.filter((c) => c.scope === 'requirement'), { type: 'requirement', id: row.id }, { autoState: docRow ? prdCheckState(docRow.status) : null });
     const documentCheckItems = docRow
-      ? await buildCheckItemViews(tx, actor, role, body.checkItems.filter((c) => c.scope === 'document'), { type: 'document', id: docRow.id }, { lockedAuto: false })
+      ? await buildCheckItemViews(tx, actor, role, body.checkItems.filter((c) => c.scope === 'document'), { type: 'document', id: docRow.id }, { autoState: null })
       : [];
     const ctx = {
       checks: await requirementCheckStates(tx, body, row),

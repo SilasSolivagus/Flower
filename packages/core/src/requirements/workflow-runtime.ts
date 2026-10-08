@@ -52,6 +52,11 @@ export function availableTransitions(body: WorkflowBody, from: string, ctx: Cond
   return out;
 }
 
+/** 作用于需求、跟随 PRD 状态的「PRD」检查项；流程里没有时为 null。 */
+export function prdAutoItem(body: WorkflowBody): CheckItem | null {
+  return body.checkItems.find((c) => c.auto === 'prd_status' && c.scope === 'requirement') ?? null;
+}
+
 export function checkStatesFor(body: WorkflowBody, results: Array<{ itemKey: string; state: CheckState }>): Record<string, CheckState> {
   const byKey = new Map(results.map((r) => [r.itemKey, r.state]));
   return Object.fromEntries(body.checkItems.map((c) => [c.key, byKey.get(c.key) ?? c.defaultState]));

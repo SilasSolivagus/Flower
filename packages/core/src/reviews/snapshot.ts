@@ -1,12 +1,14 @@
-import { and, asc, eq, inArray } from 'drizzle-orm';
-import { checkItemResults, checkItemSignoffs, memberFunctionTags, members, requirementAssignments } from '../db/schema';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { checkItemResults, checkItemSignoffs, documents, memberFunctionTags, members, requirementAssignments, requirements } from '../db/schema';
 import type { Tx } from '../db/tx';
 import type { WorkflowBody } from '../definitions/workflow-schema';
 import type { Actor, ProductRole } from '../domain-types';
+import { prdCheckState } from '../documents/markdown';
 import type { CheckState } from '../requirements/labels';
 import {
   type CheckItem,
   checkStatesFor,
+  prdAutoItem,
   reviewStarted,
   type SignerIdentity,
   type SignoffRecord,
@@ -58,6 +60,21 @@ async function loadResults(tx: Tx, targetType: 'requirement' | 'document', ids: 
   };
 }
 
+/**
+ * 被 PRD 覆盖的需求，「PRD」auto 项的有效状态由所挂 PRD 的状态推出，不读存储值：流程后来才加上 auto 项、
+ * 或产品换了流程时，存储值可能不存在或过时。返回 需求 id → 要覆盖的状态；流程没有 auto 项或需求未被覆盖时不含该需求。
+ */
+export async function coveredPrdStates(tx: Tx, body: WorkflowBody, requirementIds: string[]): Promise<Map<string, Record<string, CheckState>>> {
+  const item = prdAutoItem(body);
+  if (!item || requirementIds.length === 0) return new Map();
+  const rows = await tx
+    .select({ id: requirements.id, status: documents.status })
+    .from(requirements)
+    .innerJoin(documents, and(eq(documents.id, requirements.changeDocumentId), isNull(documents.deletedAt)))
+    .where(inArray(requirements.id, requirementIds));
+  return new Map(rows.map((r) => [r.id, { [item.key]: prdCheckState(r.status) }]));
+}
+
 /** 一批需求的检查项状态（缺省按流程默认状态）、会签记录（按检查项分组、按时间排序）与按职能标签的分配。 */
 export async function checkSnapshots(tx: Tx, body: WorkflowBody, requirementIds: string[]): Promise<Map<string, CheckSnapshot>> {
   const snapshotOf = await loadResults(tx, 'requirement', requirementIds);
@@ -82,7 +99,13 @@ export async function checkSnapshots(tx: Tx, body: WorkflowBody, requirementIds:
     byTag.set(a.tagId, set);
     assigneesByRequirement.set(a.requirementId, byTag);
   }
-  return new Map(requirementIds.map((id) => [id, snapshotOf(body, id, assigneesByRequirement.get(id) ?? new Map())]));
+  const covered = await coveredPrdStates(tx, body, requirementIds);
+  return new Map(
+    requirementIds.map((id) => {
+      const snap = snapshotOf(body, id, assigneesByRequirement.get(id) ?? new Map());
+      return [id, { ...snap, states: { ...snap.states, ...covered.get(id) } }];
+    }),
+  );
 }
 
 /** 一批 PRD 的检查项状态与会签记录。 */

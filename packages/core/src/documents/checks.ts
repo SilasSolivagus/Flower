@@ -32,7 +32,7 @@ export type DocumentReviewQueue = { columns: Array<{ key: string; label: string;
 
 export async function documentCheckItemViews(tx: Tx, actor: Actor, role: ProductRole, doc: { id: string; productId: string }): Promise<CheckItemView[]> {
   const body = await productWorkflowBody(tx, doc.productId);
-  return buildCheckItemViews(tx, actor, role, body.checkItems.filter((c) => c.scope === 'document'), { type: 'document', id: doc.id }, { lockedAuto: false });
+  return buildCheckItemViews(tx, actor, role, body.checkItems.filter((c) => c.scope === 'document'), { type: 'document', id: doc.id }, { autoState: null });
 }
 
 async function documentItem(tx: Tx, productId: string, itemKey: string) {

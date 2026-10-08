@@ -3,20 +3,15 @@ import { requireProductRole } from '../access/permissions';
 import type { Db } from '../db/client';
 import { checkItemResults, products, requirements } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
-import type { WorkflowBody } from '../definitions/workflow-schema';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
 import { productWorkflowBody } from '../requirements/context';
 import { displayKey, productKeyOf } from '../requirements/requirements';
-import type { CheckItem } from '../requirements/workflow-runtime';
+import { prdAutoItem } from '../requirements/workflow-runtime';
 import type { DocumentStatus } from './constants';
 import { loadDocument } from './documents';
 import { documentDisplayKey, prdCheckState } from './markdown';
-
-export function prdAutoItem(body: WorkflowBody): CheckItem | null {
-  return body.checkItems.find((c) => c.auto === 'prd_status' && c.scope === 'requirement') ?? null;
-}
 
 /** 把被覆盖需求的「PRD」检查项写成 PRD 状态对应的结果；流程里没有 auto 项时什么也不做。调用方已锁住文档与这些需求。 */
 export async function syncPrdCheck(tx: Tx, actor: Actor, doc: { id: string; productId: string; status: DocumentStatus }, requirementIds: string[]): Promise<void> {
