@@ -1,4 +1,4 @@
-import { createAccount, listFunctionTags, listMembers, type Actor } from '@flower/core';
+import { createAccount, createPlaceholderMember, createRequirement, createProduct, listFunctionTags, listMembers, listRequirements, type Actor } from '@flower/core';
 import { createTestDb } from '@flower/core/testing';
 import { seedInstance } from '@flower/core/testing/factories';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -59,5 +59,25 @@ describe('重导后让已有账号重新加入组织', () => {
     // 跳过的账号保持原有角色（member），没有被第二次清单里的 admin 覆盖
     expect(members.find((m) => m.email === 'joined-c@example.com')).toMatchObject({ orgRole: 'member' });
     expect(members.find((m) => m.email === 'new-d@example.com')).toMatchObject({ hasAccount: true, orgRole: 'member' });
+  });
+
+  it('导入时已有同邮箱、未关联账号的成员：账号绑定到这个成员，保留其名下的历史记录，不另建成员', async () => {
+    await createAccount(t.adminDb, { email: 'legacy-e@example.com', name: '旧人戊', password: 'password123' });
+    const placeholder = await createPlaceholderMember(t.db, owner, { displayName: '旧人戊', email: 'legacy-e@example.com' });
+    const product = await createProduct(t.db, owner, { name: '网盘', key: 'PAN' });
+    await createRequirement(t.db, owner, product.id, { title: '旧人戊负责的需求', ownerMemberId: placeholder.id });
+
+    const result = await rejoinAccounts(t.db, owner, [{ email: 'legacy-e@example.com', orgRole: 'member', functionTags: ['开发'] }]);
+    expect(result).toEqual([{ email: 'legacy-e@example.com', memberId: placeholder.id, status: 'bound' }]);
+    const same = (await listMembers(t.db, owner)).filter((m) => m.email === 'legacy-e@example.com');
+    expect(same).toHaveLength(1);
+    expect(same[0]).toMatchObject({ id: placeholder.id, hasAccount: true, orgRole: 'member' });
+    const list = await listRequirements(t.db, owner, product.id);
+    expect(list.items.find((r) => r.title === '旧人戊负责的需求')?.owner?.id).toBe(placeholder.id);
+
+    // 再跑一次：已经关联账号，跳过
+    expect(await rejoinAccounts(t.db, owner, [{ email: 'legacy-e@example.com', orgRole: 'member', functionTags: [] }])).toEqual([
+      { email: 'legacy-e@example.com', memberId: placeholder.id, status: 'skipped' },
+    ]);
   });
 });

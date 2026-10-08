@@ -80,9 +80,10 @@ async function main(): Promise<void> {
     const { db, close } = createDb(url, { max: 2 });
     try {
       const joined = await rejoinAccounts(db, await ownerActor(db, email, v['org-slug']!), entries);
-      const skipped = joined.filter((j) => j.status === 'skipped').length;
+      const count = (status: string) => joined.filter((j) => j.status === status).length;
+      const [bound, skipped] = [count('bound'), count('skipped')];
       console.log(
-        `已重新加入组织 ${v['org-slug']}：${joined.length - skipped} 个账号。${skipped > 0 ? `另有 ${skipped} 个账号已在组织中，已跳过。` : ''}`,
+        `已重新加入组织 ${v['org-slug']}：${joined.length - skipped} 个账号${bound > 0 ? `（其中 ${bound} 个关联到导入时已有的同邮箱成员，保留其历史记录）` : ''}。${skipped > 0 ? `另有 ${skipped} 个账号已在组织中，已跳过。` : ''}`,
       );
     } finally {
       await close();

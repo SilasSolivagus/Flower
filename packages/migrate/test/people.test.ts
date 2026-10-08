@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type PersonEntry, Resolver } from '../src/mapping';
+import { buildImportPlan } from '../src/plan';
 import { suggestMapping } from '../src/suggest';
 import { makeLegacyData, messyLegacyData, planeReq } from './fixtures';
 
@@ -53,6 +54,35 @@ describe('人员对照表：多人写法、头衔与昵称、非人员写法', (
     expect(r2.person('小雨')?.displayName).toBe('小雨');
     expect(r2.person('周小雨')?.displayName).toBe('周小雨');
     expect(r2.person('王小雨')?.displayName).toBe('王小雨');
+  });
+});
+
+describe('人员对照表：同名的不同人', () => {
+  const sameName = () => {
+    const data = messyLegacyData();
+    data.plane.users.push({ id: 'w1', email: 'wangwei1@example.com', name: '王伟', nickname: null, role: 'member', created_at: '2026-03-01 00:00:00' });
+    data.plane.users.push({ id: 'w2', email: 'wangwei2@example.com', name: '王伟', nickname: null, role: 'member', created_at: '2026-03-01 00:00:00' });
+    return data;
+  };
+
+  it('邮箱不同的两个同名账号保留为两个人；头衔写法有两个候选时不合并、也不改名成同名的第三个人', () => {
+    const data = sameName();
+    data.plane.requirements.push(planeReq({ id: 'X201', title: '同名测试', owner: '设计-王伟', created_at: '2026-03-08T08:00:00Z' }));
+    const m = suggestMapping(data, null);
+    const wangs = m.people.people.filter((p) => p.displayName === '王伟');
+    expect(wangs.map((p) => p.email).sort()).toEqual(['wangwei1@example.com', 'wangwei2@example.com']);
+    expect(wangs.every((p) => !p.aliases.includes('设计-王伟'))).toBe(true);
+    expect(m.people.people.find((p) => p.aliases.includes('设计-王伟'))?.displayName).toBe('设计-王伟');
+    expect(suggestMapping(data, m).people).toEqual(m.people);
+  });
+
+  it('导入时遇到多人共用的写法记为问题、拒绝写入，不替任何一方做主', () => {
+    const data = sameName();
+    data.plane.requirements.push(planeReq({ id: 'X202', title: '只写了名字', owner: '王伟', created_at: '2026-03-08T08:00:00Z' }));
+    const plan = buildImportPlan(data, suggestMapping(data, null), {
+      orgSlug: 'pan123', orgName: '123云盘', productKey: 'PAN', productName: '123云盘', asOf: '2026-09-29', owner: null,
+    });
+    expect(plan.report.problems).toContain('人员对照表中多人共用这个写法，无法判断是谁（请给其中一人改显示名或删去这个别名）：王伟');
   });
 });
 

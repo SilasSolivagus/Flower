@@ -78,12 +78,14 @@ function absorbable(p: PersonEntry, roleKeys: Set<string>): boolean {
  * 2. 某个写法已经是别人的写法；
  * 3. 两个汉字的短名，与唯一一个三字姓名的后两字相同；
  * 4. 拉丁字母写法与唯一一个人的邮箱前缀相同。
- * 3、4 只在显示名仍是原始写法（没被用户改过）时使用。多个候选时优先有邮箱的、再按出现次数。
+ * 3、4 只在显示名仍是原始写法（没被用户改过）时使用。每条规则都只在唯一候选时合并，多个候选时不合并。
  */
 function mergeTarget(e: PersonEntry, people: PersonEntry[]): { into: PersonEntry; extra: string[] } | null {
   const others = people.filter((p) => p !== e && p.kind !== 'agent');
   const holders = (s: string) => others.filter((p) => writtenForms(p).some((a) => aliasKey(a) === aliasKey(s)));
-  const pick = (list: PersonEntry[]) => [...list].sort((a, b) => Number(!!b.email) - Number(!!a.email) || b.mentions - a.mentions)[0];
+  // 只在唯一候选时合并：同名的多个人（例如两个「王伟」）中按邮箱或出现次数挑一个是在猜，会把一个人的记录算到另一个人头上。
+  // 候选里可并入的条目会在后续轮次先并走，剩下唯一候选时再合并。
+  const pick = (list: PersonEntry[]) => (list.length === 1 ? list[0] : undefined);
   for (const a of e.aliases) {
     const parsed = parsePersonName(a);
     if (parsed.name === a.trim()) continue;
@@ -127,7 +129,9 @@ function mergeVariants(people: PersonEntry[], roleKeys: Set<string>, fresh: Set<
         break;
       }
       const titled = e.aliases.map(parsePersonName).find((p, i) => p.name !== e.aliases[i]!.trim() && e.displayName === e.aliases[i]);
-      if (titled) {
+      // 姓名已经是别人的写法（同名的多个人、没能唯一合并）时不改名，否则会再多出一个同名的人；保留原写法，留给用户在对照表里处理
+      const nameTaken = !!titled && people.some((p) => p !== e && writtenForms(p).some((a) => aliasKey(a) === aliasKey(titled.name)));
+      if (titled && !nameTaken) {
         e.displayName = titled.name;
         addAliases(e, [titled.name, ...(titled.nickname ? [titled.nickname] : [])]);
         changed = true;
@@ -195,8 +199,12 @@ export function suggestPeople(data: LegacyData, existing: Mapping['people'] | nu
     const raw = parseProxySigner(m.raw)?.actor ?? m.raw;
     const parts = byAlias.has(aliasKey(raw)) ? [raw] : splitNames(raw);
     for (const part of parts) {
-      const email = (parts.length === 1 ? m.email : null) ?? nameToEmail.get(aliasKey(part)) ?? null;
-      let p = byAlias.get(aliasKey(part)) ?? (email ? byAlias.get(aliasKey(email)) : undefined);
+      const ownEmail = parts.length === 1 ? m.email : null;
+      const email = ownEmail ?? nameToEmail.get(aliasKey(part)) ?? null;
+      // 自带邮箱的写法（账号、评论作者等）先按邮箱找；按名字找到的人邮箱不同时是同名的另一个人，不能并进去
+      const byName = byAlias.get(aliasKey(part));
+      let p = (ownEmail ? byAlias.get(aliasKey(ownEmail)) : undefined) ?? (byName && (!ownEmail || !byName.email || byName.email === ownEmail) ? byName : undefined);
+      p ??= email && !ownEmail ? byAlias.get(aliasKey(email)) : undefined;
       if (!p) p = addPerson(part.includes('@') ? part.split('@')[0]! : part, email);
       if (!p.aliases.some((a) => aliasKey(a) === aliasKey(part))) {
         p.aliases.push(part);
