@@ -3,10 +3,10 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { CheckItems } from '@/components/check-items';
+import { EditableTitle } from '@/components/editable-title';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
@@ -27,8 +27,6 @@ export default function RequirementPage() {
   const router = useRouter();
   const q = useRequirement(org, decodedKey);
   const r = q.data;
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [title, setTitle] = useState('');
   const [editingDesc, setEditingDesc] = useState(false);
   const [description, setDescription] = useState('');
   const patch = useApiMutation((body: { title?: string; description?: string }) => api(`/orgs/${org}/requirements/${r!.id}`, { method: 'PATCH', body }), {
@@ -50,31 +48,7 @@ export default function RequirementPage() {
     <>
       <PageHeader
         crumbs={[{ label: '需求', href: `/${org}/requirements?product=${r.productKey}` }, { label: r.displayKey }]}
-        title={
-          editingTitle ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                patch.mutate({ title }, { onSuccess: () => setEditingTitle(false) });
-              }}
-            >
-              <Input aria-label="标题" className="h-9 text-xl font-semibold" value={title} autoFocus maxLength={200} onChange={(e) => setTitle(e.target.value)} onBlur={() => setEditingTitle(false)} />
-            </form>
-          ) : (
-            <button
-              type="button"
-              disabled={!canEdit}
-              className="text-left disabled:cursor-default"
-              onClick={() => {
-                setTitle(r.title);
-                setEditingTitle(true);
-              }}
-            >
-              <span className="mr-2 font-mono text-base text-muted-foreground">{r.displayKey}</span>
-              {r.title}
-            </button>
-          )
-        }
+        title={<EditableTitle displayKey={r.displayKey} title={r.title} canEdit={canEdit} onSubmit={(title, close) => patch.mutate({ title }, { onSuccess: close })} />}
         description={r.aliases.length > 0 ? `旧编号：${r.aliases.join('、')}` : undefined}
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
