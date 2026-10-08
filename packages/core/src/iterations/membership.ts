@@ -1,14 +1,15 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { requireProductRole } from '../access/permissions';
 import type { Db } from '../db/client';
-import { checkItemResults, fieldDefinitions, fieldValues, iterations, requirements } from '../db/schema';
+import { fieldDefinitions, fieldValues, iterations, requirements } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { WorkflowBody } from '../definitions/workflow-schema';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
+import { requirementCheckStates } from '../requirements/check-views';
 import { effectiveFields, loadRequirementForUpdate, productWorkflowBody } from '../requirements/context';
-import { checkStatesFor, type UnmetCondition, unmetConditions } from '../requirements/workflow-runtime';
+import { type UnmetCondition, unmetConditions } from '../requirements/workflow-runtime';
 
 type ReqRow = typeof requirements.$inferSelect;
 
@@ -16,10 +17,6 @@ type ReqRow = typeof requirements.$inferSelect;
 export async function joinIterationUnmet(tx: Tx, body: WorkflowBody, req: ReqRow): Promise<UnmetCondition[]> {
   const gate = body.actionGates.find((g) => g.action === 'join_iteration');
   if (!gate || gate.conditions.length === 0) return [];
-  const results = await tx
-    .select({ itemKey: checkItemResults.itemKey, state: checkItemResults.state })
-    .from(checkItemResults)
-    .where(and(eq(checkItemResults.targetType, 'requirement'), eq(checkItemResults.targetId, req.id)));
   const fields = await effectiveFields(tx, req.productId);
   const filled = await tx
     .selectDistinct({ key: fieldDefinitions.key })
@@ -29,7 +26,7 @@ export async function joinIterationUnmet(tx: Tx, body: WorkflowBody, req: ReqRow
   return unmetConditions(
     gate.conditions,
     {
-      checks: checkStatesFor(body, results),
+      checks: await requirementCheckStates(tx, body, req),
       filledFields: new Set(filled.map((f) => f.key)),
       hasIteration: req.iterationId !== null,
       hasChangeDocument: req.changeDocumentId !== null,

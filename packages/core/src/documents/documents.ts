@@ -7,10 +7,11 @@ import type { Actor, ProductRole } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
 import { recordEvent } from '../events';
 import { assertAssignableMember, memberNames } from '../requirements/context';
-import type { CheckItemView } from '../requirements/detail';
+import type { CheckItemView } from '../requirements/check-views';
 import { assertTitle, productKeyOf, displayKey as requirementDisplayKey, type MemberRef } from '../requirements/requirements';
 import { orgToday } from '../tasks/tasks';
 import { reanchorDocumentComments } from './comments';
+import { documentCheckItemViews } from './checks';
 import { linkRequirementsTx, syncPrdCheck } from './coverage';
 import type { DocumentStatus, ExternalProvider, RevisionSnapshot } from './constants';
 import {
@@ -136,7 +137,7 @@ async function detailOf(tx: Tx, actor: Actor, doc: DocRow): Promise<DocumentDeta
     myRole: role,
     transitions: role === 'viewer' ? [] : DOCUMENT_TRANSITIONS[doc.status],
     requirements: reqs.map((r) => ({ id: r.id, displayKey: requirementDisplayKey(productKey, r.number), title: r.title, stateKey: r.stateKey })),
-    checkItems: [],
+    checkItems: await documentCheckItemViews(tx, actor, role, doc),
     createdAt: doc.createdAt,
   };
 }

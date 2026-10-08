@@ -63,7 +63,7 @@ function Sections({ data }: { data: Workbench }) {
       </Section>
       <Section title="等我签字" total={data.signatures.total} shown={data.signatures.items.length} empty="没有等你签字的检查项">
         {data.signatures.items.map((s) => (
-          <li key={`${s.requirementId}-${s.itemKey}-${s.ruleIndex}`}>
+          <li key={`${s.requirementId ?? s.documentId}-${s.itemKey}-${s.ruleIndex}`}>
             <Link href={requirementHref(s.org, s.displayKey)} className={ROW}>
               <OrgBadge show={badge} name={s.org.name} />
               <span className="font-mono text-muted-foreground">{s.displayKey}</span>
