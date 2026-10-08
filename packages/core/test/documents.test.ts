@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { documentRevisions, domainEvents } from '../src/db/schema';
 import type { Actor } from '../src/domain-types';
@@ -126,6 +126,19 @@ describe('保存、修订与恢复', () => {
     expect(events.map((e) => e.type)).toContain('document.restored');
     // 恢复之后同一作者马上保存，不能合并进「恢复」那一版
     expect(await saveDocumentContent(t.db, editor, d.id, { baseVersion: 4, markdown: '恢复后再改' })).toMatchObject({ revisionNumber: 4, merged: false });
+  });
+
+  it('恢复：旧修订里残留的 data: 图片换成「[图片未迁移]」，恢复后可以继续保存', async () => {
+    const d = await createDocument(t.db, editor, pan, { title: '残留图片' });
+    await saveDocumentContent(t.db, editor, d.id, { baseVersion: 1, markdown: '占位' });
+    const [first] = await t.adminDb.select().from(documentRevisions).where(and(eq(documentRevisions.documentId, d.id), eq(documentRevisions.version, 1)));
+    await t.adminDb
+      .update(documentRevisions)
+      .set({ snapshot: { title: '残留图片', markdown: '前文\n\n![图](data:image/svg+xml;utf8,<svg></svg>)\n\n[附件](data:text/plain,abc)\n\n后文' } })
+      .where(eq(documentRevisions.id, first!.id));
+    const r = await restoreRevision(t.db, editor, d.id, { number: 1, baseVersion: 2 });
+    expect((await getDocumentByKey(t.db, viewer, d.displayKey)).markdown).toBe('前文\n\n[图片未迁移]\n\n[图片未迁移]\n\n后文');
+    expect(await saveDocumentContent(t.db, editor, d.id, { baseVersion: r.version, markdown: '前文\n\n继续写' })).toMatchObject({ version: r.version + 1 });
   });
 
   it('正文不能内嵌 data: 图片；正文过长；外部 PRD 不能保存正文；只读成员与只读 Token 不能保存', async () => {

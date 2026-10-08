@@ -69,6 +69,10 @@ function assertMarkdown(markdown: string): string {
   return markdown;
 }
 
+/** 迁移进来的旧修订可能残留内嵌的 data: 图片；恢复时换成占位文字，否则恢复后的每次保存都会被 assertMarkdown 拒绝。 */
+const LEFTOVER_DATA_LINK = /!?\[[^\]]*\]\(\s*data:[^)]*\)/gi;
+const UNMIGRATED_IMAGE = '[图片未迁移]';
+
 function assertBaseVersion(doc: DocRow, baseVersion: number): void {
   if (doc.version !== baseVersion) throw new AppError('conflict', '文档已被其他人修改，请重新加载后再编辑', { version: doc.version });
 }
@@ -400,10 +404,11 @@ export async function restoreRevision(db: Db, actor: Actor, id: string, input: {
     if (doc.source !== 'native') throw new AppError('invalid', '外部 PRD 没有修订');
     assertBaseVersion(doc, input.baseVersion);
     const target = await revisionSnapshot(tx, id, input.number);
-    const rev = await writeRevision(tx, actor, doc, target.snapshot, { summary: `恢复到第 ${input.number} 版`, allowMerge: false });
+    const snapshot = { ...target.snapshot, markdown: assertMarkdown(target.snapshot.markdown.replace(LEFTOVER_DATA_LINK, UNMIGRATED_IMAGE)) };
+    const rev = await writeRevision(tx, actor, doc, snapshot, { summary: `恢复到第 ${input.number} 版`, allowMerge: false });
     const version = doc.version + 1;
     await tx.update(documents).set({ title: target.snapshot.title, version, currentRevisionId: rev.id, updatedAt: new Date() }).where(eq(documents.id, id));
-    await reanchorDocumentComments(tx, id, target.snapshot.markdown);
+    await reanchorDocumentComments(tx, id, snapshot.markdown);
     await recordEvent(tx, {
       orgId: actor.orgId,
       productId: doc.productId,
