@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { createIteration, createProduct, createRequirement, createTask, FAIL_500, login, OWNER, setupInstance } from './helpers';
+import { createIteration, createMember, createProduct, createRequirement, createTask, expectNoPageOverflow, FAIL_500, login, OWNER, setupInstance, textFits } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -73,6 +73,52 @@ test('甘特页签：保存一个字段时，同一行正在编辑的另一个�
   await ganttRefetched;
   await expect(note).toHaveValue('等前端联调完成');
   await expect(alias).toHaveValue('联调-别名');
+});
+
+test('甘特页签：任务负责人用搜索选择', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const iterationId = await createIteration(request, productId, '迭代0105', '2026-01-05', '2026-01-16');
+  await createTask(request, { iterationId, title: '联调' });
+  for (let i = 1; i <= 20; i++) await createMember(request, `开发${String(i).padStart(2, '0')}`);
+  await createMember(request, '测试丙');
+
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/iterations/${iterationId}?tab=gantt`);
+  const assignee = page.getByRole('combobox', { name: '负责人 联调' });
+  await expect(assignee).toHaveText('未指派');
+  await assignee.click();
+  await page.getByRole('textbox', { name: '搜索负责人 联调' }).fill('测试');
+  const saved = taskSaved(page);
+  await page.getByRole('option', { name: '测试丙' }).click();
+  expect((await saved).ok()).toBeTruthy();
+  await expect(assignee).toHaveText('测试丙');
+  await page.reload();
+  await expect(page.getByRole('combobox', { name: '负责人 联调' })).toHaveText('测试丙');
+});
+
+test('甘特表：1440 与 800 宽度下「需求 / 任务」列不压到负责人列，进度、工期、延期的数字完整显示，页面不横向滚动', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const req = await createRequirement(request, productId, '一个很长的需求标题，用来检查需求与任务列不会压到负责人列');
+  const iterationId = await createIteration(request, productId, '迭代0105', '2026-01-05', '2026-01-16');
+  const label = '前端开发联调与埋点验证';
+  await createTask(request, { iterationId, requirementId: req.id, title: label, planStart: '2026-01-05', planDays: 12.5, delayDays: 10.5, progress: 100 });
+
+  await login(page, OWNER.email, OWNER.password);
+  for (const width of [1440, 800]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/acme/iterations/${iterationId}?tab=gantt`);
+    const assignee = (await page.getByRole('combobox', { name: `负责人 ${label}` }).boundingBox())!;
+    for (const left of [page.getByLabel(`别名 ${label}`), page.getByText(`· ${label}`, { exact: true })]) {
+      const box = (await left.boundingBox())!;
+      expect(box.x + box.width, `${width}px`).toBeLessThanOrEqual(assignee.x);
+    }
+    for (const name of [`进度 ${label}`, `工期 ${label}`, `延期 ${label}`]) {
+      const input = page.getByLabel(name, { exact: true });
+      await expect(input).not.toHaveValue('');
+      expect(await textFits(input), `${name}，${width}px`).toBe(true);
+    }
+    await expectNoPageOverflow(page);
+  }
 });
 
 test('甘特页签：每个迭代最多 10 个重点任务；新增与删除不挂需求的任务', async ({ page, request }) => {

@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { releaseStatusText } from '@/lib/labels';
 import { releaseKeys, requirementKeys, useApiMutation, useProducts, useReleases } from '@/lib/queries';
 import type { IterationDetail, Release } from '@/lib/types';
+import { LinkRequirementsDialog } from './link-requirements-dialog';
 import { ReleaseDialog } from './release-dialog';
 
 export function ReleasesTab({ org, iteration: it }: { org: string; iteration: IterationDetail }) {
@@ -18,6 +19,8 @@ export function ReleasesTab({ org, iteration: it }: { org: string; iteration: It
   const editable = editableIterationProducts(products.data ?? [], it);
   const q = useReleases(org, `iteration=${it.id}`);
   const [dialog, setDialog] = useState<{ open: boolean; release: Release | null }>({ open: false, release: null });
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const linking = q.data?.find((r) => r.id === linkingId) ?? null;
   const markReleased = useApiMutation((id: string) => api(`/orgs/${org}/releases/${id}/released`, { method: 'POST' }), {
     invalidate: [releaseKeys(org), requirementKeys(org)],
     success: '已标记为已发布',
@@ -46,12 +49,12 @@ export function ReleasesTab({ org, iteration: it }: { org: string; iteration: It
                 <TableHead className="w-28">基线日期</TableHead>
                 <TableHead className="w-32">状态</TableHead>
                 <TableHead className="w-16 text-right">需求</TableHead>
-                <TableHead className="w-40" />
+                <TableHead className="sticky right-0 z-10 w-56 bg-card" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {q.data.map((r) => (
-                <TableRow key={r.id} className="h-10 even:bg-zebra">
+                <TableRow key={r.id} className="group h-10 even:bg-zebra">
                   <TableCell className="font-mono">{r.versionName}</TableCell>
                   {!it.product && <TableCell className="font-mono text-[13px]">{r.productKey}</TableCell>}
                   <TableCell className="text-[13px]">{r.platform?.label ?? '—'}</TableCell>
@@ -59,9 +62,12 @@ export function ReleasesTab({ org, iteration: it }: { org: string; iteration: It
                   <TableCell className="font-mono text-[13px]">{r.baselineDate ?? '—'}</TableCell>
                   <TableCell className="text-[13px]">{releaseStatusText(r)}</TableCell>
                   <TableCell className="text-right font-mono">{r.requirementCount}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="sticky right-0 z-10 bg-card text-right group-even:bg-zebra">
                     {r.canEdit && (
                       <>
+                        <Button variant="ghost" size="sm" aria-label={`关联需求 ${r.versionName}`} onClick={() => setLinkingId(r.id)}>
+                          关联需求
+                        </Button>
                         <Button variant="ghost" size="sm" aria-label={`编辑 ${r.versionName}`} onClick={() => setDialog({ open: true, release: r })}>
                           编辑
                         </Button>
@@ -88,6 +94,7 @@ export function ReleasesTab({ org, iteration: it }: { org: string; iteration: It
         </div>
       )}
       <ReleaseDialog org={org} open={dialog.open} onOpenChange={(open) => setDialog((d) => ({ ...d, open }))} iteration={it} release={dialog.release} products={editable} />
+      <LinkRequirementsDialog key={linkingId ?? 'closed'} org={org} iteration={it} release={linking} onClose={() => setLinkingId(null)} />
     </div>
   );
 }

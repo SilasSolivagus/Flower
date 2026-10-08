@@ -23,6 +23,7 @@ PR 会跑 GitHub Actions CI（`.github/workflows/ci.yml`）：类型检查 + web
 | 端到端测试（需要 db:up；会占用 3100 端口，不要与 pnpm dev 同时运行） | `pnpm --filter @flower/web e2e` |
 | 生成旧数据对照表（只读副本放在 .local-data/） | `pnpm --filter @flower/migrate legacy suggest --plane "$PWD/.local-data/123plane.db" --push "$PWD/.local-data/push.db" --prd-url postgres://flower_admin:flower_admin@localhost:54329/prd_src --mapping "$PWD/.local-data/mapping"` |
 | 迁移旧数据（先加 --dry-run 看对账报告；--as-of 决定迭代与任务状态，重导沿用 docs/p1a-validation.md 记录的日期） | `pnpm --filter @flower/migrate legacy import …同上参数… --out "$PWD/.local-data/reports" --owner-email <你的账号邮箱> --as-of YYYY-MM-DD [--replace] [--dry-run]` |
+| 重导后让测试账号重新加入组织（清单 `.local-data/test-accounts.json`：`[{"email","orgRole","functionTags"}]`，不含密码） | `pnpm --filter @flower/migrate legacy rejoin --org-slug pan123 --owner-email <你的账号邮箱> --accounts "$PWD/.local-data/test-accounts.json"` |
 | 真实数据性能测量（需先导入 pan123） | `pnpm --filter @flower/migrate build && node --disable-warning=ExperimentalWarning --env-file=apps/web/.env.local packages/migrate/dist/cli.mjs perf --org-slug pan123 --owner-email <邮箱>` |
 
 首次开发：`cp .env.example apps/web/.env.local`，填入 `FLOWER_SECRET_KEY`（`openssl rand -base64 48`）。

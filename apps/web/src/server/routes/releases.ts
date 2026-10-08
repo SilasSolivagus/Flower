@@ -1,4 +1,4 @@
-import { createRelease, linkRequirementRelease, listReleases, markReleaseReleased, unlinkRequirementRelease, updateRelease } from '@flower/core';
+import { createRelease, linkRequirementRelease, linkRequirementsToRelease, listReleases, markReleaseReleased, unlinkRequirementRelease, updateRelease } from '@flower/core';
 import { z } from 'zod';
 import type { ApiDeps, App } from '../api';
 import { readJson } from '../http';
@@ -40,6 +40,11 @@ export function registerReleaseRoutes(app: App, deps: ApiDeps): void {
   });
 
   app.post('/orgs/:org/releases/:id/released', async (c) => c.json({ release: await markReleaseReleased(deps.db, c.get('actor'), c.req.param('id')) }));
+
+  app.post('/orgs/:org/releases/:id/requirements', async (c) => {
+    const body = await readJson(c, z.object({ requirementIds: z.array(z.string()).min(1).max(200) }));
+    return c.json(await linkRequirementsToRelease(deps.db, c.get('actor'), c.req.param('id'), body.requirementIds));
+  });
 
   app.put('/orgs/:org/releases/:id/requirements/:requirementId', async (c) => {
     await linkRequirementRelease(deps.db, c.get('actor'), c.req.param('id'), c.req.param('requirementId'));

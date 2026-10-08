@@ -11,11 +11,13 @@ export function buildImportPlan(data: LegacyData, mapping: Mapping, opts: Import
   const { report, rows, resolver } = ctx;
   const unmapped: Array<[string, Set<string>]> = [
     ['人员对照表缺少', resolver.unmapped.people],
+    ['人员对照表中多人共用这个写法，无法判断是谁（请给其中一人改显示名或删去这个别名）', resolver.ambiguousPeople],
     ['平台对照表缺少', resolver.unmapped.platforms],
     ['业务域对照表缺少', resolver.unmapped.domains],
     ['迭代对照表缺少', resolver.unmapped.iterations],
   ];
   for (const [label, set] of unmapped) for (const v of [...set].sort()) ctx.problem(`${label}：${v}`);
+  report.proxies = [...resolver.proxies].sort((a, b) => a[0].localeCompare(b[0], 'zh')).map(([raw, refs]) => ({ raw, refs }));
 
   const { plane, push, prd } = data;
   report.sourceCounts = {

@@ -1,8 +1,9 @@
 'use client';
 
+import { MemberPicker } from '@/components/member-picker';
 import { OptionMultiSelect } from '@/components/option-multi-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { activePeople, canListMembers } from '@/features/members/model';
+import { activePeople, canListMembers, pickerOptions } from '@/features/members/model';
 import { nodeOptions } from '@/features/structure/model';
 import { api } from '@/lib/api';
 import { qk, requirementKeys, useApiMutation, useFields, useMembers, useNodes, useOrg } from '@/lib/queries';
@@ -38,20 +39,14 @@ export function FieldsPanel({ org, requirement: r }: { org: string; requirement:
   const memberSelect = (label: string, field: 'ownerMemberId' | 'requesterMemberId', current: { id: string; displayName: string } | null) => (
     <Row label={label}>
       {canEdit && canListMembersFlag ? (
-        <Select value={current?.id ?? NONE} onValueChange={(v) => patch.mutate({ [field]: v === NONE ? null : v })}>
-          <SelectTrigger className="h-8" aria-label={label}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NONE}>不填</SelectItem>
-            {current && !people.some((p) => p.id === current.id) && <SelectItem value={current.id}>{current.displayName}</SelectItem>}
-            {people.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.displayName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <MemberPicker
+          label={label}
+          className="h-8 w-full"
+          noneLabel="不填"
+          options={pickerOptions(people, current)}
+          value={current?.id ?? null}
+          onChange={(id) => patch.mutate({ [field]: id })}
+        />
       ) : (
         (current?.displayName ?? '—')
       )}

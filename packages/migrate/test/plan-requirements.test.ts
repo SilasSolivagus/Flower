@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { legacyUuid } from '../src/ids';
 import { buildImportPlan } from '../src/plan';
 import type { ImportOptions } from '../src/plan-types';
-import { makeLegacyData, planeReq, reviewedMapping } from './fixtures';
+import { makeLegacyData, messyLegacyData, planeReq, reviewedMapping } from './fixtures';
 
 const OPTS: ImportOptions = { orgSlug: 'pan123', orgName: '123云盘', productKey: 'PAN', productName: '123云盘', asOf: '2026-09-29', owner: null };
 
@@ -305,5 +306,68 @@ describe('导入计划：需求（修复回归）', () => {
     const p = buildImportPlan(data, reviewedMapping(), OPTS);
     expect(p.report.problems).toContain('push 甘特任务标记「constructor」没有对应规则');
     expect(p.rows.tasks.find((t) => t.title === '前端开发')!.flag).toBeNull();
+  });
+});
+
+describe('导入计划：一个字段写了多人、代签写法、工具账号', () => {
+  const data = messyLegacyData();
+  const { rows, report } = buildImportPlan(data, reviewedMapping(data), OPTS);
+  const member = (name: string) => rows.members.find((m) => m.displayName === name)!.id;
+  const byLegacyKey = (key: string) => rows.requirements.find((r) => r.legacyKey === key)!;
+
+  it('没有阻止写入的问题', () => {
+    expect(report.problems).toEqual([]);
+  });
+
+  it('单值字段取第一人，其余保留原文并记入报告', () => {
+    const x1 = byLegacyKey('X001');
+    expect(x1.requesterMemberId).toBe(member('客户甲'));
+    expect(x1.legacyMeta).toMatchObject({ plane: { coRequesters: ['客户乙'] } });
+    expect(rows.tasks.find((t) => t.title === '多人任务')).toMatchObject({ assigneeMemberId: member('王五'), meta: expect.objectContaining({ ovAssignee: '王五、赵六 钱七' }) });
+    expect(report.personSplits).toEqual(
+      expect.arrayContaining([
+        { raw: '客户甲、客户乙', people: ['客户甲', '客户乙'], singleRefs: 1, multiRefs: 0 },
+        { raw: '王五、赵六 钱七', people: ['王五', '赵六', '钱七'], singleRefs: 1, multiRefs: 0 },
+      ]),
+    );
+  });
+
+  it('多值字段每人一条：开发分配与会签签字；第一人沿用原 id，重导时 id 稳定', () => {
+    const x2 = byLegacyKey('X002');
+    expect(rows.requirementAssignments.filter((a) => a.requirementId === x2.id).map((a) => a.memberId).sort()).toEqual([member('王五'), member('赵六')].sort());
+    const firstAssignment = rows.requirementAssignments.find((a) => a.id === legacyUuid('pan123/assignment', 'plane:d3'))!;
+    expect(firstAssignment).toMatchObject({ requirementId: x2.id, memberId: member('王五') });
+    const x1 = byLegacyKey('X001');
+    const design = rows.checkItemResults.find((c) => c.targetId === x1.id && c.itemKey === 'design_signoff')!;
+    const rule2 = rows.checkItemSignoffs.filter((s) => s.resultId === design.id && s.signerRuleIndex === 2);
+    expect(rule2.map((s) => s.signerMemberId).sort()).toEqual([member('李四'), member('张三')].sort());
+    expect(new Set(rule2.map((s) => s.id)).size).toBe(2);
+    const firstSignoff = rule2.find((s) => s.id === legacyUuid('pan123/signoff', 'push:3'))!;
+    expect(firstSignoff).toMatchObject({ signerMemberId: member('张三') });
+    expect(report.personSplits).toEqual(
+      expect.arrayContaining([
+        { raw: '王五、赵六', people: ['王五', '赵六'], singleRefs: 0, multiRefs: 1 },
+        { raw: '张三、李四', people: ['张三', '李四'], singleRefs: 0, multiRefs: 1 },
+      ]),
+    );
+  });
+
+  it('变更记录里的代签写法：事件操作人是实际操作人，原写法保存在 payload；不建成员', () => {
+    const ev = rows.domainEvents.find((e) => e.type === 'legacy.push.change' && (e.payload as { field?: string }).field === 'status')!;
+    expect(ev).toMatchObject({ actorMemberId: member('张三'), payload: expect.objectContaining({ editedBy: '代饶总 by 张三' }) });
+    expect(rows.members.filter((m) => m.displayName.startsWith('代'))).toEqual([]);
+    expect(report.proxies).toEqual([{ raw: '代饶总 by 张三', refs: 1 }]);
+  });
+
+  it('工具账号导入为 Agent 成员，报告里标出类型', () => {
+    expect(rows.members.find((m) => m.displayName === 'model-v4-flash')).toMatchObject({ kind: 'agent', accountId: null });
+    expect(report.people.find((p) => p.displayName === 'data-sync')?.kind).toBe('agent');
+    expect(report.people.find((p) => p.displayName === '张三')?.kind).toBe('human');
+  });
+
+  it('人员合并清单列出成员的其他写法', () => {
+    const lisi = report.personMerges.find((x) => x.displayName === '李四')!;
+    expect(lisi.variants).toEqual(expect.arrayContaining(['产品经理-李四(小李)', '小李', 'lisi']));
+    expect(lisi.variants.some((v) => v.includes('@'))).toBe(false);
   });
 });

@@ -3,12 +3,14 @@
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { ConfirmAction } from '@/components/confirm-action';
+import { MemberPicker } from '@/components/member-picker';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { activePeople, pickerOptions } from '@/features/members/model';
 import { PRODUCT_ROLE_LABEL } from '@/lib/labels';
 import type { FunctionTag, Member, WorkflowBody } from '@/lib/types';
 import { addCheckItem, type CheckItem, removeCheckItem } from '../model';
@@ -149,33 +151,37 @@ export function CheckItems({
                       <SelectItem value="product_role">产品角色</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Select value={signer.ref} onValueChange={(ref) => setSigner({ ...signer, ref })}>
-                    <SelectTrigger className="flex-1" aria-label="签字人">
-                      <SelectValue placeholder="选择" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {signer.by === 'function_tag' &&
-                        tags.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.name}
-                          </SelectItem>
-                        ))}
-                      {signer.by === 'member' &&
-                        members
-                          .filter((m) => m.status === 'active')
-                          .map((m) => (
-                            <SelectItem key={m.id} value={m.id}>
-                              {m.displayName}
+                  {signer.by === 'member' ? (
+                    <MemberPicker
+                      label="签字人"
+                      className="flex-1"
+                      placeholder="选择"
+                      modal
+                      options={pickerOptions(activePeople(members), null)}
+                      value={signer.ref || null}
+                      onChange={(id) => setSigner({ ...signer, ref: id ?? '' })}
+                    />
+                  ) : (
+                    <Select value={signer.ref} onValueChange={(ref) => setSigner({ ...signer, ref })}>
+                      <SelectTrigger className="flex-1" aria-label="签字人">
+                        <SelectValue placeholder="选择" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {signer.by === 'function_tag' &&
+                          tags.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.name}
                             </SelectItem>
                           ))}
-                      {signer.by === 'product_role' &&
-                        (['admin', 'editor', 'viewer'] as const).map((r) => (
-                          <SelectItem key={r} value={r}>
-                            {PRODUCT_ROLE_LABEL[r]}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                        {signer.by === 'product_role' &&
+                          (['admin', 'editor', 'viewer'] as const).map((r) => (
+                            <SelectItem key={r} value={r}>
+                              {PRODUCT_ROLE_LABEL[r]}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Button
                     type="button"
                     variant="outline"

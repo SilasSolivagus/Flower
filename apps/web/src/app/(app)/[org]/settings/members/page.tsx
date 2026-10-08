@@ -63,8 +63,8 @@ function MembersPage() {
           <TabsTrigger value="invitations">待接受邀请 {pending}</TabsTrigger>
         </TabsList>
         <TabsContent value="members" className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <label className="flex h-9 w-72 items-center gap-2 rounded-md border bg-card px-3 text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex h-9 w-72 max-w-full items-center gap-2 rounded-md border bg-card px-3 text-muted-foreground">
               <Search className="size-4" aria-hidden="true" />
               <Input
                 className="h-8 border-0 p-0 shadow-none focus-visible:ring-0"

@@ -1,5 +1,5 @@
 import { BUILTIN_FIELDS, DEFAULT_FUNCTION_TAGS, type IterationMilestone, validateWorkflowBody } from '@flower/core';
-import { parseLegacyDate, parseLegacyTime } from './normalize';
+import { aliasKey, parseLegacyDate, parseLegacyTime } from './normalize';
 import type { PlanContext } from './plan-types';
 import { iterationWindow } from './suggest';
 import {
@@ -44,7 +44,7 @@ export function buildBase(ctx: PlanContext): void {
       id,
       orgId,
       accountId: isOwner ? opts.owner!.accountId : null,
-      kind: 'human',
+      kind: p.kind ?? 'human',
       displayName: p.displayName,
       email: p.email,
       orgRole: isOwner ? 'owner' : p.orgRole,
@@ -53,7 +53,9 @@ export function buildBase(ctx: PlanContext): void {
     });
     for (const t of p.functionTags) rows.memberFunctionTags.push({ orgId, memberId: id, tagId: ctx.tagIdByName.get(t)! });
     if (p.productRole && !isOwner && p.orgRole !== 'admin') rows.productMembers.push({ orgId, productId, memberId: id, role: p.productRole });
-    ctx.report.people.push({ key: p.key, displayName: p.displayName, email: p.email, orgRole: isOwner ? 'owner' : p.orgRole, hasAccount: isOwner, mentions: p.mentions });
+    ctx.report.people.push({ key: p.key, displayName: p.displayName, email: p.email, kind: p.kind ?? 'human', orgRole: isOwner ? 'owner' : p.orgRole, hasAccount: isOwner, mentions: p.mentions });
+    const variants = p.aliases.filter((a) => aliasKey(a) !== aliasKey(p.displayName) && !a.includes('@'));
+    if (variants.length > 0) ctx.report.personMerges.push({ key: p.key, displayName: p.displayName, variants });
   }
   if (opts.owner && !ownerLinked) {
     rows.members.push({ id: ctx.id('member', '__owner'), orgId, accountId: opts.owner.accountId, kind: 'human', displayName: opts.owner.name, email: ownerEmail ?? null, orgRole: 'owner', status: 'active', createdAt });
