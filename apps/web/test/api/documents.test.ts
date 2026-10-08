@@ -103,6 +103,14 @@ describe('PRD 接口', () => {
     expect(noLength.body.error.message).toBe('上传请求缺少 Content-Length');
   });
 
+  it('跨组织按 id 读附件返回 404', async () => {
+    const doc = (await call(app, 'POST', `/orgs/acme/products/${productId}/documents`, { session, body: { title: '跨组织' } })).body.document;
+    const up = await upload(app, `/orgs/acme/documents/${doc.id}/attachments`, { session, file: new Blob([PNG], { type: 'image/png' }), filename: 'a.png' });
+    expect((await call(app, 'POST', '/orgs', { session, body: { name: '另一个组织', slug: 'beta' } })).status).toBe(201);
+    const res = await app.request(`/api/v1/orgs/beta/attachments/${up.body.attachment.id}`, { headers: { cookie: `flower_session=${session}` } });
+    expect(res.status).toBe(404);
+  });
+
   it('权限矩阵：只读成员能评论不能写；只读 Token 只能读；模板只有组织管理员能建', async () => {
     const doc = (await call(app, 'POST', `/orgs/acme/products/${productId}/documents`, { session, body: { title: '权限' } })).body.document;
     expect((await call(app, 'PUT', `/orgs/acme/documents/${doc.id}/content`, { session: viewerSession, body: { baseVersion: 1, markdown: 'x' } })).status).toBe(403);
