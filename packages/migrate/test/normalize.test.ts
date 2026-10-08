@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { legacyUuid } from '../src/ids';
-import { addDays, aliasKey, normTitle, parseJsonArray, parseLegacyDate, parseLegacyTime, splitNames, splitPlatforms } from '../src/normalize';
+import { addDays, aliasKey, normTitle, parseJsonArray, parseLegacyDate, parseLegacyTime, parsePersonName, splitNames, splitPlatforms } from '../src/normalize';
 
 describe('确定性 ID', () => {
   it('同样的输入得到同样的 UUID，格式合法', () => {
@@ -24,6 +24,25 @@ describe('归一化', () => {
     expect(parseJsonArray('["pc"," web ",""]')).toEqual(['pc', 'web']);
     expect(parseJsonArray('not json')).toEqual([]);
     expect(aliasKey(' Web 端 ')).toBe('web端');
+  });
+
+  it('两侧各有至少两个汉字的空白也算多人分隔，其他空白不拆', () => {
+    expect(splitNames('王五、赵六 钱七')).toEqual(['王五', '赵六', '钱七']);
+    expect(splitNames('王五 、 赵六  、、 钱七')).toEqual(['王五', '赵六', '钱七']);
+    expect(splitNames('Alex Chen')).toEqual(['Alex Chen']);
+    expect(splitNames('代饶总 by 张三')).toEqual(['代饶总 by 张三']);
+    expect(splitNames('张 三')).toEqual(['张 三']);
+    expect(splitNames('张三 李四')).toEqual(['张三', '李四']);
+    expect(splitNames('欧阳娜娜 张三')).toEqual(['欧阳娜娜', '张三']);
+  });
+
+  it('解析「头衔-姓名(昵称)」「姓名（昵称）」；姓名不是 2–4 个汉字时原样返回', () => {
+    expect(parsePersonName('产品经理-李四(小李)')).toEqual({ name: '李四', title: '产品经理', nickname: '小李' });
+    expect(parsePersonName('运营-孙八')).toEqual({ name: '孙八', title: '运营', nickname: null });
+    expect(parsePersonName('周小雨（雨雨）')).toEqual({ name: '周小雨', title: null, nickname: '雨雨' });
+    expect(parsePersonName(' 王五 ')).toEqual({ name: '王五', title: null, nickname: null });
+    expect(parsePersonName('市场-Amy')).toEqual({ name: '市场-Amy', title: null, nickname: null });
+    expect(parsePersonName('data-sync')).toEqual({ name: 'data-sync', title: null, nickname: null });
   });
 
   it('解析旧系统的时间与日期写法（无时区的按 UTC）', () => {

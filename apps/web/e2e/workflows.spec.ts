@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { login, OWNER, setupInstance } from './helpers';
+import { login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ page, request }) => {
   await resetDatabase();
@@ -60,4 +60,22 @@ test('校验失败时显示问题并禁止发布；模板可以复制、改名�
   await page.getByRole('button', { name: '更多操作：网盘需求流程' }).click();
   await page.getByRole('menuitem', { name: '归档' }).click();
   await expect(page.getByRole('row', { name: /网盘需求流程/ }).getByText('已归档')).toBeVisible();
+});
+
+test('会签检查项：「指定成员」签字人用搜索选择', async ({ page, request }) => {
+  await ok(request.post('/api/v1/orgs/acme/members', { data: { displayName: '老板乙' } }));
+  await page.getByRole('link', { name: '默认流程' }).click();
+  await page.getByRole('tab', { name: /检查项/ }).click();
+  await page.getByRole('button', { name: '新增检查项' }).click();
+  const dialog = page.getByRole('dialog', { name: '新增检查项' });
+  await dialog.getByLabel('检查项名称').fill('老板签字');
+  await dialog.getByLabel('类型', { exact: true }).click();
+  await page.getByRole('option', { name: '会签' }).click();
+  await dialog.getByRole('combobox', { name: '签字人类型' }).click();
+  await page.getByRole('option', { name: '成员' }).click();
+  await dialog.getByRole('combobox', { name: '签字人', exact: true }).click();
+  await page.getByRole('textbox', { name: '搜索签字人' }).fill('老板');
+  await page.getByRole('option', { name: '老板乙' }).click();
+  await dialog.getByRole('button', { name: '加入' }).click();
+  await expect(dialog.getByText('成员：老板乙')).toBeVisible();
 });

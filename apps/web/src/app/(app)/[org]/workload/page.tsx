@@ -5,13 +5,13 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, Suspense } from 'react';
 import { LoadHeatmap } from '@/components/load-heatmap';
 import { QueryError } from '@/components/load-error';
+import { MemberPicker } from '@/components/member-picker';
 import { PageHeader } from '@/components/page-header';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { groupByIteration, heatRows, upcomingWorkdays } from '@/features/gantt/model';
-import { activePeople, canListMembers } from '@/features/members/model';
+import { activePeople, canListMembers, pickerOptions } from '@/features/members/model';
 import { ITERATION_STATUS_LABEL, TASK_STATUS_LABEL } from '@/lib/labels';
 import { useMembers, useMemberTasks, useOrg } from '@/lib/queries';
 import type { MemberTasks } from '@/lib/types';
@@ -116,18 +116,7 @@ function WorkloadPage() {
       />
       <div className="flex items-center gap-4">
         {people.length > 0 && (
-          <Select value={memberId} onValueChange={(v) => go({ member: v })}>
-            <SelectTrigger className="h-8 w-44" aria-label="选择成员">
-              <SelectValue placeholder="选择成员" />
-            </SelectTrigger>
-            <SelectContent>
-              {people.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.displayName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MemberPicker label="选择成员" className="h-8 w-44" options={pickerOptions(people, null)} value={memberId || null} onChange={(id) => id && go({ member: id })} />
         )}
         <span className="flex items-center gap-2 text-[13px]">
           <Switch aria-label="包含已结束的迭代" checked={includeFinished} onCheckedChange={(v) => go({ all: v })} />

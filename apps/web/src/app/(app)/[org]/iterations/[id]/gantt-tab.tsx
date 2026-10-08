@@ -144,18 +144,18 @@ export function GanttTab({ org, iterationId }: { org: string; iterationId: strin
         <p className="py-8 text-center text-muted-foreground">还没有任务</p>
       ) : (
         <div className="overflow-x-auto rounded-md border bg-card">
-          <Table className="min-w-[1180px]">
+          <Table className="min-w-[1472px] table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">
                   <span className="sr-only">重点</span>
                 </TableHead>
-                <TableHead>需求 / 任务</TableHead>
-                <TableHead className="w-32">负责人</TableHead>
+                <TableHead className="w-72">需求 / 任务</TableHead>
+                <TableHead className="w-36">负责人</TableHead>
                 <TableHead className="w-28">状态</TableHead>
-                <TableHead className="w-60">开始 / 工期（天）</TableHead>
-                <TableHead className="w-48">进度（%）</TableHead>
-                <TableHead className="w-44">标记 / 延期（天）</TableHead>
+                <TableHead className="w-64">开始 / 工期（天）</TableHead>
+                <TableHead className="w-52">进度（%）</TableHead>
+                <TableHead className="w-48">标记 / 延期（天）</TableHead>
                 <TableHead className="w-48">说明</TableHead>
                 <TableHead className="w-10">
                   <span className="sr-only">操作</span>

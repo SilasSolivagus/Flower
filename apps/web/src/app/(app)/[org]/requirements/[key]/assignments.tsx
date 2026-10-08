@@ -3,9 +3,10 @@
 import { X } from 'lucide-react';
 import { useState } from 'react';
 import { FormError } from '@/components/form-error';
+import { MemberPicker } from '@/components/member-picker';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { activePeople, canListMembers } from '@/features/members/model';
+import { activePeople, canListMembers, pickerOptions } from '@/features/members/model';
 import { api } from '@/lib/api';
 import { qk, requirementKeys, useApiMutation, useFields, useFunctionTags, useMembers, useOrg } from '@/lib/queries';
 import type { RequirementDetail } from '@/lib/types';
@@ -22,7 +23,7 @@ export function Assignments({ org, requirement: r }: { org: string; requirement:
   const fields = useFields(org, r.productId, canEdit);
   const platformOptions = (fields.data?.find((f) => f.key === 'platform')?.options ?? []).filter((o) => o.active);
   const [tagId, setTagId] = useState(NONE);
-  const [memberId, setMemberId] = useState(NONE);
+  const [memberId, setMemberId] = useState<string | null>(null);
   const [platformId, setPlatformId] = useState(NONE);
   // 分配改变「等我签字」的推送对象：刷新需求详情、评审表（都在 requirementKeys 下）和工作台
   const invalidate = [requirementKeys(org), qk.workbench];
@@ -37,7 +38,7 @@ export function Assignments({ org, requirement: r }: { org: string; requirement:
       silentError: true,
       success: '已添加分配',
       onSuccess: () => {
-        setMemberId(NONE);
+        setMemberId(null);
         setPlatformId(NONE);
       },
     },
@@ -95,21 +96,14 @@ export function Assignments({ org, requirement: r }: { org: string; requirement:
               ))}
             </SelectContent>
           </Select>
-          <Select value={memberId} onValueChange={setMemberId}>
-            <SelectTrigger className="h-8" aria-label="分配成员">
-              <SelectValue placeholder="选择成员" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE} disabled>
-                选择成员
-              </SelectItem>
-              {activePeople(members.data ?? []).map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.displayName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MemberPicker
+            label="分配成员"
+            className="h-8 w-full"
+            placeholder="选择成员"
+            options={pickerOptions(activePeople(members.data ?? []), null)}
+            value={memberId}
+            onChange={setMemberId}
+          />
           {platformOptions.length > 0 && (
             <Select value={platformId} onValueChange={setPlatformId}>
               <SelectTrigger className="h-8" aria-label="分配平台">
@@ -125,7 +119,7 @@ export function Assignments({ org, requirement: r }: { org: string; requirement:
               </SelectContent>
             </Select>
           )}
-          <Button type="submit" size="sm" variant="outline" disabled={tagId === NONE || memberId === NONE || add.isPending}>
+          <Button type="submit" size="sm" variant="outline" disabled={tagId === NONE || !memberId || add.isPending}>
             添加分配
           </Button>
           <FormError error={add.error ?? remove.error} />

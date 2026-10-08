@@ -22,6 +22,7 @@ export type ReleaseView = {
   baselineDate: string | null;
   releasedAt: Date | null;
   notes: string | null;
+  requirementIds: string[];
   requirementCount: number;
   canEdit: boolean;
 };
@@ -61,12 +62,11 @@ async function views(tx: Tx, actor: Actor, rows: ReleaseRow[]): Promise<ReleaseV
   const opts = optionIds.length ? await tx.select().from(fieldOptions).where(inArray(fieldOptions.id, optionIds)) : [];
   const iterIds = [...new Set(rows.map((r) => r.iterationId).filter((x): x is string => !!x))];
   const iters = iterIds.length ? await tx.select({ id: iterations.id, name: iterations.name }).from(iterations).where(inArray(iterations.id, iterIds)) : [];
-  const counts = await tx
-    .select({ releaseId: requirementReleases.releaseId, n: sql<number>`count(*)::int` })
+  const links = await tx
+    .select({ releaseId: requirementReleases.releaseId, requirementId: requirementReleases.requirementId })
     .from(requirementReleases)
     .innerJoin(requirements, eq(requirements.id, requirementReleases.requirementId))
-    .where(and(inArray(requirementReleases.releaseId, ids), isNull(requirements.deletedAt)))
-    .groupBy(requirementReleases.releaseId);
+    .where(and(inArray(requirementReleases.releaseId, ids), isNull(requirements.deletedAt)));
   const roles = new Map<string, ProductRole | null>();
   for (const pid of productIds) roles.set(pid, await productRoleOf(tx, actor, pid));
   return rows.map((r) => {
@@ -83,7 +83,8 @@ async function views(tx: Tx, actor: Actor, rows: ReleaseRow[]): Promise<ReleaseV
       baselineDate: r.baselineDate,
       releasedAt: r.releasedAt,
       notes: r.notes,
-      requirementCount: counts.find((c) => c.releaseId === r.id)?.n ?? 0,
+      requirementIds: links.filter((l) => l.releaseId === r.id).map((l) => l.requirementId),
+      requirementCount: links.filter((l) => l.releaseId === r.id).length,
       canEdit: atLeast(roles.get(r.productId) ?? null, 'editor'),
     };
   });
@@ -203,38 +204,56 @@ export async function markReleaseReleased(db: Db, actor: Actor, id: string): Pro
   });
 }
 
-async function loadPair(tx: Tx, actor: Actor, releaseId: string, requirementId: string) {
+async function loadReleaseForEdit(tx: Tx, actor: Actor, releaseId: string): Promise<ReleaseRow> {
   const rel = await loadRelease(tx, releaseId);
   await requireProductRole(tx, actor, rel.productId, 'editor');
+  return rel;
+}
+
+async function assertRequirementInProduct(tx: Tx, productId: string, requirementId: string) {
   const req = await loadRequirement(tx, requirementId);
-  if (req.productId !== rel.productId) throw new AppError('invalid', '只能关联本产品的需求');
-  return { rel, req };
+  if (req.productId !== productId) throw new AppError('invalid', '只能关联本产品的需求');
+  return req;
+}
+
+/** 把多条需求关联到一个发布版本：已关联的跳过，每条新关联记一条事件；任一条不合法时整批不写入。 */
+export async function linkRequirementsToRelease(db: Db, actor: Actor, releaseId: string, requirementIds: string[]): Promise<{ linked: number }> {
+  const ids = [...new Set(requirementIds)].sort();
+  if (ids.length === 0 || ids.length > 200) throw new AppError('invalid', '一次关联 1–200 条需求');
+  return withOrg(db, actor.orgId, async (tx) => {
+    const rel = await loadReleaseForEdit(tx, actor, releaseId);
+    let linked = 0;
+    for (const requirementId of ids) {
+      const req = await assertRequirementInProduct(tx, rel.productId, requirementId);
+      const inserted = await tx
+        .insert(requirementReleases)
+        .values({ orgId: actor.orgId, requirementId: req.id, releaseId: rel.id })
+        .onConflictDoNothing()
+        .returning({ releaseId: requirementReleases.releaseId });
+      if (inserted.length === 0) continue;
+      linked += 1;
+      await recordEvent(tx, {
+        orgId: actor.orgId,
+        productId: rel.productId,
+        type: 'requirement.release_linked',
+        subjectType: 'requirement',
+        subjectId: req.id,
+        actor,
+        payload: { releaseId: rel.id, versionName: rel.versionName },
+      });
+    }
+    return { linked };
+  });
 }
 
 export async function linkRequirementRelease(db: Db, actor: Actor, releaseId: string, requirementId: string): Promise<void> {
-  return withOrg(db, actor.orgId, async (tx) => {
-    const { rel, req } = await loadPair(tx, actor, releaseId, requirementId);
-    const inserted = await tx
-      .insert(requirementReleases)
-      .values({ orgId: actor.orgId, requirementId: req.id, releaseId: rel.id })
-      .onConflictDoNothing()
-      .returning({ releaseId: requirementReleases.releaseId });
-    if (inserted.length === 0) return;
-    await recordEvent(tx, {
-      orgId: actor.orgId,
-      productId: rel.productId,
-      type: 'requirement.release_linked',
-      subjectType: 'requirement',
-      subjectId: req.id,
-      actor,
-      payload: { releaseId: rel.id, versionName: rel.versionName },
-    });
-  });
+  await linkRequirementsToRelease(db, actor, releaseId, [requirementId]);
 }
 
 export async function unlinkRequirementRelease(db: Db, actor: Actor, releaseId: string, requirementId: string): Promise<void> {
   return withOrg(db, actor.orgId, async (tx) => {
-    const { rel, req } = await loadPair(tx, actor, releaseId, requirementId);
+    const rel = await loadReleaseForEdit(tx, actor, releaseId);
+    const req = await assertRequirementInProduct(tx, rel.productId, requirementId);
     const deleted = await tx
       .delete(requirementReleases)
       .where(and(eq(requirementReleases.releaseId, rel.id), eq(requirementReleases.requirementId, req.id)))

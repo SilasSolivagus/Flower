@@ -2,33 +2,31 @@
 
 import { useState } from 'react';
 import { FormError } from '@/components/form-error';
+import { MemberPicker } from '@/components/member-picker';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatDate } from '@/features/requirements/format';
-import { activePeople, canListMembers } from '@/features/members/model';
+import { activePeople, canListMembers, pickerOptions } from '@/features/members/model';
 import { api } from '@/lib/api';
 import { iterationKeys, requirementKeys, useApiMutation, useMembers, useOrg } from '@/lib/queries';
 import type { RequirementDetail } from '@/lib/types';
-
-const NONE = '__none';
 
 export function Blockers({ org, requirement: r }: { org: string; requirement: RequirementDetail }) {
   const canEdit = r.myRole !== 'viewer';
   const orgQ = useOrg(org);
   const members = useMembers(org, canEdit && canListMembers(orgQ.data?.me));
   const [description, setDescription] = useState('');
-  const [owner, setOwner] = useState(NONE);
+  const [owner, setOwner] = useState<string | null>(null);
   const invalidate = [requirementKeys(org), iterationKeys(org)];
   const add = useApiMutation(
-    () => api(`/orgs/${org}/requirements/${r.id}/blockers`, { method: 'POST', body: { description, ownerMemberId: owner === NONE ? null : owner } }),
+    () => api(`/orgs/${org}/requirements/${r.id}/blockers`, { method: 'POST', body: { description, ownerMemberId: owner } }),
     {
       invalidate,
       silentError: true,
       success: '已添加阻塞项',
       onSuccess: () => {
         setDescription('');
-        setOwner(NONE);
+        setOwner(null);
       },
     },
   );
@@ -91,19 +89,7 @@ export function Blockers({ org, requirement: r }: { org: string; requirement: Re
         >
           <Input aria-label="新阻塞项" placeholder="描述阻塞原因" className="h-8" maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} />
           {people.length > 0 && (
-            <Select value={owner} onValueChange={setOwner}>
-              <SelectTrigger className="h-8 w-32" aria-label="阻塞项负责人">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={NONE}>无负责人</SelectItem>
-                {people.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.displayName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <MemberPicker label="阻塞项负责人" className="h-8 w-32" noneLabel="无负责人" options={pickerOptions(people, null)} value={owner} onChange={setOwner} />
           )}
           <Button type="submit" size="sm" variant="outline" disabled={!description.trim() || add.isPending}>
             添加

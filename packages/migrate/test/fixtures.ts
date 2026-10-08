@@ -99,9 +99,31 @@ export function makeLegacyData(): LegacyData {
   };
 }
 
-/** 模拟用户审阅后的对照表：会签角色"饶总"指向王老板，业务域"会员"并入"会员与支付"。 */
-export function reviewedMapping(): Mapping {
+/** 带人员问题的旧数据（全部为虚构姓名）：一个字段写了多人、头衔与昵称写法、两字短名、邮箱前缀、代签写法、工具账号。 */
+export function messyLegacyData(): LegacyData {
   const data = makeLegacyData();
+  data.plane.users.push({ id: 'u4', email: 'zhouxiaoyu@example.com', name: '周小雨', nickname: null, role: 'member', created_at: '2026-03-01 00:00:00' });
+  data.plane.requirements[0]!.requester = '客户甲、客户乙';
+  data.plane.requirements.push(
+    planeReq({ id: 'X004', title: '头衔写法', requester: '产品经理-李四(小李)', owner: '张三', created_at: '2026-03-04T08:00:00Z' }),
+    planeReq({ id: 'X005', title: '昵称写法', requester: '小李', owner: '张三', created_at: '2026-03-05T08:00:00Z' }),
+    planeReq({ id: 'X006', title: '只有头衔写法', requester: '运营-孙八', owner: '张三', created_at: '2026-03-06T08:00:00Z' }),
+  );
+  data.plane.requirementDevelopers.push({ id: 'd3', requirement_id: 'X002', platform: null, developer: '王五、赵六', created_at: null });
+  data.plane.subtasks.push({ id: 's2', requirement_id: 'X001', title: '短名写法', status: 'todo', assignee: '小雨', created_at: '2026-03-04T00:00:00Z', updated_at: null });
+  data.push.ganttTasks.push({ ...data.push.ganttTasks[0]!, id: 3, title: '多人任务', assignee: '', ov_assignee: '王五、赵六 钱七' });
+  data.push.designSignoffs[2] = { ...data.push.designSignoffs[2]!, state: '通过', by: '张三、李四', at: '2026-03-04 00:00:00' };
+  data.push.changeLog.push(
+    { id: 2, entity_type: 'requirement', entity_id: '1', field: 'status', old_value: '评审中', new_value: '已通过', edited_by: '代饶总 by 张三', edited_at: '2026-03-05 00:00:00' },
+    { id: 3, entity_type: 'requirement', entity_id: '1', field: 'prd_url', old_value: null, new_value: 'https://example.com/prd', edited_by: 'data-sync', edited_at: '2026-03-05 00:00:00' },
+    { id: 4, entity_type: 'requirement', entity_id: '1', field: 'priority', old_value: 'P0', new_value: 'P1', edited_by: 'lisi', edited_at: '2026-03-06 00:00:00' },
+  );
+  data.push.autoReviews[0]!.reviewed_by = 'model-v4-flash';
+  return data;
+}
+
+/** 模拟用户审阅后的对照表：会签角色"饶总"指向王老板，业务域"会员"并入"会员与支付"。 */
+export function reviewedMapping(data: LegacyData = makeLegacyData()): Mapping {
   const m = suggestMapping(data, null);
   const boss = m.people.people.find((p) => p.displayName === '王老板')!;
   m.people.signoffRoles['饶总'] = boss.key;

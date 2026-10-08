@@ -4,8 +4,20 @@ export const normTitle = (s: string): string => s.normalize('NFKC').replace(/[\s
 
 export const aliasKey = (s: string): string => s.normalize('NFKC').replace(/\s+/g, '').toLowerCase();
 
+/** 一个字段写了多人：顿号、中英文逗号、斜杠、分号，以及两侧各有至少两个汉字的空白都算分隔（「张 三」这类单字加空格的写法不拆）。 */
 export const splitNames = (s: S | undefined): string[] =>
-  (s ?? '').split(/[、,，/;；]+/).map((x) => x.trim()).filter(Boolean);
+  (s ?? '').split(/[、,，/;；]+|(?<=\p{Script=Han}{2})\s+(?=\p{Script=Han}{2})/u).map((x) => x.trim()).filter(Boolean);
+
+/**
+ * 带头衔或昵称的写法：「头衔-姓名(昵称)」「头衔-姓名」「姓名（昵称）」。
+ * 姓名是 2–4 个汉字时才解析；既没有头衔也没有昵称、或姓名不是汉字时原样返回。
+ */
+export function parsePersonName(raw: string): { name: string; title: string | null; nickname: string | null } {
+  const t = raw.trim();
+  const m = /^(?:([^-－—]+?)\s*[-－—]\s*)?(\p{Script=Han}{2,4})\s*(?:[（(]\s*([^（）()]+?)\s*[）)])?$/u.exec(t);
+  if (!m || (!m[1] && !m[3])) return { name: t, title: null, nickname: null };
+  return { name: m[2]!, title: m[1]?.trim() || null, nickname: m[3]?.trim() || null };
+}
 
 export const splitPlatforms = (s: S | undefined): string[] =>
   (s ?? '').split(/[,，、]+/).map((x) => x.trim()).filter(Boolean);

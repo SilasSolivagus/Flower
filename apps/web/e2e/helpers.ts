@@ -1,4 +1,4 @@
-import { type APIRequestContext, type APIResponse, expect, type Page } from '@playwright/test';
+import { type APIRequestContext, type APIResponse, expect, type Locator, type Page } from '@playwright/test';
 
 export const OWNER = { email: 'owner@example.com', password: 'password123', name: '林澄' };
 
@@ -109,4 +109,21 @@ export async function applyReviewWorkflow(request: APIRequestContext, productId:
     }),
   );
   await ok(request.put(`/api/v1/orgs/acme/products/${productId}/workflow`, { data: { versionId: wf.version.id } }));
+}
+
+/** 页面本身不出现横向滚动：内容超宽时只能在自己的容器里滚动。 */
+export async function expectNoPageOverflow(page: Page): Promise<void> {
+  const { scroll, client } = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }));
+  expect(scroll, `页面宽 ${scroll}px，超出视口 ${client}px`).toBeLessThanOrEqual(client);
+}
+
+/** 输入框里的文字能否完整显示：按计算后的字体量宽度，数字输入框另留 16px 给上下箭头。 */
+export async function textFits(input: Locator): Promise<boolean> {
+  return input.evaluate((el: HTMLInputElement) => {
+    const cs = getComputedStyle(el);
+    const ctx = document.createElement('canvas').getContext('2d')!;
+    ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const inner = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    return ctx.measureText(el.value).width + (el.type === 'number' ? 16 : 0) <= inner;
+  });
 }

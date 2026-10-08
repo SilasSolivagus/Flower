@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '@/components/empty-state';
+import { MemberPicker } from '@/components/member-picker';
 import { OptionMultiSelect } from '@/components/option-multi-select';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { activePeople, canListMembers } from '@/features/members/model';
+import { activePeople, canListMembers, pickerOptions } from '@/features/members/model';
 import { filterToApiQuery, filterToSearch, type ListFilter, parseFilter, patchFilter } from '@/features/requirements/filter';
 import { SORT_LABEL } from '@/lib/labels';
 import { useFields, useMembers, useNodes, useOrg, useProductIterations, useProducts, useProductWorkflow, useRequirements } from '@/lib/queries';
@@ -169,19 +170,14 @@ function RequirementsPage() {
           </Select>
         )}
         {canListMembersFlag && members.data && (
-          <Select value={filter.owner ?? ALL} onValueChange={(v) => setFilter({ owner: v === ALL ? null : v })}>
-            <SelectTrigger className="h-8 w-32" aria-label="负责人">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>全部负责人</SelectItem>
-              {activePeople(members.data).map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.displayName}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
+          <MemberPicker
+            label="负责人"
+            className="h-8 w-32"
+            noneLabel="全部负责人"
+            options={pickerOptions(activePeople(members.data), null)}
+            value={filter.owner}
+            onChange={(id) => setFilter({ owner: id })}
+          />
         )}
         <Select value={filter.iteration ?? ALL} onValueChange={(v) => setFilter({ iteration: v === ALL ? null : v })}>
           <SelectTrigger className="h-8 w-36" aria-label="迭代">

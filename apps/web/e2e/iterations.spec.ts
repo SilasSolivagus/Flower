@@ -1,6 +1,6 @@
 import { type APIRequestContext, expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { acceptInvite, createProduct, FAIL_500, login, ok, OWNER, setupInstance } from './helpers';
+import { acceptInvite, createIteration, createProduct, FAIL_500, json, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -199,6 +199,35 @@ test('迭代详情：不存在时显示无权访问；加载失败（非 404）�
   await expect(page.getByRole('heading', { name: '迭代0901' })).toBeVisible();
 });
 
+test('迭代详情：当前页签写入地址栏，刷新、离开再后退都保持；未开始的迭代没有范围对比', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const iterationId = await createIteration(request, productId, '迭代0105', '2026-01-05', '2026-01-16');
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/iterations/${iterationId}`);
+  await expect(page.getByRole('tab', { name: /^需求/ })).toHaveAttribute('aria-selected', 'true');
+
+  await page.getByRole('tab', { name: '发布版本' }).click();
+  await expect(page).toHaveURL(new RegExp(`/acme/iterations/${iterationId}\\?tab=releases$`));
+  await page.reload();
+  await expect(page.getByRole('tab', { name: '发布版本' })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('button', { name: '新建发布版本' })).toBeVisible();
+
+  await page.getByRole('tab', { name: '甘特' }).click();
+  await expect(page).toHaveURL(/\?tab=gantt$/);
+  await page.getByRole('navigation', { name: '面包屑' }).getByRole('link', { name: '迭代' }).click();
+  await expect(page).toHaveURL(/\/acme\/iterations$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\?tab=gantt$/);
+  await expect(page.getByRole('tab', { name: '甘特' })).toHaveAttribute('aria-selected', 'true');
+
+  await page.getByRole('tab', { name: /^需求/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/acme/iterations/${iterationId}$`));
+
+  await page.goto(`/acme/iterations/${iterationId}?tab=scope`);
+  await expect(page.getByRole('tab', { name: /^需求/ })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: '范围对比' })).toHaveCount(0);
+});
+
 test('发布版本：在迭代详情新建、改计划日期（基线不变）、标记发布；在需求详情关联与解除', async ({ page, request }) => {
   const productId = await createProduct(request);
   const fields = (await (await ok(request.get('/api/v1/orgs/acme/fields'))).json()).fields;
@@ -241,4 +270,48 @@ test('发布版本：在迭代详情新建、改计划日期（基线不变）�
   await expect(releases).toContainText('3.2.0');
   await releases.getByRole('button', { name: '解除 3.2.0' }).click();
   await expect(releases).toContainText('未关联');
+});
+
+test('发布版本：在迭代的发布版本页签一次关联多条需求，已关联的不能再勾', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const iterationId = await createIteration(request, productId, '迭代0801', '2026-08-01', '2026-08-14');
+  const reqs = [];
+  for (const title of ['分享链接加密码', '回收站恢复', '离线下载']) {
+    const r = await createRequirement(request, productId, title, false);
+    await ok(request.put(`/api/v1/orgs/acme/requirements/${r.id}/iteration`, { data: { iterationId } }));
+    reqs.push(r);
+  }
+  const release = (await json<{ release: { id: string } }>(request.post('/api/v1/orgs/acme/releases', { data: { productId, versionName: '3.2.0', iterationId, plannedDate: '2026-08-14' } })))
+    .release;
+  await ok(request.put(`/api/v1/orgs/acme/releases/${release.id}/requirements/${reqs[2]!.id}`));
+
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/iterations/${iterationId}?tab=releases`);
+  const row = page.getByRole('row').filter({ hasText: '3.2.0' });
+  await expect(row.getByRole('cell', { name: '1', exact: true })).toBeVisible();
+  await row.getByRole('button', { name: '关联需求 3.2.0' }).click();
+  const dialog = page.getByRole('dialog', { name: '关联需求到 3.2.0' });
+  await expect(dialog.getByRole('checkbox', { name: /PAN-3/ })).toBeDisabled();
+  await expect(dialog.getByRole('checkbox', { name: /PAN-3/ })).toBeChecked();
+
+  await dialog.getByPlaceholder('输入编号或标题').fill('不存在的需求标题');
+  await expect(dialog.getByText('没有匹配的需求')).toBeVisible();
+  await dialog.getByPlaceholder('输入编号或标题').fill('');
+
+  // 对话框仍开着时，另一处把 PAN-1 关联到同一版本；查询过期（staleTime 10s）后网络重连触发重取，对话框里的勾选状态要跟着变成已关联且禁用，而不是用打开时的旧快照。
+  await ok(request.put(`/api/v1/orgs/acme/releases/${release.id}/requirements/${reqs[0]!.id}`));
+  await page.waitForTimeout(11_000);
+  await page.context().setOffline(true);
+  await page.context().setOffline(false);
+  await expect(dialog.getByRole('checkbox', { name: /PAN-1/ })).toBeDisabled({ timeout: 15_000 });
+  await expect(dialog.getByRole('checkbox', { name: /PAN-1/ })).toBeChecked();
+
+  await dialog.getByRole('checkbox', { name: /PAN-2/ }).check();
+  await dialog.getByRole('button', { name: /^关联所选/ }).click();
+  await expect(page.getByText('已关联需求')).toBeVisible();
+  await expect(dialog).toHaveCount(0);
+  await expect(row.getByRole('cell', { name: '3', exact: true })).toBeVisible();
+
+  await page.goto(`/acme/requirements/${reqs[0]!.displayKey}`);
+  await expect(page.getByRole('region', { name: '发布版本' })).toContainText('3.2.0');
 });
