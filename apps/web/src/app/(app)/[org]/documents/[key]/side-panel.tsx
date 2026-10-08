@@ -15,10 +15,11 @@ import { activePeople, canListMembers, pickerOptions } from '@/features/members/
 import { ApiError, api } from '@/lib/api';
 import { documentKeys, qk, requirementKeys, useApiMutation, useMembers, useOrg } from '@/lib/queries';
 import type { DocumentDetail, DocumentStatus } from '@/lib/types';
+import { Revisions } from './revisions';
 
 const CARD = 'rounded-md border bg-card p-4';
 
-export function SidePanel({ org, doc }: { org: string; doc: DocumentDetail; onReload: () => void }) {
+export function SidePanel({ org, doc, onReload }: { org: string; doc: DocumentDetail; onReload: () => void }) {
   const canEdit = doc.myRole !== 'viewer';
   const orgQ = useOrg(org);
   const members = useMembers(org, canListMembers(orgQ.data?.me));
@@ -128,6 +129,8 @@ export function SidePanel({ org, doc }: { org: string; doc: DocumentDetail; onRe
       </section>
 
       <CheckItems items={doc.checkItems} canEdit={canEdit} basePath={`/orgs/${org}/documents/${doc.id}/checks`} invalidate={invalidate} />
+
+      {doc.source === 'native' && <Revisions org={org} doc={doc} onRestored={onReload} />}
 
       {doc.source === 'native' && doc.externalUrl && (
         <p className="break-all text-[12px] text-muted-foreground">

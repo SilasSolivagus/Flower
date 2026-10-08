@@ -1,4 +1,5 @@
 import { DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider } from '@flower/core/markdown';
+import type { DocumentComment } from '@/lib/types';
 
 export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
   draft: '#8a9199',
@@ -65,3 +66,24 @@ export function saveStateLabel(state: SaveState, editable: boolean): string {
   if (!editable) return '只读';
   return state === 'saving' ? '保存中…' : state === 'dirty' ? '未保存' : '已保存';
 }
+
+const CONTEXT_CHARS = 32;
+
+/** 划词评论的前后文（W3C TextQuoteSelector 的 prefix / suffix），各取 32 个字符。 */
+export function clipContext(before: string, after: string): { prefix: string; suffix: string } {
+  return { prefix: before.slice(-CONTEXT_CHARS), suffix: after.slice(0, CONTEXT_CHARS) };
+}
+
+export type Thread = { comment: DocumentComment; replies: DocumentComment[] };
+
+/** 评论按顶层分组（保持时间顺序），回复挂在所属评论下；上级不存在的回复当作顶层显示。 */
+export function groupThreads(comments: DocumentComment[]): Thread[] {
+  const ids = new Set(comments.map((c) => c.id));
+  const threads = comments.filter((c) => !c.parentId || !ids.has(c.parentId)).map((comment) => ({ comment, replies: [] as DocumentComment[] }));
+  const byId = new Map(threads.map((t) => [t.comment.id, t]));
+  for (const c of comments) if (c.parentId && byId.has(c.parentId)) byId.get(c.parentId)!.replies.push(c);
+  return threads;
+}
+
+export const SECTION_CHANGE_LABEL = { added: '新增', removed: '删除', modified: '修改' } as const;
+export const ANCHOR_STATE_LABEL = { stale: '已失效', unanchored: '未定位' } as const;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { documentFilterToApiQuery, documentFilterToSearch, documentHref, parseDocumentFilter, parseRequirementKeys, saveStateLabel, sourceLabel } from './model';
+import { clipContext, documentFilterToApiQuery, documentFilterToSearch, documentHref, groupThreads, parseDocumentFilter, parseRequirementKeys, saveStateLabel, sourceLabel } from './model';
 
 describe('PRD 列表筛选', () => {
   it('地址栏 ↔ 筛选；无效的状态与来源被忽略', () => {
@@ -30,5 +30,23 @@ describe('详情页辅助', () => {
     expect(saveStateLabel('dirty', true)).toBe('未保存');
     expect(saveStateLabel('saving', true)).toBe('保存中…');
     expect(saveStateLabel('saved', false)).toBe('只读');
+  });
+});
+
+describe('评论', () => {
+  it('划词的前后文各取 32 个字符', () => {
+    const before = '甲'.repeat(40) + '前文';
+    expect(clipContext(before, '后文' + '乙'.repeat(40))).toEqual({ prefix: before.slice(-32), suffix: ('后文' + '乙'.repeat(40)).slice(0, 32) });
+    expect(clipContext('', '')).toEqual({ prefix: '', suffix: '' });
+  });
+
+  it('按顶层评论分组，回复挂在所属评论下，找不到上级的回复当作顶层', () => {
+    const c = (id: string, parentId: string | null) =>
+      ({ id, parentId, author: null, body: id, anchor: null, anchorState: null, resolvedAt: null, resolvedBy: null, createdAt: '2026-10-08T00:00:00Z' }) as const;
+    expect(groupThreads([c('a', null), c('b', null), c('a1', 'a'), c('x1', 'gone')]).map((t) => [t.comment.id, t.replies.map((r) => r.id)])).toEqual([
+      ['a', ['a1']],
+      ['b', []],
+      ['x1', []],
+    ]);
   });
 });

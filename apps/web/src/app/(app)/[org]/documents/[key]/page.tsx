@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/lib/api';
 import { documentKeys, useApiMutation, useDocument } from '@/lib/queries';
 import type { DocumentDetail } from '@/lib/types';
+import { DocumentComments } from './comments';
 import { EditorPane, type EditorPaneHandle } from './editor-pane';
 import { ExternalCard } from './external-card';
 import { SidePanel } from './side-panel';
@@ -49,6 +50,7 @@ export default function DocumentPage() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-w-0 flex-col gap-4">
           {d.source === 'native' ? <EditorPane key={`${d.id}:${epoch}`} ref={editor} org={org} doc={d} onReload={() => void reload()} /> : <ExternalCard org={org} doc={d} />}
+          <DocumentComments org={org} doc={d} />
         </div>
         <SidePanel org={org} doc={d} onReload={() => void reload()} />
       </div>

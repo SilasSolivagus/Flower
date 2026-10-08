@@ -8,10 +8,12 @@ import { FormError } from '@/components/form-error';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { PrdEditorHandle } from '@/features/documents/editor/prd-editor';
+import { type SelectionAnchor, selectionAnchor } from '@/features/documents/editor/selection';
 import { type SaveState, saveStateLabel } from '@/features/documents/model';
 import { ApiError, api, apiUpload } from '@/lib/api';
 import { qk, useApiMutation } from '@/lib/queries';
 import type { Attachment, DocumentDetail } from '@/lib/types';
+import { AnchorCommentDialog } from './comments';
 
 type SaveResult = { version: number; revisionNumber: number };
 
@@ -43,6 +45,20 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
   const lastSave = useRef<Promise<SaveResult> | null>(null);
   const [state, setState] = useState<SaveState>('saved');
   const qc = useQueryClient();
+  const container = useRef<HTMLDivElement>(null);
+  const [pick, setPick] = useState<(SelectionAnchor & { top: number; left: number }) | null>(null);
+  const [commenting, setCommenting] = useState<SelectionAnchor | null>(null);
+  /** 鼠标或键盘松开时读取选区，在选区下方显示「评论」按钮。 */
+  const onSelect = () => {
+    const el = container.current;
+    const a = el ? selectionAnchor(el, window.getSelection()) : null;
+    if (!el || !a) {
+      setPick(null);
+      return;
+    }
+    const box = el.getBoundingClientRect();
+    setPick({ quote: a.quote, prefix: a.prefix, suffix: a.suffix, top: a.rect.bottom - box.top + 4, left: Math.max(0, a.rect.left - box.left) });
+  };
   const save = useApiMutation(
     (markdown: string) =>
       (lastSave.current = api<SaveResult>(`/orgs/${org}/documents/${doc.id}/content`, { method: 'PUT', body: { baseVersion: version.current, markdown } })),
@@ -154,9 +170,24 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
           <FormError error={save.error} />
         </div>
       )}
-      <div className="px-2 py-4">
+      <div ref={container} className="relative px-2 py-4" onMouseUp={onSelect} onKeyUp={onSelect}>
         <DocumentBodyEditor ref={handle} initialMarkdown={doc.markdown ?? ''} editable={editable && !conflict} onDirty={onDirty} uploadImage={uploadImage} />
+        {pick && (
+          <Button
+            size="sm"
+            className="absolute z-10"
+            style={{ top: pick.top, left: pick.left }}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setCommenting({ quote: pick.quote, prefix: pick.prefix, suffix: pick.suffix });
+              setPick(null);
+            }}
+          >
+            评论
+          </Button>
+        )}
       </div>
+      <AnchorCommentDialog documentId={doc.id} anchor={commenting} onClose={() => setCommenting(null)} />
     </section>
   );
 }
