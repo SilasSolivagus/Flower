@@ -21,7 +21,7 @@
 ## 记录
 
 ### 2026-10-09 · 本地 · P2-A 变更 PRD
-- 分支 / PR：`feat/p2a-change-prd`，PR TBD
+- 分支 / PR：`feat/p2a-change-prd`，PR #12
 - 做了什么：
   - 数据模型：documents、document_revisions、document_templates、attachments（RLS），products.document_seq，requirements.change_document_id 外键。
   - Flower 内 PRD（BlockNote，自动保存与乐观锁，同一作者 5 分钟内合并修订，按小节对比与恢复，划词评论与已失效标记）与外部 PRD（链接、状态、覆盖需求、会签、评论）；三种导入；模板与必填小节；图片附件存本地卷。
