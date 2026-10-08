@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { documentFilterToApiQuery, documentFilterToSearch, documentHref, parseDocumentFilter, sourceLabel } from './model';
+import { documentFilterToApiQuery, documentFilterToSearch, documentHref, parseDocumentFilter, parseRequirementKeys, saveStateLabel, sourceLabel } from './model';
 
 describe('PRD 列表筛选', () => {
   it('地址栏 ↔ 筛选；无效的状态与来源被忽略', () => {
@@ -16,5 +16,19 @@ describe('PRD 列表筛选', () => {
     expect(sourceLabel({ source: 'native', externalProvider: 'wecom' })).toBe('Flower 文档');
     expect(sourceLabel({ source: 'external', externalProvider: 'wecom' })).toBe('企业微信文档');
     expect(sourceLabel({ source: 'external', externalProvider: null })).toBe('外部链接');
+  });
+});
+
+describe('详情页辅助', () => {
+  it('需求编号：逗号、顿号、空白分隔，转大写、去重，丢弃不合法的写法', () => {
+    expect(parseRequirementKeys(' pan-1，PAN-2、PAN-1  x-y PAN-03 ')).toEqual(['PAN-1', 'PAN-2', 'PAN-03']);
+    expect(parseRequirementKeys('')).toEqual([]);
+  });
+
+  it('保存状态文字', () => {
+    expect(saveStateLabel('saved', true)).toBe('已保存');
+    expect(saveStateLabel('dirty', true)).toBe('未保存');
+    expect(saveStateLabel('saving', true)).toBe('保存中…');
+    expect(saveStateLabel('saved', false)).toBe('只读');
   });
 });

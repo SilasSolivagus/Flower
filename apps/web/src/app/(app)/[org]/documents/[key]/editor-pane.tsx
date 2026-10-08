@@ -1,0 +1,130 @@
+'use client';
+
+import dynamic from 'next/dynamic';
+import { type Ref, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { toast } from 'sonner';
+import { FormError } from '@/components/form-error';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import type { PrdEditorHandle } from '@/features/documents/editor/prd-editor';
+import { type SaveState, saveStateLabel } from '@/features/documents/model';
+import { ApiError, api, apiUpload } from '@/lib/api';
+import { qk, useApiMutation } from '@/lib/queries';
+import type { Attachment, DocumentDetail } from '@/lib/types';
+
+// BlockNote 只在浏览器里运行
+const DocumentBodyEditor = dynamic(() => import('@/features/documents/editor/body-editor').then((m) => m.DocumentBodyEditor), {
+  ssr: false,
+  loading: () => <Skeleton className="h-96" />,
+});
+
+export const AUTOSAVE_MS = 1000;
+
+export type EditorPaneHandle = {
+  /** 本页改标题成功后调用：服务端为原生 PRD 改标题会把版本号加一，紧接在当前版本之后时沿用，否则留给下次保存报冲突。 */
+  onRenamed: (version: number) => void;
+};
+
+/**
+ * Flower 内 PRD 的正文：编辑后 1 秒自动保存（带 baseVersion 乐观锁）。409 时停止自动保存、提示重新加载；
+ * 重新加载由页面换 key 让本组件重新挂载，编辑器读取新的正文与版本号。
+ */
+export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: DocumentDetail; onReload: () => void; ref?: Ref<EditorPaneHandle> }) {
+  const editable = doc.myRole !== 'viewer';
+  const handle = useRef<PrdEditorHandle>(null);
+  const version = useRef(doc.version);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlight = useRef(false);
+  const blocked = useRef(false);
+  const [state, setState] = useState<SaveState>('saved');
+  const save = useApiMutation(
+    (markdown: string) => api<{ version: number }>(`/orgs/${org}/documents/${doc.id}/content`, { method: 'PUT', body: { baseVersion: version.current, markdown } }),
+    { silentError: true, invalidate: [qk.document(org, doc.displayKey), qk.documentRevisions(org, doc.id)] },
+  );
+  useImperativeHandle(ref, () => ({
+    onRenamed: (v) => {
+      if (v === version.current + 1) version.current = v;
+    },
+  }));
+  const conflict = save.error instanceof ApiError && save.error.status === 409;
+
+  const flush = () => {
+    timer.current = null;
+    if (inFlight.current) {
+      timer.current = setTimeout(flush, AUTOSAVE_MS);
+      return;
+    }
+    const markdown = handle.current?.getMarkdown();
+    if (markdown === undefined) return;
+    inFlight.current = true;
+    setState('saving');
+    save.mutate(markdown, {
+      onSuccess: (r) => {
+        version.current = r.version;
+        setState(timer.current ? 'dirty' : 'saved');
+      },
+      onError: (e) => {
+        if (e.status === 409) blocked.current = true;
+        setState('dirty');
+      },
+      onSettled: () => {
+        inFlight.current = false;
+      },
+    });
+  };
+
+  const onDirty = () => {
+    if (!editable || blocked.current) return;
+    setState('dirty');
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(flush, AUTOSAVE_MS);
+  };
+
+  const uploadImage = async (file: File): Promise<string> => {
+    try {
+      return (await apiUpload<{ attachment: Attachment }>(`/orgs/${org}/documents/${doc.id}/attachments`, file, file.name)).attachment.url;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '图片上传失败');
+      throw e;
+    }
+  };
+
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+  // 有未保存的修改时，关闭或刷新页面前由浏览器提示
+  useEffect(() => {
+    if (state === 'saved') return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [state]);
+
+  return (
+    <section className="rounded-md border bg-card" aria-label="正文">
+      <div className="flex h-10 items-center justify-between border-b px-4 text-[13px] text-muted-foreground">
+        <span>第 {doc.revisionNumber} 版</span>
+        <span role="status">{saveStateLabel(state, editable)}</span>
+      </div>
+      {conflict && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-[13px] text-destructive">
+          <span>文档已被其他人修改，你刚才的修改没有保存。重新加载后再编辑（需要保留的内容请先复制）。</span>
+          <Button size="sm" variant="outline" onClick={onReload}>
+            重新加载
+          </Button>
+        </div>
+      )}
+      {save.error && !conflict && (
+        <div className="px-4 pt-3">
+          <FormError error={save.error} />
+        </div>
+      )}
+      <div className="px-2 py-4">
+        <DocumentBodyEditor ref={handle} initialMarkdown={doc.markdown ?? ''} editable={editable && !conflict} onDirty={onDirty} uploadImage={uploadImage} />
+      </div>
+    </section>
+  );
+}

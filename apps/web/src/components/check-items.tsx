@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -8,10 +8,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { formatDateTime } from '@/features/requirements/format';
 import { api } from '@/lib/api';
 import { CHECK_STATE_LABEL } from '@/lib/labels';
-import { qk, requirementKeys, useApiMutation } from '@/lib/queries';
-import type { CheckState, RequirementDetail } from '@/lib/types';
+import { useApiMutation } from '@/lib/queries';
+import type { CheckItem, CheckState } from '@/lib/types';
 
-type Item = RequirementDetail['checkItems'][number];
 export const CHECK_STATE_STYLE: Record<CheckState, string> = {
   not_started: 'text-muted-foreground',
   in_progress: 'text-amber-700 dark:text-amber-400',
@@ -30,19 +29,33 @@ function Rounds({ meta }: { meta: Record<string, unknown> }) {
   );
 }
 
-export function CheckItems({ org, requirement: r }: { org: string; requirement: RequirementDetail }) {
-  const [proxy, setProxy] = useState<{ item: Item; ruleIndex: number } | null>(null);
+/**
+ * 检查项与会签：普通检查项改状态、本人签字、产品管理员代签。需求与 PRD 共用，basePath 决定写到哪个对象上
+ * （`/orgs/{org}/requirements/{id}/checks` 或 `/orgs/{org}/documents/{id}/checks`）。
+ */
+export function CheckItems({
+  items,
+  canEdit,
+  basePath,
+  invalidate,
+  title = '检查项',
+}: {
+  items: CheckItem[];
+  canEdit: boolean;
+  basePath: string;
+  invalidate: ReadonlyArray<readonly unknown[]>;
+  title?: string;
+}) {
+  const headingId = useId();
+  const [proxy, setProxy] = useState<{ item: CheckItem; ruleIndex: number } | null>(null);
   const [decision, setDecision] = useState<'passed' | 'rejected'>('passed');
   const [note, setNote] = useState('');
-  const canEdit = r.myRole !== 'viewer';
-  const setState = useApiMutation((v: { key: string; state: CheckState }) => api(`/orgs/${org}/requirements/${r.id}/checks/${v.key}`, { method: 'PUT', body: { state: v.state } }), {
-    invalidate: [requirementKeys(org), qk.workbench],
-  });
+  const setState = useApiMutation((v: { key: string; state: CheckState }) => api(`${basePath}/${v.key}`, { method: 'PUT', body: { state: v.state } }), { invalidate });
   const sign = useApiMutation(
     (v: { key: string; decision: 'passed' | 'rejected'; ruleIndex?: number; onBehalf?: boolean; note?: string }) =>
-      api(`/orgs/${org}/requirements/${r.id}/checks/${v.key}/signoffs`, { method: 'POST', body: { decision: v.decision, ruleIndex: v.ruleIndex, onBehalf: v.onBehalf, note: v.note } }),
+      api(`${basePath}/${v.key}/signoffs`, { method: 'POST', body: { decision: v.decision, ruleIndex: v.ruleIndex, onBehalf: v.onBehalf, note: v.note } }),
     {
-      invalidate: [requirementKeys(org), qk.workbench],
+      invalidate,
       success: '已签字',
       onSuccess: () => {
         setProxy(null);
@@ -50,19 +63,19 @@ export function CheckItems({ org, requirement: r }: { org: string; requirement: 
       },
     },
   );
-  if (r.checkItems.length === 0) return null;
+  if (items.length === 0) return null;
 
   return (
-    <section className="rounded-md border bg-card p-4" aria-labelledby="checks-title">
-      <h2 id="checks-title" className="mb-3 text-sm font-semibold">
-        检查项
+    <section className="rounded-md border bg-card p-4" aria-labelledby={headingId}>
+      <h2 id={headingId} className="mb-3 text-sm font-semibold">
+        {title}
       </h2>
       <ul className="flex flex-col divide-y">
-        {r.checkItems.map((c) => (
+        {items.map((c) => (
           <li key={c.key} className="flex flex-col gap-1.5 py-2.5" aria-label={c.label}>
             <div className="flex items-center gap-3">
               <span className="w-24 text-[13px] font-medium">{c.label}</span>
-              {c.type === 'single' && canEdit ? (
+              {c.type === 'single' && canEdit && !c.locked ? (
                 <Select value={c.state} onValueChange={(v) => setState.mutate({ key: c.key, state: v as CheckState })}>
                   <SelectTrigger className="h-8 w-28" aria-label={`${c.label}状态`}>
                     <SelectValue />
@@ -78,6 +91,7 @@ export function CheckItems({ org, requirement: r }: { org: string; requirement: 
               ) : (
                 <span className={`text-[13px] ${CHECK_STATE_STYLE[c.state]}`}>{CHECK_STATE_LABEL[c.state]}</span>
               )}
+              {c.locked && <span className="rounded-sm bg-muted px-1.5 py-0.5 text-[12px] text-muted-foreground">跟随 PRD</span>}
               {c.note && <span className="truncate text-[12px] text-muted-foreground">{c.note}</span>}
             </div>
             <Rounds meta={c.meta} />

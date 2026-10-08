@@ -49,3 +49,19 @@ function toParams(f: DocumentListFilter, keys: Array<keyof DocumentListFilter>):
 export const documentFilterToSearch = (f: DocumentListFilter): string => toParams(f, ['product', 'status', 'owner', 'source', 'q']);
 /** 接口查询串：产品在路径里，不重复。 */
 export const documentFilterToApiQuery = (f: DocumentListFilter): string => toParams(f, ['status', 'owner', 'source', 'q']);
+
+/** 「关联需求」输入框：逗号、顿号、空白分隔的需求编号，转大写、去重。 */
+export function parseRequirementKeys(input: string): string[] {
+  const keys = input
+    .split(/[\s,，、;；]+/)
+    .map((s) => s.trim().toUpperCase())
+    .filter((s) => /^[A-Z][A-Z0-9]{1,9}-\d{1,9}$/.test(s));
+  return [...new Set(keys)];
+}
+
+export type SaveState = 'saved' | 'dirty' | 'saving';
+
+export function saveStateLabel(state: SaveState, editable: boolean): string {
+  if (!editable) return '只读';
+  return state === 'saving' ? '保存中…' : state === 'dirty' ? '未保存' : '已保存';
+}

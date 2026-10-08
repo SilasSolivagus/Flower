@@ -1,0 +1,135 @@
+import { expect, type Page, test } from '@playwright/test';
+import { resetDatabase } from './db';
+import {
+  acceptInvite,
+  createDocument,
+  createMember,
+  createProduct,
+  createRequirement,
+  expectNoPageOverflow,
+  login,
+  ok,
+  OWNER,
+  presetTemplateId,
+  setupInstance,
+} from './helpers';
+
+test.beforeEach(async ({ request }) => {
+  await resetDatabase();
+  await setupInstance(request);
+});
+
+/** 在正文末尾输入一段文字，等自动保存的 PUT 返回。 */
+async function typeAtEnd(page: Page, docId: string, text: string) {
+  const saved = page.waitForResponse((r) => r.url().endsWith(`/documents/${docId}/content`) && r.request().method() === 'PUT');
+  await page.getByRole('region', { name: '正文' }).locator('.bn-block-content').last().click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(text);
+  return saved;
+}
+
+test('Flower 文档：输入后自动保存，刷新后仍在', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const doc = await createDocument(request, productId, { title: '上传提速', templateId: await presetTemplateId(request, productId) });
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/documents/${doc.displayKey}`);
+  const body = page.getByRole('region', { name: '正文' });
+  await expect(body).toContainText('1. 背景介绍');
+  expect((await typeAtEnd(page, doc.id, '上传失败率降到百分之一以下')).ok()).toBeTruthy();
+  await expect(body.getByRole('status')).toHaveText('已保存');
+  await page.reload();
+  await expect(page.getByRole('region', { name: '正文' })).toContainText('上传失败率降到百分之一以下');
+});
+
+test('两个窗口同时编辑：后保存的一方看到冲突提示，重新加载后看到对方的内容', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const doc = await createDocument(request, productId, { title: '冲突', templateId: await presetTemplateId(request, productId) });
+  await login(page, OWNER.email, OWNER.password);
+  const other = await page.context().newPage();
+  await page.goto(`/acme/documents/${doc.displayKey}`);
+  await other.goto(`/acme/documents/${doc.displayKey}`);
+  await expect(other.getByRole('region', { name: '正文' })).toContainText('1. 背景介绍');
+
+  expect((await typeAtEnd(page, doc.id, '甲窗口写的')).ok()).toBeTruthy();
+  const conflict = await typeAtEnd(other, doc.id, '乙窗口写的');
+  expect(conflict.status()).toBe(409);
+  const alert = other.getByRole('alert').filter({ hasText: '文档已被其他人修改' });
+  await expect(alert).toBeVisible();
+  await alert.getByRole('button', { name: '重新加载' }).click();
+  await expect(other.getByRole('region', { name: '正文' })).toContainText('甲窗口写的');
+  await expect(other.getByRole('region', { name: '正文' })).not.toContainText('乙窗口写的');
+  await expect(other.getByRole('alert').filter({ hasText: '文档已被其他人修改' })).toHaveCount(0);
+});
+
+test('改标题后继续编辑正文：自动保存沿用改名后的版本，不报冲突', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const doc = await createDocument(request, productId, { title: '改名前', templateId: await presetTemplateId(request, productId) });
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/documents/${doc.displayKey}`);
+  const body = page.getByRole('region', { name: '正文' });
+  await expect(body).toContainText('1. 背景介绍');
+
+  await page.getByRole('button', { name: /改名前/ }).click();
+  const renamed = page.waitForResponse((r) => r.url().endsWith(`/documents/${doc.id}`) && r.request().method() === 'PATCH');
+  await page.getByLabel('标题').fill('改名后');
+  await page.getByLabel('标题').press('Enter');
+  expect((await renamed).ok()).toBeTruthy();
+  await expect(page.getByRole('button', { name: /改名后/ })).toBeVisible();
+
+  const saved = await typeAtEnd(page, doc.id, '改名之后写的');
+  expect(saved.status()).toBe(200);
+  await expect(body.getByRole('status')).toHaveText('已保存');
+  await expect(page.getByRole('alert').filter({ hasText: '文档已被其他人修改' })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('region', { name: '正文' })).toContainText('改名之后写的');
+});
+
+test('外部 PRD：链接卡片、改状态、指定负责人、覆盖需求的关联与移出', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  await createRequirement(request, productId, '分片上传');
+  await createMember(request, '产品经理甲');
+  const doc = await createDocument(request, productId, { title: '外部方案', externalUrl: 'https://doc.weixin.qq.com/doc/w3_X?scode=1' });
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/documents/${doc.displayKey}`);
+
+  const card = page.getByRole('region', { name: '外部文档' });
+  await expect(card).toContainText('企业微信文档');
+  await expect(card.getByRole('link', { name: 'https://doc.weixin.qq.com/doc/w3_X?scode=1' })).toHaveAttribute('target', '_blank');
+  await expect(page.getByRole('region', { name: '正文' })).toHaveCount(0);
+
+  const side = page.getByRole('complementary');
+  await side.getByRole('button', { name: '改为评审中' }).click();
+  await expect(side.getByRole('region', { name: '状态' })).toContainText('评审中');
+  await expect(side.getByRole('button', { name: '改为已通过' })).toBeVisible();
+
+  await side.getByRole('combobox', { name: '负责人' }).click();
+  await page.getByRole('option', { name: '产品经理甲' }).click();
+  await expect(side.getByRole('combobox', { name: '负责人' })).toHaveText('产品经理甲');
+
+  const cover = side.getByRole('region', { name: '覆盖的需求' });
+  await expect(cover.getByText('还没有覆盖需求')).toBeVisible();
+  await cover.getByLabel('需求编号').fill('pan-1');
+  await cover.getByRole('button', { name: '关联' }).click();
+  await expect(cover.getByRole('link', { name: /PAN-1/ })).toBeVisible();
+  await cover.getByRole('button', { name: '移出 PAN-1' }).click();
+  await expect(cover.getByText('还没有覆盖需求')).toBeVisible();
+});
+
+test('只读成员：编辑器不可编辑，没有改状态按钮；1440 与 760 宽度下页面不横向滚动', async ({ browser, request }) => {
+  const productId = await createProduct(request);
+  const doc = await createDocument(request, productId, { title: '只读查看', templateId: await presetTemplateId(request, productId) });
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  const viewerId = await acceptInvite(page, request, { email: 'viewer@example.com', orgRole: 'member', name: '只读成员' });
+  await ok(request.put(`/api/v1/orgs/acme/products/${productId}/roles/${viewerId}`, { data: { role: 'viewer' } }));
+  for (const width of [1440, 760]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/acme/documents/${doc.displayKey}`);
+    await expect(page.getByRole('region', { name: '正文' })).toContainText('1. 背景介绍');
+    await expect(page.locator('.bn-editor')).toHaveAttribute('contenteditable', 'false');
+    await expect(page.getByRole('complementary').getByRole('region', { name: '状态' })).toContainText('草稿');
+    await expect(page.getByRole('button', { name: /^改为/ })).toHaveCount(0);
+    await expectNoPageOverflow(page);
+  }
+  await ctx.close();
+});

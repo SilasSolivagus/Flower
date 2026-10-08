@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
-import { requirementKeys, useApiMutation, useRequirement } from '@/lib/queries';
+import { qk, requirementKeys, useApiMutation, useRequirement } from '@/lib/queries';
 import { Blockers } from './blockers';
 import { Comments } from './comments';
 import { FieldsPanel } from './fields-panel';
@@ -93,7 +93,7 @@ export default function RequirementPage() {
               <p className="whitespace-pre-wrap text-[13px] leading-6">{r.description || <span className="text-muted-foreground">暂无描述</span>}</p>
             )}
           </section>
-          <CheckItems org={org} requirement={r} />
+          <CheckItems items={r.checkItems} canEdit={canEdit} basePath={`/orgs/${org}/requirements/${r.id}/checks`} invalidate={[requirementKeys(org), qk.workbench]} />
           <Blockers org={org} requirement={r} />
           <Relations org={org} requirement={r} />
           <Comments org={org} requirementId={r.id} />
