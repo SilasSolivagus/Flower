@@ -20,6 +20,14 @@
 
 ## 记录
 
+### 2026-10-08 · 本地 · 合并服务端成员校验（PR #9），P1 收尾
+- 分支 / PR：`docs/progress-after-p9`
+- 做了什么：
+  - 核对 PR #9：`assertAssignableMember` 接在需求负责人与提出人、任务负责人、需求分配、阻塞项负责人、流程「指定成员」签字人 6 处写入点；冲突解决后两条日志都保留。CI 三项在 `410308a` 上通过后合并（merge commit `b573e7a`）。
+  - `docs/handoff.md`：成员校验标为已合并，记录 P1 阶段全部完成；下一步改为规划 P2。
+- 怎么验证的：PR #9 CI 三项通过；本地 `pnpm db:migrate` 后开发服务器可用。
+- 留给对方：无
+
 ### 2026-10-08 · 云端 · 服务端写入成员时校验：本组织在职的人类成员
 - 分支 / PR：`claude/compassionate-babbage-ei9baf`
 - 做了什么：
