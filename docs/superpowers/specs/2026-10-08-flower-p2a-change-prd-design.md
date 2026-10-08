@@ -73,10 +73,12 @@ P2 拆为两段：
 ## 6. 迁移
 
 - **prd 系统**：11 份未删除页面导入为 Flower 内的 PRD，连同：
-  - 114 条修订
-  - 99 个附件
-  - 6 条评论（anchor_state = unanchored）
-  - 1 条需求关联
+  - 104 条修订
+  - 98 个附件，另有 6 张内嵌图片抽成附件
+  - 3 条评论（anchor_state = unanchored）
+  - 0 条需求关联（另有 1 条关联的需求在 123plane 与 push 中都不存在，不计入）
+
+  （2026-10-09 更正：原数字含已删除页面）
 
   状态取 `prd_meta.status`：draft → draft，review → review，approved → approved，in_dev → approved，launched → launched。当前数据是 6 份 draft、5 份 launched。
 
