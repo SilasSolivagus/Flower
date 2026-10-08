@@ -88,6 +88,21 @@ describe('PRD 接口', () => {
     expect((await call(app, 'POST', `/orgs/acme/documents/${doc.id}/attachments`, { session, body: {} })).status).toBe(400);
   });
 
+  it('上传拒绝跨站请求与缺少 Content-Length 的请求', async () => {
+    const doc = (await call(app, 'POST', `/orgs/acme/products/${productId}/documents`, { session, body: { title: '上传校验' } })).body.document;
+    const url = `/orgs/acme/documents/${doc.id}/attachments`;
+    const file = new Blob([PNG], { type: 'image/png' });
+    const crossSite = await upload(app, url, { session, file, filename: 'a.png', headers: { 'sec-fetch-site': 'same-site' } });
+    expect(crossSite.status).toBe(403);
+    expect(crossSite.body.error.message).toBe('不接受来自其他站点的上传请求');
+    expect((await upload(app, url, { session, file, filename: 'a.png', headers: { origin: 'http://evil.example.com' } })).status).toBe(403);
+    expect((await upload(app, url, { session, file, filename: 'a.png', headers: { 'sec-fetch-site': 'same-origin', origin: 'http://localhost' } })).status).toBe(201);
+    expect((await upload(app, url, { session, file, filename: 'a.png', headers: { origin: 'http://localhost' } })).status).toBe(201);
+    const noLength = await upload(app, url, { session, file, filename: 'a.png', headers: { 'content-length': null } });
+    expect(noLength.status).toBe(400);
+    expect(noLength.body.error.message).toBe('上传请求缺少 Content-Length');
+  });
+
   it('权限矩阵：只读成员能评论不能写；只读 Token 只能读；模板只有组织管理员能建', async () => {
     const doc = (await call(app, 'POST', `/orgs/acme/products/${productId}/documents`, { session, body: { title: '权限' } })).body.document;
     expect((await call(app, 'PUT', `/orgs/acme/documents/${doc.id}/content`, { session: viewerSession, body: { baseVersion: 1, markdown: 'x' } })).status).toBe(403);
