@@ -2,7 +2,7 @@ import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { productRoleOf, visibleProductIds } from '../access/permissions';
 import type { Db } from '../db/client';
 import { checkItemResults, commentReads, comments, documents, iterations, products, requirements, tasks } from '../db/schema';
-import { withOrg } from '../db/tx';
+import { type Tx, withOrg } from '../db/tx';
 import { documentDisplayKey } from '../documents/markdown';
 import type { Actor } from '../domain-types';
 import { type StateInfo, stateInfoByProduct, stateOf } from '../iterations/iterations';
@@ -41,7 +41,17 @@ export type WorkbenchSignature = {
   /** 可代签时为被代签成员的名字；本人的规则为 null。 */
   onBehalfOf: string | null;
 };
-export type WorkbenchUnread = { org: WorkbenchOrg; requirementId: string; displayKey: string; title: string; unread: number; lastAt: Date };
+export type WorkbenchUnread = {
+  org: WorkbenchOrg;
+  /** 需求上的未读评论为需求 id，PRD 上的为 null。 */
+  requirementId: string | null;
+  /** PRD 上的未读评论为 PRD id，需求上的为 null。 */
+  documentId: string | null;
+  displayKey: string;
+  title: string;
+  unread: number;
+  lastAt: Date;
+};
 export type WorkbenchSection<T> = { total: number; items: T[] };
 export type Workbench = {
   orgs: WorkbenchOrg[];
@@ -54,6 +64,44 @@ type OrgPart = { owned: WorkbenchRequirement[]; tasks: WorkbenchTask[]; signatur
 
 function section<T>(list: T[], compare: (a: T, b: T) => number): WorkbenchSection<T> {
   return { total: list.length, items: [...list].sort(compare).slice(0, WORKBENCH_LIMIT) };
+}
+
+type CommentTarget = { type: 'requirement'; table: typeof requirements } | { type: 'document'; table: typeof documents };
+
+/**
+ * 一类对象（需求或 PRD）上的未读评论，按对象合计：对象由我负责、或我在上面发过评论；
+ * 只计别人发的（作者为空的也计）、我还没读的；已删除的对象与看不到的产品不计。
+ */
+async function unreadComments(tx: Tx, actor: Actor, visible: string[], { type, table }: CommentTarget) {
+  const rows = await tx
+    .select({
+      targetId: comments.targetId,
+      unread: sql<number>`count(*)::int`,
+      lastAt: sql`max(${comments.createdAt})`.mapWith(comments.createdAt),
+    })
+    .from(comments)
+    .innerJoin(table, eq(table.id, comments.targetId))
+    .where(
+      and(
+        eq(comments.targetType, type),
+        isNull(table.deletedAt),
+        inArray(table.productId, visible),
+        or(isNull(comments.authorMemberId), ne(comments.authorMemberId, actor.memberId)),
+        sql`not exists (select 1 from ${commentReads} where ${commentReads.commentId} = ${comments.id} and ${commentReads.memberId} = ${actor.memberId})`,
+        or(
+          eq(table.ownerMemberId, actor.memberId),
+          sql`exists (select 1 from ${comments} as mine where mine.target_type = ${type} and mine.target_id = ${table.id} and mine.author_member_id = ${actor.memberId})`,
+        ),
+      ),
+    )
+    .groupBy(comments.targetId);
+  if (rows.length === 0) return [];
+  const targets = await tx
+    .select({ id: table.id, productId: table.productId, number: table.number, title: table.title })
+    .from(table)
+    .where(inArray(table.id, rows.map((u) => u.targetId)));
+  const byId = new Map(targets.map((x) => [x.id, x]));
+  return rows.map((u) => ({ ...byId.get(u.targetId)!, unread: u.unread, lastAt: u.lastAt }));
 }
 
 /** 一个组织内的工作台数据：在该组织的 withOrg 事务里、以该组织的成员身份读取。 */
@@ -71,7 +119,7 @@ async function orgPart(db: Db, actor: Actor, org: WorkbenchOrg, today: string | 
       return category !== 'completed' && category !== 'canceled';
     };
 
-    // 我负责的需求（全部读出：未读评论也要用到已完成的需求）
+    // 我负责的未完成需求（状态类别按产品工作流判断）
     const ownedRows = await tx
       .select()
       .from(requirements)
@@ -181,31 +229,27 @@ async function orgPart(db: Db, actor: Actor, org: WorkbenchOrg, today: string | 
       }
     }
 
-    // 我负责的需求上别人发的、我还没读的评论
-    const unreadRows = await tx
-      .select({
-        requirementId: comments.targetId,
-        unread: sql<number>`count(*)::int`,
-        lastAt: sql`max(${comments.createdAt})`.mapWith(comments.createdAt),
-      })
-      .from(comments)
-      .innerJoin(requirements, eq(requirements.id, comments.targetId))
-      .where(
-        and(
-          eq(comments.targetType, 'requirement'),
-          eq(requirements.ownerMemberId, actor.memberId),
-          isNull(requirements.deletedAt),
-          inArray(requirements.productId, visible),
-          or(isNull(comments.authorMemberId), ne(comments.authorMemberId, actor.memberId)),
-          sql`not exists (select 1 from ${commentReads} where ${commentReads.commentId} = ${comments.id} and ${commentReads.memberId} = ${actor.memberId})`,
-        ),
-      )
-      .groupBy(comments.targetId);
-    const ownedById = new Map(ownedRows.map((r) => [r.id, r]));
-    const unread = unreadRows.map((u) => {
-      const r = ownedById.get(u.requirementId)!;
-      return { org, requirementId: r.id, displayKey: keyFor(r), title: r.title, unread: u.unread, lastAt: u.lastAt };
-    });
+    // 我负责的、或我评论过的需求与 PRD 上别人发的、我还没读的评论
+    const unread: WorkbenchUnread[] = [
+      ...(await unreadComments(tx, actor, visible, { type: 'requirement', table: requirements })).map((u) => ({
+        org,
+        requirementId: u.id,
+        documentId: null,
+        displayKey: keyFor(u),
+        title: u.title,
+        unread: u.unread,
+        lastAt: u.lastAt,
+      })),
+      ...(await unreadComments(tx, actor, visible, { type: 'document', table: documents })).map((u) => ({
+        org,
+        requirementId: null,
+        documentId: u.id,
+        displayKey: documentDisplayKey(keyOf.get(u.productId)!, u.number),
+        title: u.title,
+        unread: u.unread,
+        lastAt: u.lastAt,
+      })),
+    ];
 
     return { owned, tasks: myTasks, signatures, unread };
   });

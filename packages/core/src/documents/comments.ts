@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { requireProductRole } from '../access/permissions';
+import { markCommentsRead } from '../comments/reads';
 import type { Db } from '../db/client';
 import { commentReads, comments, documentRevisions } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
@@ -161,4 +162,14 @@ export async function reanchorDocumentComments(tx: Tx, documentId: string, markd
     changed += 1;
   }
   return changed;
+}
+
+/** 打开 PRD 详情时把它的全部评论标为已读（与需求详情一致）；只读 Token 不能标记。 */
+export async function markDocumentCommentsRead(db: Db, actor: Actor, documentId: string): Promise<number> {
+  if (actor.tokenScope?.access === 'read') throw new AppError('forbidden', '只读 Token 不能标记已读');
+  return withOrg(db, actor.orgId, async (tx) => {
+    const doc = await loadDocument(tx, documentId);
+    await requireProductRole(tx, actor, doc.productId, 'viewer');
+    return markCommentsRead(tx, actor, { type: 'document', id: documentId });
+  });
 }

@@ -1,5 +1,6 @@
-import { and, asc, eq, notInArray } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { requireProductRole } from '../access/permissions';
+import { markCommentsRead } from '../comments/reads';
 import type { Db } from '../db/client';
 import { commentReads, comments } from '../db/schema';
 import { withOrg } from '../db/tx';
@@ -101,16 +102,6 @@ export async function markRequirementCommentsRead(db: Db, actor: Actor, requirem
   return withOrg(db, actor.orgId, async (tx) => {
     const req = await loadRequirement(tx, requirementId);
     await requireProductRole(tx, actor, req.productId, 'viewer');
-    const already = tx.select({ id: commentReads.commentId }).from(commentReads).where(eq(commentReads.memberId, actor.memberId));
-    const unread = await tx
-      .select({ id: comments.id })
-      .from(comments)
-      .where(and(onRequirement(requirementId), notInArray(comments.id, already)));
-    if (unread.length === 0) return 0;
-    await tx
-      .insert(commentReads)
-      .values(unread.map((c) => ({ orgId: actor.orgId, commentId: c.id, memberId: actor.memberId })))
-      .onConflictDoNothing();
-    return unread.length;
+    return markCommentsRead(tx, actor, { type: 'requirement', id: requirementId });
   });
 }

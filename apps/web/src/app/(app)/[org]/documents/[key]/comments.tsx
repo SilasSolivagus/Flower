@@ -38,6 +38,12 @@ export function DocumentComments({ org, doc, focus = null }: { org: string; doc:
   useEffect(() => {
     if (focus) document.getElementById(`comment-${focus.id}`)?.scrollIntoView({ block: 'center' });
   }, [focus]);
+  // 打开 PRD 详情即把评论标为已读（与需求详情一致）；只读 Token 会被拒绝，静默忽略
+  const read = useApiMutation(() => api(`/orgs/${org}/documents/${doc.id}/comments/read`, { method: 'POST' }), { invalidate: [qk.workbench], silentError: true });
+  const readMutate = read.mutate;
+  useEffect(() => {
+    readMutate(undefined);
+  }, [doc.id, readMutate]);
   const orgQ = useOrg(org);
   const list = useDocumentComments(org, doc.id);
   const [body, setBody] = useState('');

@@ -59,3 +59,29 @@ test('工作台加载失败（5xx）显示重试', async ({ page }) => {
   await page.getByRole('button', { name: '重试' }).click();
   await expect(page.getByRole('region', { name: /我负责的需求/ })).toBeVisible();
 });
+
+test('工作台的 PRD 未读评论：我负责的 PRD 上别人的评论；打开 PRD 后变为已读', async ({ page, request, playwright }) => {
+  const productId = await createProduct(request);
+  const me = (await json<{ me: { memberId: string } }>(request.get('/api/v1/orgs/acme'))).me.memberId;
+  const doc = (await json<{ document: { id: string; displayKey: string } }>(request.post(`/api/v1/orgs/acme/products/${productId}/documents`, { data: { title: '登录 PRD', ownerMemberId: me } })))
+    .document;
+  const agent = (await json<{ member: { id: string } }>(request.post('/api/v1/orgs/acme/agents', { data: { displayName: '评审助手' } }))).member.id;
+  const { token } = await json<{ token: string }>(
+    request.post('/api/v1/orgs/acme/tokens', { data: { memberId: agent, name: '评论', scope: { products: 'all', access: 'write' } } }),
+  );
+  const bot = await playwright.request.newContext({ baseURL: 'http://localhost:3100', extraHTTPHeaders: { authorization: `Bearer ${token}` } });
+  await ok(bot.post(`/api/v1/orgs/acme/documents/${doc.id}/comments`, { data: { body: '背景还缺数据' } }));
+  await bot.dispose();
+
+  await login(page, OWNER.email, OWNER.password);
+  await page.waitForURL('**/acme');
+  const unread = page.getByRole('region', { name: /未读评论/ });
+  await expect(unread.getByRole('link', { name: new RegExp(doc.displayKey) })).toContainText('1 条未读');
+  const read = page.waitForResponse((r) => r.url().endsWith(`/documents/${doc.id}/comments/read`) && r.request().method() === 'POST');
+  await unread.getByRole('link', { name: new RegExp(doc.displayKey) }).click();
+  await expect(page).toHaveURL(new RegExp(`/acme/documents/${doc.displayKey}$`));
+  expect((await read).ok()).toBeTruthy();
+  await expect(page.getByRole('region', { name: /^评论/ })).toContainText('背景还缺数据');
+  await page.goto('/acme');
+  await expect(page.getByRole('region', { name: /未读评论/ })).toContainText('没有未读评论');
+});
