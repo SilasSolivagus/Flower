@@ -1,19 +1,21 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { type Ref, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import { type MouseEvent, type Ref, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { FormError } from '@/components/form-error';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { DecorationInput } from '@/features/documents/editor/decorations';
 import type { PrdEditorHandle } from '@/features/documents/editor/prd-editor';
 import { type SelectionAnchor, selectionAnchor } from '@/features/documents/editor/selection';
 import { uploadDataImages } from '@/features/documents/import';
-import { type SaveState, saveStateLabel } from '@/features/documents/model';
+import { findSectionIndex, type SaveState, saveStateLabel } from '@/features/documents/model';
 import { ApiError, api, apiUpload } from '@/lib/api';
-import { qk, useApiMutation } from '@/lib/queries';
-import type { Attachment, DocumentDetail } from '@/lib/types';
+import { linkKeys, qk, useApiMutation, useDocumentLinks } from '@/lib/queries';
+import type { Attachment, DocumentDetail, LinkSuggestion } from '@/lib/types';
 import { AnchorCommentDialog } from './comments';
 
 type SaveResult = { version: number; revisionNumber: number };
@@ -38,7 +40,20 @@ export type EditorPaneHandle = {
  * Flower 内 PRD 的正文：编辑后 1 秒自动保存（带 baseVersion 乐观锁）。409 时停止自动保存、提示重新加载；
  * 重新加载由页面换 key 让本组件重新挂载，编辑器读取新的正文与版本号。
  */
-export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: DocumentDetail; onReload: () => void; ref?: Ref<EditorPaneHandle> }) {
+export function EditorPane({
+  org,
+  doc,
+  onReload,
+  section,
+  ref,
+}: {
+  org: string;
+  doc: DocumentDetail;
+  onReload: () => void;
+  /** 地址栏 ?section=：编辑器渲染后滚动到这个小节。 */
+  section?: string | null;
+  ref?: Ref<EditorPaneHandle>;
+}) {
   const editable = doc.myRole !== 'viewer';
   const handle = useRef<PrdEditorHandle>(null);
   const version = useRef(doc.version);
@@ -56,6 +71,13 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
   const [retrying, setRetrying] = useState(false);
   const [state, setState] = useState<SaveState>('saved');
   const qc = useQueryClient();
+  const router = useRouter();
+  const links = useDocumentLinks(org, doc.id);
+  const decorations = useMemo<DecorationInput>(() => ({ org, productKey: doc.productKey, cards: links.data ?? [] }), [org, doc.productKey, links.data]);
+  const searchLinks = useCallback(
+    (q: string) => api<{ suggestions: LinkSuggestion[] }>(`/orgs/${org}/links/search?${new URLSearchParams({ product: doc.productId, q })}`).then((r) => r.suggestions),
+    [org, doc.productId],
+  );
   const container = useRef<HTMLDivElement>(null);
   const [pick, setPick] = useState<(SelectionAnchor & { top: number; left: number }) | null>(null);
   const [commenting, setCommenting] = useState<SelectionAnchor | null>(null);
@@ -79,7 +101,7 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
       }))),
     {
       silentError: true,
-      invalidate: [qk.documentRevisions(org, doc.id)],
+      invalidate: [qk.documentRevisions(org, doc.id), linkKeys(org)],
       // 只把这次保存的结果写进缓存里的详情，不重新拉取整篇正文
       onSuccess: (r) =>
         qc.setQueryData<{ document: DocumentDetail }>(qk.document(org, doc.displayKey), (old) =>
@@ -199,6 +221,34 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
     return () => window.removeEventListener('beforeunload', warn);
   }, [state]);
 
+  // 地址栏指定了小节：等编辑器渲染出标题后滚动过去（最多等 3 秒）
+  useEffect(() => {
+    if (!section) return;
+    let tries = 0;
+    const timer = setInterval(() => {
+      const heads = container.current ? [...container.current.querySelectorAll<HTMLElement>('[data-content-type="heading"]')] : [];
+      const i = findSectionIndex(
+        heads.map((h) => h.textContent ?? ''),
+        section,
+      );
+      tries += 1;
+      if (i >= 0 || tries >= 30) {
+        clearInterval(timer);
+        heads[i]?.scrollIntoView({ block: 'start' });
+      }
+    }, 100);
+    return () => clearInterval(timer);
+  }, [section]);
+
+  /** 点击正文里的链接卡：站内跳转（编辑区是可编辑区域，浏览器不会自己跟随链接）。 */
+  const onBodyClick = (e: MouseEvent<HTMLDivElement>) => {
+    const link = (e.target as HTMLElement).closest<HTMLElement>('[data-wikilink-href]');
+    if (link?.dataset.wikilinkHref) {
+      e.preventDefault();
+      router.push(link.dataset.wikilinkHref);
+    }
+  };
+
   return (
     <section className="rounded-md border bg-card" aria-label="正文">
       <div className="flex h-10 items-center justify-between border-b px-4 text-[13px] text-muted-foreground">
@@ -218,8 +268,8 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
           <FormError error={save.error} />
         </div>
       )}
-      <div ref={container} className="relative px-2 py-4" onMouseUp={onSelect} onKeyUp={onSelect}>
-        <DocumentBodyEditor ref={handle} initialMarkdown={doc.markdown ?? ''} editable={editable && !conflict} onDirty={onDirty} uploadImage={uploadImage} />
+      <div ref={container} className="relative px-2 py-4" onMouseUp={onSelect} onKeyUp={onSelect} onClick={onBodyClick}>
+        <DocumentBodyEditor ref={handle} initialMarkdown={doc.markdown ?? ''} editable={editable && !conflict} onDirty={onDirty} uploadImage={uploadImage} decorations={decorations} searchLinks={editable ? searchLinks : undefined} />
         {pick && (
           <Button
             size="sm"

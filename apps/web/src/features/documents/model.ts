@@ -1,4 +1,4 @@
-import { DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, splitSections, type TemplateSection } from '@flower/core/markdown';
+import { DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, normalizeHeading, splitSections, type TemplateSection } from '@flower/core/markdown';
 import type { DocumentComment } from '@/lib/types';
 
 export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
@@ -128,4 +128,10 @@ export function sectionsFromBody(body: string): TemplateSection[] {
   return splitSections(body)
     .filter((s) => s.level === 2 && s.heading)
     .map((s) => ({ heading: s.heading!, required: false }));
+}
+
+/** [[PRD#小节]] 跳转：按归一化标题（去编号与空白）找第一个匹配的标题，没有时为 -1。 */
+export function findSectionIndex(headings: string[], section: string): number {
+  const want = normalizeHeading(section);
+  return headings.findIndex((h) => normalizeHeading(h) === want);
 }

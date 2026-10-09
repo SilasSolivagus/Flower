@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DocumentComment } from '@/lib/types';
-import { base64ToBytes, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, findDataImages, groupThreads, importSummary, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
+import { base64ToBytes, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, findDataImages, findSectionIndex, groupThreads, importSummary, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
 
 describe('PRD 列表筛选', () => {
   it('地址栏 ↔ 筛选；无效的状态与来源被忽略', () => {
@@ -78,5 +78,12 @@ describe('模板', () => {
       { heading: '1. 背景', required: false },
       { heading: '2. 方案', required: false },
     ]);
+  });
+});
+
+describe('小节跳转', () => {
+  it('按归一化标题找第一个匹配的标题', () => {
+    expect(findSectionIndex(['1. 背景', '2. 需求 说明', '3. 需求说明'], '需求说明')).toBe(1);
+    expect(findSectionIndex(['1. 背景'], '方案')).toBe(-1);
   });
 });
