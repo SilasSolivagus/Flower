@@ -6,6 +6,7 @@ import { withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { type IterationStatus, loadVisibleIteration } from '../iterations/iterations';
+import { parseTaskKey } from '../links/syntax';
 import { loadRequirement } from '../requirements/context';
 import type { MemberRef } from '../requirements/requirements';
 import { type IterationOverview, iterationOverview, workdaysBetween } from './schedule';
@@ -32,6 +33,36 @@ export type IterationGantt = {
 };
 export type MemberTask = TaskView & { iteration: { id: string; name: string; startDate: string; endDate: string; status: IterationStatus } | null };
 export type MemberTasks = { member: MemberRef; today: string; tasks: MemberTask[] };
+
+export type TaskDetail = TaskView & {
+  productKey: string;
+  iteration: { id: string; name: string; status: IterationStatus } | null;
+  createdAt: Date;
+};
+
+const TASK_NOT_FOUND = '任务不存在';
+
+/** 任务详情：编号形如 PAN-T-12（大小写不敏感）。看不到所属产品时与不存在一样。 */
+export async function getTaskByKey(db: Db, actor: Actor, key: string, opts: { today?: string } = {}): Promise<TaskDetail> {
+  const parsed = parseTaskKey(key);
+  if (!parsed) throw new AppError('not_found', TASK_NOT_FOUND);
+  return withOrg(db, actor.orgId, async (tx) => {
+    const [row] = await tx
+      .select({ t: tasks })
+      .from(tasks)
+      .innerJoin(products, eq(products.id, tasks.productId))
+      .where(and(eq(products.key, parsed.productKey), eq(tasks.number, parsed.number), isNull(products.deletedAt)));
+    if (!row || !(await productRoleOf(tx, actor, row.t.productId))) throw new AppError('not_found', TASK_NOT_FOUND);
+    const [view] = await hydrateTasks(tx, actor, [row.t], opts.today ?? (await orgToday(tx, actor.orgId)));
+    const [it] = row.t.iterationId
+      ? await tx
+          .select({ id: iterations.id, name: iterations.name, status: iterations.status })
+          .from(iterations)
+          .where(and(eq(iterations.id, row.t.iterationId), isNull(iterations.deletedAt)))
+      : [];
+    return { ...view!, productKey: parsed.productKey, iteration: it ?? null, createdAt: row.t.createdAt };
+  });
+}
 
 const byPlanStart = [sql`${tasks.planStart} asc nulls last`, asc(tasks.createdAt)] as const;
 

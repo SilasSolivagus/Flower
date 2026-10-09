@@ -18,3 +18,8 @@ export const showOrgBadge = (orgs: Workbench['orgs']): boolean => orgs.length > 
 export function signatureHref(s: Workbench['signatures']['items'][number]): string {
   return s.documentId ? `/${s.org.slug}/documents/${s.displayKey}` : requirementHref(s.org, s.displayKey);
 }
+
+/** 未读评论：需求去需求详情，PRD 去 PRD 详情（打开即标为已读）。 */
+export function unreadHref(u: Workbench['unread']['items'][number]): string {
+  return u.documentId ? `/${u.org.slug}/documents/${u.displayKey}` : requirementHref(u.org, u.displayKey);
+}

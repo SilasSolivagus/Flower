@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { TASK_STATUS_LABEL } from '@/lib/labels';
 import type { RequirementDetail } from '@/lib/types';
@@ -11,14 +12,17 @@ function Block({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function SideLists({ requirement: r }: { requirement: RequirementDetail }) {
+export function SideLists({ org, requirement: r }: { org: string; requirement: RequirementDetail }) {
   return (
     <>
       {r.tasks.length > 0 && (
         <Block title="任务">
           {r.tasks.map((t) => (
-            <li key={t.id} className="flex flex-col">
-              <span>{t.title}</span>
+            <li key={t.id} className="flex min-w-0 flex-col">
+              <Link href={`/${org}/tasks/${t.displayKey}`} className="flex min-w-0 gap-1.5 hover:underline">
+                <span className="shrink-0 font-mono text-muted-foreground">{t.displayKey}</span>
+                <span className="truncate">{t.title}</span>
+              </Link>
               <span className="text-[12px] text-muted-foreground">
                 {[t.assignee?.displayName, TASK_STATUS_LABEL[t.status], t.planStart && `${t.planStart} 起`, t.planDays && `${t.planDays} 天`].filter(Boolean).join(' · ')}
               </span>

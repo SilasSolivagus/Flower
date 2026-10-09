@@ -153,21 +153,29 @@ function commonPrefix(a: string, b: string): number {
 }
 
 /**
- * W3C TextQuoteSelector 的精确匹配：在每个小节的纯文本里找 quote 的全部出现，
- * 按「与 prefix 的公共后缀 + 与 suffix 的公共前缀」打分取最高。找不到返回 null（评论标为已失效）。
+ * W3C TextQuoteSelector 的精确匹配：在比较形式（squash 之后）的 text 里找 quote 的全部出现，
+ * 按「与 prefix 的公共后缀 + 与 suffix 的公共前缀」打分，返回分数最高（同分取最先出现）的起点与分数。找不到返回 null。
+ * 服务端（按小节的纯文本）与编辑器（按文本节点）共用。
  */
-export function locateQuote(markdown: string, a: { quote: string; prefix: string; suffix: string }): { sectionHeading: string | null } | null {
+export function bestQuoteMatch(text: string, a: { quote: string; prefix: string; suffix: string }): { at: number; score: number } | null {
   const q = squash(a.quote);
   if (!q) return null;
   const pre = squash(a.prefix);
   const suf = squash(a.suffix);
+  let best: { at: number; score: number } | null = null;
+  for (let i = text.indexOf(q); i !== -1; i = text.indexOf(q, i + 1)) {
+    const score = commonSuffix(text.slice(0, i), pre) + commonPrefix(text.slice(i + q.length), suf);
+    if (!best || score > best.score) best = { at: i, score };
+  }
+  return best;
+}
+
+/** 在每个小节的纯文本里按 bestQuoteMatch 找 quote，取分数最高的小节。找不到返回 null（评论标为已失效）。 */
+export function locateQuote(markdown: string, a: { quote: string; prefix: string; suffix: string }): { sectionHeading: string | null } | null {
   let best: { score: number; heading: string | null } | null = null;
   for (const s of splitSections(markdown)) {
-    const text = squash(plainText(s.markdown));
-    for (let i = text.indexOf(q); i !== -1; i = text.indexOf(q, i + 1)) {
-      const score = commonSuffix(text.slice(0, i), pre) + commonPrefix(text.slice(i + q.length), suf);
-      if (!best || score > best.score) best = { score, heading: s.heading };
-    }
+    const m = bestQuoteMatch(squash(plainText(s.markdown)), a);
+    if (m && (!best || m.score > best.score)) best = { score: m.score, heading: s.heading };
   }
   return best ? { sectionHeading: best.heading } : null;
 }
@@ -223,7 +231,8 @@ export function fillTemplate(body: string, vars: { date: string; author: string 
   return body.replaceAll('{{date}}', vars.date).replaceAll('{{author}}', vars.author);
 }
 
-const normHeading = (s: string): string => s.replace(/^[\d.、\s]+/, '').replace(/\s+/g, '');
+/** 小节标题的比较形式：去掉开头的数字编号与全部空白。必填小节、评论所在小节与 [[PRD#小节]] 共用。 */
+export const normalizeHeading = (s: string): string => s.replace(/^[\d.、\s]+/, '').replace(/\s+/g, '');
 
 /**
  * 缺少或未填写的必填小节（按模板顺序返回模板里的标题）。标题去掉开头的数字编号与空白后相等即为同一小节；
@@ -248,7 +257,7 @@ export function missingRequiredSections(markdown: string, template: { body: stri
   return template.sections
     .filter((t) => t.required)
     .filter((t) => {
-      const i = sections.findIndex((s) => s.heading !== null && normHeading(s.heading) === normHeading(t.heading));
+      const i = sections.findIndex((s) => s.heading !== null && normalizeHeading(s.heading) === normalizeHeading(t.heading));
       if (i === -1) return true;
       const own = [sections[i]!];
       for (let j = i + 1; j < sections.length && sections[j]!.level > sections[i]!.level; j++) own.push(sections[j]!);

@@ -1,7 +1,7 @@
 import { type CheckState, signoffResultState } from '@flower/core';
 import type { PlaneRequirement, PushRequirement } from './legacy-types';
 import { addDays, normTitle, parseJsonArray, parseLegacyDate, parseLegacyTime, splitNames, splitPlatforms } from './normalize';
-import type { PlanContext } from './plan-types';
+import type { ImportRows, PlanContext } from './plan-types';
 import {
   BLOCKER_STATUS,
   FEASIBILITY_TO_CHECK,
@@ -455,7 +455,7 @@ export function buildRequirements(ctx: PlanContext): void {
     const status = SUBTASK_STATUS[s.status ?? 'todo'];
     if (!status) ctx.problem(`子任务状态「${s.status}」没有对应规则`);
     const createdAt = ctx.time(s.created_at);
-    rows.tasks.push({ id: ctx.id('task', `plane:${s.id}`), orgId, productId, requirementId: target, iterationId: iterationOf.get(target) ?? null, title: s.title, assigneeMemberId: ctx.memberId(s.assignee), status: status ?? 'todo', meta: {}, legacyKey: `plane:${s.id}`, createdAt, updatedAt: ctx.time(s.updated_at, createdAt) });
+    rows.tasks.push({ id: ctx.id('task', `plane:${s.id}`), orgId, productId, number: 0, requirementId: target, iterationId: iterationOf.get(target) ?? null, title: s.title, assigneeMemberId: ctx.memberId(s.assignee), status: status ?? 'todo', meta: {}, legacyKey: `plane:${s.id}`, createdAt, updatedAt: ctx.time(s.updated_at, createdAt) });
   }
   if (orphanSubtasks) report.skipped.push({ what: '已删除需求上的子任务', count: orphanSubtasks, reason: '需求已在 123plane 中物理删除' });
   for (const g of data.push.ganttTasks) {
@@ -472,6 +472,7 @@ export function buildRequirements(ctx: PlanContext): void {
       id: ctx.id('task', `push:${g.id}`),
       orgId,
       productId,
+      number: 0,
       requirementId: g.requirement_id === null ? null : (reqIdOfPush.get(resolveMergedPushId(g.requirement_id)) ?? null),
       iterationId: it ? ctx.iterationIdByKey.get(it.key) ?? null : null,
       title: g.title,
@@ -498,6 +499,7 @@ export function buildRequirements(ctx: PlanContext): void {
       updatedAt: createdAt,
     });
   }
+  assignTaskNumbers(rows);
 
   // 6. 发布版本关联
   let orphanReleases = 0;
@@ -572,4 +574,16 @@ export function buildRequirements(ctx: PlanContext): void {
   if (resolver.ignoredIterationRefs) {
     report.skipped.push({ what: '迭代对照表中忽略的迭代引用', count: resolver.ignoredIterationRefs, reason: '对照表 ignore 列表（测试或无效的迭代编号）' });
   }
+}
+
+/**
+ * 任务编号：与补号迁移（0011）同一规则——同一产品内按创建时间、相同时按 id 升序，从 1 起；task_seq 设为最大值。
+ * id 是小写十六进制的 uuid 字符串，字符串比较与 Postgres 的 uuid 比较顺序一致。
+ */
+export function assignTaskNumbers(rows: ImportRows): void {
+  const sorted = [...rows.tasks].sort((a, b) => a.createdAt!.getTime() - b.createdAt!.getTime() || (a.id! < b.id! ? -1 : a.id! > b.id! ? 1 : 0));
+  sorted.forEach((task, i) => {
+    task.number = i + 1;
+  });
+  rows.products[0]!.taskSeq = sorted.length;
 }

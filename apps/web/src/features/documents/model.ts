@@ -1,4 +1,4 @@
-import { DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, splitSections, type TemplateSection } from '@flower/core/markdown';
+import { bestQuoteMatch, DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, normalizeHeading, splitSections, squash, type TemplateSection } from '@flower/core/markdown';
 import type { DocumentComment } from '@/lib/types';
 
 export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
@@ -128,4 +128,39 @@ export function sectionsFromBody(body: string): TemplateSection[] {
   return splitSections(body)
     .filter((s) => s.level === 2 && s.heading)
     .map((s) => ({ heading: s.heading!, required: false }));
+}
+
+/** [[PRD#小节]] 跳转：按归一化标题（去编号与空白）找第一个匹配的标题，没有时为 -1。 */
+export function findSectionIndex(headings: string[], section: string): number {
+  const want = normalizeHeading(section);
+  return headings.findIndex((h) => normalizeHeading(h) === want);
+}
+
+export type TextSegment = { text: string; pos: number };
+export type EditorAnchor = { id: string; quote: string; prefix: string; suffix: string };
+
+/**
+ * 划词评论的原文在编辑器文档中的位置 [from, to)：文本节点按 squash 的规则去掉空白与 Markdown 符号后拼起来，
+ * 用与服务端 locateQuote 相同的 bestQuoteMatch 定位，再换回文档位置。segments 是文档里依次出现的文本节点。找不到返回 null。
+ */
+export function locateAnchorRange(segments: TextSegment[], a: { quote: string; prefix: string; suffix: string }): { from: number; to: number } | null {
+  let text = '';
+  const posAt: number[] = [];
+  for (const s of segments) {
+    for (let i = 0; i < s.text.length; i++) {
+      const ch = squash(s.text[i]!);
+      if (!ch) continue;
+      text += ch;
+      posAt.push(s.pos + i);
+    }
+  }
+  const m = bestQuoteMatch(text, a);
+  return m ? { from: posAt[m.at]!, to: posAt[m.at + squash(a.quote).length - 1]! + 1 } : null;
+}
+
+/** 编辑器里要高亮的评论：顶层、定位正常（已失效与未定位的不算）、未解决的划词评论。 */
+export function editorAnchors(comments: DocumentComment[]): EditorAnchor[] {
+  return comments
+    .filter((c) => !c.parentId && c.anchor && c.anchorState === 'ok' && !c.resolvedAt)
+    .map((c) => ({ id: c.id, quote: c.anchor!.quote, prefix: c.anchor!.prefix, suffix: c.anchor!.suffix }));
 }

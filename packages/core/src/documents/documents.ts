@@ -6,6 +6,7 @@ import { type Tx, withOrg } from '../db/tx';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
 import { recordEvent } from '../events';
+import { relinkDangling, syncSourceLinks } from '../links/links';
 import { assertAssignableMember, memberNames } from '../requirements/context';
 import type { CheckItemView } from '../requirements/check-views';
 import { assertTitle, productKeyOf, displayKey as requirementDisplayKey, type MemberRef } from '../requirements/requirements';
@@ -234,6 +235,7 @@ export async function createDocument(
     if (!external) {
       const rev = await writeRevision(tx, actor, doc, { title, markdown }, { summary: null, allowMerge: false });
       await tx.update(documents).set({ currentRevisionId: rev.id }).where(eq(documents.id, doc.id));
+      await syncSourceLinks(tx, actor.orgId, { type: 'document', id: doc.id, productKey: await productKeyOf(tx, productId) }, markdown, { markdown: true });
     }
     await recordEvent(tx, {
       orgId: actor.orgId,
@@ -244,6 +246,7 @@ export async function createDocument(
       actor,
       payload: { number: doc.number, title, source: doc.source, externalUrl: doc.externalUrl, templateId },
     });
+    await relinkDangling(tx, { type: 'document', id: doc.id, texts: [documentDisplayKey(await productKeyOf(tx, productId), doc.number)], withSections: true });
     if (input.requirementIds?.length) await linkRequirementsTx(tx, actor, doc.id, input.requirementIds);
     return documentDetailInTx(tx, actor, doc.id);
   });
@@ -344,6 +347,7 @@ export async function saveDocumentContent(db: Db, actor: Actor, id: string, inpu
     const version = doc.version + 1;
     await tx.update(documents).set({ title, version, currentRevisionId: rev.id, updatedAt: new Date() }).where(eq(documents.id, id));
     await reanchorDocumentComments(tx, id, markdown);
+    await syncSourceLinks(tx, actor.orgId, { type: 'document', id, productKey: await productKeyOf(tx, doc.productId) }, markdown, { markdown: true });
     await recordEvent(tx, {
       orgId: actor.orgId,
       productId: doc.productId,
@@ -409,6 +413,7 @@ export async function restoreRevision(db: Db, actor: Actor, id: string, input: {
     const version = doc.version + 1;
     await tx.update(documents).set({ title: target.snapshot.title, version, currentRevisionId: rev.id, updatedAt: new Date() }).where(eq(documents.id, id));
     await reanchorDocumentComments(tx, id, snapshot.markdown);
+    await syncSourceLinks(tx, actor.orgId, { type: 'document', id, productKey: await productKeyOf(tx, doc.productId) }, snapshot.markdown, { markdown: true });
     await recordEvent(tx, {
       orgId: actor.orgId,
       productId: doc.productId,
@@ -466,6 +471,7 @@ export async function convertExternalDocument(db: Db, actor: Actor, id: string, 
     const rev = await writeRevision(tx, actor, doc, { title: doc.title, markdown }, { summary: '由外部文档转换', allowMerge: false });
     const version = doc.version + 1;
     await tx.update(documents).set({ source: 'native', currentRevisionId: rev.id, version, updatedAt: new Date() }).where(eq(documents.id, id));
+    await syncSourceLinks(tx, actor.orgId, { type: 'document', id, productKey: await productKeyOf(tx, doc.productId) }, markdown, { markdown: true });
     await recordEvent(tx, {
       orgId: actor.orgId,
       productId: doc.productId,

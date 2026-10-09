@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { base64ToBytes, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, findDataImages, groupThreads, importSummary, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
+import type { DocumentComment } from '@/lib/types';
+import { base64ToBytes, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, editorAnchors, findDataImages, findSectionIndex, groupThreads, importSummary, locateAnchorRange, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
 
 describe('PRD 列表筛选', () => {
   it('地址栏 ↔ 筛选；无效的状态与来源被忽略', () => {
@@ -42,7 +43,7 @@ describe('评论', () => {
 
   it('按顶层评论分组，回复挂在所属评论下，找不到上级的回复当作顶层', () => {
     const c = (id: string, parentId: string | null) =>
-      ({ id, parentId, author: null, body: id, anchor: null, anchorState: null, resolvedAt: null, resolvedBy: null, createdAt: '2026-10-08T00:00:00Z' }) as const;
+      ({ id, parentId, author: null, body: id, anchor: null, anchorState: null, resolvedAt: null, resolvedBy: null, createdAt: '2026-10-08T00:00:00Z', links: [] as DocumentComment['links'] }) as const;
     expect(groupThreads([c('a', null), c('b', null), c('a1', 'a'), c('x1', 'gone')]).map((t) => [t.comment.id, t.replies.map((r) => r.id)])).toEqual([
       ['a', ['a1']],
       ['b', []],
@@ -77,5 +78,40 @@ describe('模板', () => {
       { heading: '1. 背景', required: false },
       { heading: '2. 方案', required: false },
     ]);
+  });
+});
+
+describe('小节跳转', () => {
+  it('按归一化标题找第一个匹配的标题', () => {
+    expect(findSectionIndex(['1. 背景', '2. 需求 说明', '3. 需求说明'], '需求说明')).toBe(1);
+    expect(findSectionIndex(['1. 背景'], '方案')).toBe(-1);
+  });
+});
+
+describe('评论锚点在编辑器中的位置', () => {
+  const segs = [
+    { text: '上传大文件时', pos: 1 },
+    { text: '经常超时', pos: 8 },
+    { text: '。下载也经常超时', pos: 20 },
+  ];
+
+  it('跨文本节点、忽略空白；多处出现时按前后文取', () => {
+    expect(locateAnchorRange(segs, { quote: '经常超时', prefix: '上传大文件时', suffix: '。' })).toEqual({ from: 8, to: 12 });
+    expect(locateAnchorRange(segs, { quote: '经常超时', prefix: '下载也', suffix: '' })).toEqual({ from: 24, to: 28 });
+    expect(locateAnchorRange(segs, { quote: '大 文件', prefix: '', suffix: '' })).toEqual({ from: 3, to: 6 });
+    expect(locateAnchorRange(segs, { quote: '不存在', prefix: '', suffix: '' })).toBeNull();
+  });
+
+  it('只高亮顶层、定位正常、未解决的划词评论', () => {
+    const base = { parentId: null, author: null, body: 'x', resolvedAt: null, resolvedBy: null, createdAt: '2026-10-09T00:00:00.000Z', links: [] };
+    const anchor = { quote: '经常超时', prefix: 'p', suffix: 's', sectionHeading: null };
+    const list = [
+      { ...base, id: 'a', anchor, anchorState: 'ok' as const },
+      { ...base, id: 'b', anchor, anchorState: 'stale' as const },
+      { ...base, id: 'c', anchor, anchorState: 'ok' as const, resolvedAt: '2026-10-09T01:00:00.000Z' },
+      { ...base, id: 'd', anchor: null, anchorState: null },
+      { ...base, id: 'e', anchor, anchorState: 'ok' as const, parentId: 'a' },
+    ];
+    expect(editorAnchors(list)).toEqual([{ id: 'a', quote: '经常超时', prefix: 'p', suffix: 's' }]);
   });
 });

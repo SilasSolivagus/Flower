@@ -30,6 +30,18 @@ describe('导入计划：需求', () => {
     expect(rows.entityAliases.map((a) => a.alias).sort()).toEqual(['X001', 'X002', 'X003', 'push-1', 'push-2', 'push-3', 'push-5']);
   });
 
+  it('任务按创建时间（相同时按 id）从 1 编号，task_seq 为任务数', () => {
+    const ordered = [...rows.tasks].sort((a, b) => a.number - b.number);
+    expect(ordered.map((x) => x.number)).toEqual(rows.tasks.map((_, i) => i + 1));
+    for (let i = 1; i < ordered.length; i++) {
+      const [a, b] = [ordered[i - 1]!, ordered[i]!];
+      const [ta, tb] = [a.createdAt!.getTime(), b.createdAt!.getTime()];
+      expect(ta < tb || (ta === tb && a.id! < b.id!)).toBe(true);
+    }
+    expect(ordered[0]!.title).toBe('接口联调');
+    expect(rows.products[0]!.taskSeq).toBe(rows.tasks.length);
+  });
+
   it('字段冲突以 123plane 为准并列入报告', () => {
     expect(report.conflicts).toEqual(
       expect.arrayContaining([

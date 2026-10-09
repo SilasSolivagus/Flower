@@ -13,6 +13,7 @@ import { registerTokenRoutes } from './routes/tokens';
 import { registerDefinitionRoutes } from './routes/definitions';
 import { registerDocumentRoutes } from './routes/documents';
 import { registerIterationRoutes } from './routes/iterations';
+import { registerLinkRoutes } from './routes/links';
 import { registerReleaseRoutes } from './routes/releases';
 import { registerRequirementRoutes } from './routes/requirements';
 import { registerReviewRoutes } from './routes/reviews';
@@ -57,5 +58,6 @@ export function createApi(deps: ApiDeps): App {
   registerWorkbenchRoutes(app, deps);
   registerDocumentRoutes(app, deps);
   registerTemplateRoutes(app, deps);
+  registerLinkRoutes(app, deps);
   return app;
 }

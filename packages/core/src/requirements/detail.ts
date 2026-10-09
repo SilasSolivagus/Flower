@@ -24,6 +24,8 @@ import { documentDisplayKey, prdCheckState } from '../documents/markdown';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { joinIterationUnmet } from '../iterations/membership';
+import { type LinkCard, linkCardsFor, sourceKey } from '../links/cards';
+import { taskDisplayKey } from '../links/syntax';
 import { buildCheckItemViews, type CheckItemView, requirementCheckStates } from './check-views';
 import { effectiveFields, memberNames, productWorkflowBody } from './context';
 import { displayKey, hydrateList, type MemberRef, type OptionRef, type RequirementListItem } from './requirements';
@@ -32,6 +34,8 @@ import { availableTransitions, type TransitionOption, type UnmetCondition } from
 export type RequirementDetail = RequirementListItem & {
   productKey: string;
   description: string;
+  /** 描述里 [[ ]] 的链接卡。 */
+  links: LinkCard[];
   createdAt: Date;
   stateChangedAt: Date;
   myRole: ProductRole;
@@ -50,7 +54,7 @@ export type RequirementDetail = RequirementListItem & {
   blockers: Array<{ id: string; description: string; status: 'active' | 'resolved'; owner: MemberRef | null; createdAt: Date; resolvedAt: Date | null }>;
   relations: Array<{ id: string; type: string; direction: 'out' | 'in'; other: { id: string; displayKey: string; title: string } }>;
   releases: Array<{ id: string; versionName: string; platform: OptionRef | null; status: 'planned' | 'released'; releasedAt: Date | null }>;
-  tasks: Array<{ id: string; title: string; assignee: MemberRef | null; status: 'todo' | 'doing' | 'done'; planStart: string | null; planDays: number | null }>;
+  tasks: Array<{ id: string; displayKey: string; title: string; assignee: MemberRef | null; status: 'todo' | 'doing' | 'done'; planStart: string | null; planDays: number | null }>;
   aliases: string[];
 };
 
@@ -156,6 +160,7 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
     const documentCheckItems = docRow
       ? await buildCheckItemViews(tx, actor, role, body.checkItems.filter((c) => c.scope === 'document'), { type: 'document', id: docRow.id }, { autoState: null })
       : [];
+    const links = (await linkCardsFor(tx, actor, [{ type: 'requirement', id: row.id }])).get(sourceKey('requirement', row.id))!;
     const ctx = {
       checks: await requirementCheckStates(tx, body, row),
       filledFields: new Set(fieldList.filter((f) => f.options.length > 0).map((f) => f.key)),
@@ -168,6 +173,7 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
       ...base!,
       productKey: product!.key,
       description: row.description,
+      links,
       createdAt: row.createdAt,
       stateChangedAt: row.stateChangedAt,
       myRole: role,
@@ -196,7 +202,15 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
         })
         .filter((x): x is NonNullable<typeof x> => x !== null),
       releases: releaseRows.map(({ r }) => ({ id: r.id, versionName: r.versionName, platform: optionRef(r.platformOptionId), status: r.status, releasedAt: r.releasedAt })),
-      tasks: taskRows.map((x) => ({ id: x.id, title: x.title, assignee: ref(x.assigneeMemberId), status: x.status, planStart: x.planStart, planDays: x.planDays })),
+      tasks: taskRows.map((x) => ({
+        id: x.id,
+        displayKey: taskDisplayKey(product!.key, x.number),
+        title: x.title,
+        assignee: ref(x.assigneeMemberId),
+        status: x.status,
+        planStart: x.planStart,
+        planDays: x.planDays,
+      })),
       aliases: aliasRows.map((a) => a.alias).sort(),
     };
   });

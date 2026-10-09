@@ -7,6 +7,7 @@
     "./workflow-schema": "./src/definitions/workflow-schema.ts",
     "./schedule": "./src/tasks/schedule.ts",
     "./markdown": "./src/documents/markdown.ts",
+    "./links": "./src/links/syntax.ts",
     "./testing": "./test/db.ts",
     "./testing/factories": "./test/factories.ts",
     "./testing/global-setup": "./test/global-setup.ts"

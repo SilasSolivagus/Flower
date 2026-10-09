@@ -14,6 +14,7 @@ import {
   listDocumentReviewQueue,
   listDocuments,
   listRevisions,
+  markDocumentCommentsRead,
   readAttachment,
   restoreRevision,
   saveDocumentContent,
@@ -124,6 +125,10 @@ export function registerDocumentRoutes(app: App, deps: ApiDeps): void {
     const body = await readJson(c, z.object({ body: z.string().max(10_000), parentId: z.string().nullable().optional(), anchor: anchorSchema.nullable().optional() }));
     return c.json({ comment: await addDocumentComment(deps.db, c.get('actor'), c.req.param('id'), body) }, 201);
   });
+
+  app.post('/orgs/:org/documents/:id/comments/read', async (c) =>
+    c.json({ marked: await markDocumentCommentsRead(deps.db, c.get('actor'), c.req.param('id')) }),
+  );
 
   app.post('/orgs/:org/document-comments/:id/resolve', async (c) => {
     const body = await readJson(c, z.object({ resolved: z.boolean() }));

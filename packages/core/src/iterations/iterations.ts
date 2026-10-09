@@ -5,8 +5,9 @@ import type { Db } from '../db/client';
 import { blockers, type IterationMilestone, iterationScopeSnapshots, iterations, products, releases, requirements, tasks } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor, ProductRole } from '../domain-types';
-import { AppError, pgErrorCode } from '../errors';
+import { AppError, isUniqueViolation, pgErrorCode } from '../errors';
 import { recordEvent } from '../events';
+import { iterationLinkTexts, relinkDangling } from '../links/links';
 import { memberNames, productWorkflowBody } from '../requirements/context';
 import { displayKey, type MemberRef } from '../requirements/requirements';
 
@@ -72,8 +73,10 @@ function assertMilestones(list: IterationMilestone[]): IterationMilestone[] {
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-function overlapToConflict(e: unknown): never {
+/** 写迭代时的约束冲突：时间重叠（排他约束）或同一产品内重名（部分唯一索引）。 */
+function writeConflict(e: unknown): never {
   if (pgErrorCode(e) === '23P01') throw new AppError('conflict', '与已有迭代时间重叠');
+  if (isUniqueViolation(e)) throw new AppError('conflict', '同一产品内已有同名迭代');
   throw e;
 }
 
@@ -242,7 +245,7 @@ export async function createIteration(
         .values({ orgId: actor.orgId, productId: input.type === 'regular' ? input.productId! : null, type: input.type, name, startDate, endDate, milestones })
         .returning()) as [IterRow];
     } catch (e) {
-      overlapToConflict(e);
+      writeConflict(e);
     }
     await recordEvent(tx, {
       orgId: actor.orgId,
@@ -253,6 +256,7 @@ export async function createIteration(
       actor,
       payload: { name, type: row.type, startDate, endDate },
     });
+    await relinkDangling(tx, { type: 'iteration', id: row.id, texts: await iterationLinkTexts(tx, row) });
     const [view] = await buildViews(tx, actor, [row], await visibleProductIds(tx, actor));
     return view!;
   });
@@ -284,11 +288,12 @@ export async function updateIteration(
     try {
       [row] = (await tx.update(iterations).set(next).where(eq(iterations.id, id)).returning()) as [IterRow];
     } catch (e) {
-      overlapToConflict(e);
+      writeConflict(e);
     }
     if (changes.length > 0) {
       await recordEvent(tx, { orgId: actor.orgId, productId: cur.productId, type: 'iteration.updated', subjectType: 'iteration', subjectId: id, actor, payload: { changes } });
     }
+    if (next.name !== cur.name) await relinkDangling(tx, { type: 'iteration', id, texts: await iterationLinkTexts(tx, row) });
     const [view] = await buildViews(tx, actor, [row], visible);
     return view!;
   });

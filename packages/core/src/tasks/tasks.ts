@@ -8,6 +8,8 @@ import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
 import { loadIteration } from '../iterations/iterations';
+import { relinkDangling } from '../links/links';
+import { taskDisplayKey } from '../links/syntax';
 import { assertAssignableMember, loadRequirement, memberNames } from '../requirements/context';
 import { displayKey, type MemberRef } from '../requirements/requirements';
 import { displayProgress, STARRED_LIMIT, TASK_FLAGS, type TaskFlag, todayInZone } from './schedule';
@@ -22,6 +24,8 @@ const TASK_NOT_FOUND = '任务不存在';
 export type TaskView = {
   id: string;
   productId: string;
+  number: number;
+  displayKey: string;
   iterationId: string | null;
   requirement: { id: string; displayKey: string; title: string } | null;
   title: string;
@@ -147,6 +151,11 @@ export async function hydrateTasks(tx: Tx, actor: Actor, rows: TaskRow[], today:
         .where(inArray(requirements.id, reqIds))
     : [];
   const names = await memberNames(tx, rows.map((r) => r.assigneeMemberId));
+  const keyRows = await tx
+    .select({ id: products.id, key: products.key })
+    .from(products)
+    .where(inArray(products.id, [...new Set(rows.map((r) => r.productId))]));
+  const keyOf = new Map(keyRows.map((p) => [p.id, p.key]));
   const roles = new Map<string, ProductRole | null>();
   for (const pid of new Set(rows.map((r) => r.productId))) roles.set(pid, await productRoleOf(tx, actor, pid));
   return rows.map((r) => {
@@ -155,6 +164,8 @@ export async function hydrateTasks(tx: Tx, actor: Actor, rows: TaskRow[], today:
     return {
       id: r.id,
       productId: r.productId,
+      number: r.number,
+      displayKey: taskDisplayKey(keyOf.get(r.productId)!, r.number),
       iterationId: r.iterationId,
       requirement: req ? { id: req.id, displayKey: displayKey(req.key, req.number), title: req.title } : null,
       title: r.title,
@@ -197,9 +208,14 @@ export async function createTask(db: Db, actor: Actor, input: TaskCreateInput, o
       await assertStarredRoom(tx, it.id);
     }
     const metaValue = Object.fromEntries(Object.entries(meta).filter(([, v]) => v !== null));
+    const [seq] = await tx
+      .update(products)
+      .set({ taskSeq: sql`${products.taskSeq} + 1` })
+      .where(eq(products.id, productId))
+      .returning({ n: products.taskSeq, key: products.key });
     const [row] = await tx
       .insert(tasks)
-      .values({ orgId: actor.orgId, productId, requirementId: req?.id ?? null, iterationId: it?.id ?? null, ...columns, title: columns.title!, meta: metaValue })
+      .values({ orgId: actor.orgId, productId, number: seq!.n, requirementId: req?.id ?? null, iterationId: it?.id ?? null, ...columns, title: columns.title!, meta: metaValue })
       .returning();
     await recordEvent(tx, {
       orgId: actor.orgId,
@@ -208,8 +224,9 @@ export async function createTask(db: Db, actor: Actor, input: TaskCreateInput, o
       subjectType: 'task',
       subjectId: row!.id,
       actor,
-      payload: { title: row!.title, requirementId: row!.requirementId, iterationId: row!.iterationId },
+      payload: { number: row!.number, title: row!.title, requirementId: row!.requirementId, iterationId: row!.iterationId },
     });
+    await relinkDangling(tx, { type: 'task', id: row!.id, texts: [taskDisplayKey(seq!.key, row!.number)] });
     const [view] = await hydrateTasks(tx, actor, [row!], opts.today ?? (await orgToday(tx, actor.orgId)));
     return view!;
   });

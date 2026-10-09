@@ -5,6 +5,8 @@ import { requirements } from '../src/db/schema';
 import { withOrg } from '../src/db/tx';
 import { createWorkflowTemplate, setProductWorkflowVersion } from '../src/definitions/workflows';
 import type { Actor } from '../src/domain-types';
+import { addDocumentComment, markDocumentCommentsRead } from '../src/documents/comments';
+import { createDocument } from '../src/documents/documents';
 import { createIteration, setIterationStatus } from '../src/iterations/iterations';
 import { addRequirementComment, markRequirementCommentsRead } from '../src/requirements/comments';
 import { createRequirement, type RequirementListItem } from '../src/requirements/requirements';
@@ -17,7 +19,7 @@ import { createOrganization, type OrgView, resolveActor } from '../src/tenancy/o
 import { createProduct } from '../src/tenancy/products';
 import { getWorkbench } from '../src/workbench/workbench';
 import { createTestDb } from './db';
-import { asMember, regularIteration, reviewWorkflow, seedInstance } from './factories';
+import { asMember, readOnlyToken, regularIteration, reviewWorkflow, seedInstance } from './factories';
 
 const TODAY = '2026-09-30';
 let t: Awaited<ReturnType<typeof createTestDb>>;
@@ -85,6 +87,7 @@ describe('工作台', () => {
         {
           org: { id: owner.orgId, slug: 'acme', name: '测试组织' },
           id: expect.any(String),
+          displayKey: 'PAN-T-1',
           title: '接口联调',
           requirement: { displayKey: 'PAN-1', title: '上传提速' },
           iteration: { id: expect.any(String), name: '迭代0928' },
@@ -117,8 +120,46 @@ describe('工作台', () => {
     expect(wb.owned.items.map((r) => r.displayKey)).toEqual(['PAN-3']);
     expect(wb.tasks.items.map((x) => x.title)).toEqual(['同事的任务']);
     expect(wb.signatures.total).toBe(0);
-    expect(wb.unread.total).toBe(0);
+    // 同事在 PAN-1 上评论过，之后负责人回复的一条对同事是未读
+    expect(wb.unread.items.map((u) => [u.displayKey, u.unread])).toEqual([['PAN-1', 1]]);
     const all = [...wb.owned.items, ...wb.tasks.items, ...wb.signatures.items, ...wb.unread.items];
     expect(all.every((x) => x.org.slug === 'acme')).toBe(true);
+  });
+
+  it('需求的未读评论也包括我评论过、不由我负责的需求；只有别人评论过的不计入', async () => {
+    const peer = (await resolveActor(t.db, peerAccountId, 'acme'))!;
+    const joined = await createRequirement(t.db, peer, mine.productId, { title: '我评论过的需求', ownerMemberId: peer.memberId });
+    const unrelated = await createRequirement(t.db, peer, mine.productId, { title: '与我无关的需求', ownerMemberId: peer.memberId });
+    await addRequirementComment(t.db, owner, joined.id, { body: '这里要确认一下' });
+    await addRequirementComment(t.db, peer, joined.id, { body: '已确认' });
+    await addRequirementComment(t.db, peer, unrelated.id, { body: '与我无关' });
+
+    const before = await getWorkbench(t.db, account.id, { today: TODAY });
+    expect(before.unread.items.map((u) => [u.displayKey, u.title, u.unread, u.documentId])).toEqual([[joined.displayKey, '我评论过的需求', 1, null]]);
+    await markRequirementCommentsRead(t.db, owner, joined.id);
+    expect((await getWorkbench(t.db, account.id, { today: TODAY })).unread.total).toBe(0);
+  });
+
+  it('PRD 的未读评论：我负责的或我评论过的 PRD 上别人发的；标记已读后消失；需求行不受影响', async () => {
+    const peer = (await resolveActor(t.db, peerAccountId, 'acme'))!;
+    const owned = await createDocument(t.db, owner, mine.productId, { title: '我负责的 PRD', ownerMemberId: owner.memberId });
+    const joined = await createDocument(t.db, peer, mine.productId, { title: '我评论过的 PRD', ownerMemberId: peer.memberId });
+    const unrelated = await createDocument(t.db, peer, mine.productId, { title: '无关的 PRD', ownerMemberId: peer.memberId });
+    await addDocumentComment(t.db, peer, owned.id, { body: '负责人看一下' });
+    await addDocumentComment(t.db, owner, joined.id, { body: '我先提一个问题' });
+    await addDocumentComment(t.db, peer, joined.id, { body: '已回答' });
+    await addDocumentComment(t.db, peer, unrelated.id, { body: '与我无关' });
+
+    const before = await getWorkbench(t.db, account.id, { today: TODAY });
+    expect(before.unread.items.filter((u) => u.documentId).map((u) => [u.displayKey, u.title, u.unread, u.requirementId]).sort()).toEqual([
+      [owned.displayKey, '我负责的 PRD', 1, null],
+      [joined.displayKey, '我评论过的 PRD', 1, null],
+    ]);
+    expect(before.unread.items.filter((u) => u.requirementId).every((u) => u.documentId === null)).toBe(true);
+
+    await expect(markDocumentCommentsRead(t.db, readOnlyToken(owner), owned.id)).rejects.toMatchObject({ code: 'forbidden', message: '只读 Token 不能标记已读' });
+    expect(await markDocumentCommentsRead(t.db, owner, owned.id)).toBe(1);
+    expect(await markDocumentCommentsRead(t.db, owner, joined.id)).toBe(1);
+    expect((await getWorkbench(t.db, account.id, { today: TODAY })).unread.items.filter((u) => u.documentId)).toEqual([]);
   });
 });

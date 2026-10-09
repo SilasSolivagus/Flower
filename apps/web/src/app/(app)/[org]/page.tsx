@@ -5,7 +5,7 @@ import { type ReactNode, useId } from 'react';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
-import { requirementHref, showOrgBadge, signatureHref, taskHref } from '@/features/workbench/model';
+import { requirementHref, showOrgBadge, signatureHref, taskHref, unreadHref } from '@/features/workbench/model';
 import { useWorkbench } from '@/lib/queries';
 import type { Workbench } from '@/lib/types';
 
@@ -52,6 +52,7 @@ function Sections({ data }: { data: Workbench }) {
           <li key={t.id}>
             <Link href={taskHref(t)} className={ROW}>
               <OrgBadge show={badge} name={t.org.name} />
+              <span className="shrink-0 font-mono text-xs text-muted-foreground">{t.displayKey}</span>
               <span className="flex-1 truncate">{t.title}</span>
               {t.requirement && <span className="font-mono text-xs text-muted-foreground">{t.requirement.displayKey}</span>}
               {t.iteration && <span className="text-xs text-muted-foreground">{t.iteration.name}</span>}
@@ -74,10 +75,10 @@ function Sections({ data }: { data: Workbench }) {
           </li>
         ))}
       </Section>
-      <Section title="未读评论" total={data.unread.total} shown={data.unread.items.length} empty="你负责的需求上没有未读评论">
+      <Section title="未读评论" total={data.unread.total} shown={data.unread.items.length} empty="没有未读评论">
         {data.unread.items.map((u) => (
-          <li key={u.requirementId}>
-            <Link href={requirementHref(u.org, u.displayKey)} className={ROW}>
+          <li key={u.requirementId ?? u.documentId}>
+            <Link href={unreadHref(u)} className={ROW}>
               <OrgBadge show={badge} name={u.org.name} />
               <span className="font-mono text-muted-foreground">{u.displayKey}</span>
               <span className="flex-1 truncate">{u.title}</span>

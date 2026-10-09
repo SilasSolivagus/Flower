@@ -56,7 +56,12 @@ function WorkloadBody({ org, data }: { org: string; data: MemberTasks }) {
               <TableBody>
                 {g.tasks.map((t) => (
                   <TableRow key={t.id} className="h-10 even:bg-zebra">
-                    <TableCell>{t.alias || t.title}</TableCell>
+                    <TableCell>
+                      <Link href={`/${org}/tasks/${t.displayKey}`} className="mr-2 font-mono text-[12px] text-muted-foreground hover:underline">
+                        {t.displayKey}
+                      </Link>
+                      {t.alias || t.title}
+                    </TableCell>
                     <TableCell>
                       {t.requirement ? (
                         <Link href={`/${org}/requirements/${t.requirement.displayKey}`} className="hover:underline">

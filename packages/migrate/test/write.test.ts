@@ -12,6 +12,7 @@ import {
   createRequirement,
   documentRevisions,
   documents,
+  entityLinks,
   fieldDefinitions,
   iterations,
   iterationScopeSnapshots,
@@ -85,6 +86,8 @@ describe('写入数据库', () => {
     await issueToken(t.db, actor, { memberId: actor.memberId, name: '脚本', scope: { products: 'all', access: 'write' } });
     const created = await createRequirement(t.db, actor, product!.id, { title: '导入后新建' });
     await addRequirementComment(t.db, actor, created.id, { body: '导入后的评论' });
+    await addRequirementComment(t.db, actor, created.id, { body: '引用 [[PAN-1]]' });
+    expect(await t.adminDb.select().from(entityLinks)).toHaveLength(1);
     const [iteration] = await t.adminDb.select({ id: iterations.id }).from(iterations).where(eq(iterations.orgId, actor.orgId));
     await t.adminDb.insert(iterationScopeSnapshots).values({ orgId: actor.orgId, iterationId: iteration!.id, requirementId: created.id, snapshotKind: 'committed' });
 
@@ -98,6 +101,7 @@ describe('写入数据库', () => {
     expect(await t.adminDb.select().from(fieldDefinitions).where(isNotNull(fieldDefinitions.productId))).toEqual([]);
     expect(await t.adminDb.select().from(apiTokens)).toEqual([]);
     expect(await t.adminDb.select().from(iterationScopeSnapshots)).toEqual([]);
+    expect(await t.adminDb.select().from(entityLinks)).toEqual([]);
     expect(await t.adminDb.select().from(comments).where(eq(comments.body, '导入后的评论'))).toEqual([]);
   });
 

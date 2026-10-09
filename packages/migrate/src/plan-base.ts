@@ -150,6 +150,11 @@ export function buildBase(ctx: PlanContext): void {
     const cur = regular[i]!;
     if (cur.startDate < prev.endDate) ctx.problem(`常规迭代「${prev.name}」与「${cur.name}」时间重叠（结束日可以等于下一迭代的开始日）`);
   }
+  const regularNames = new Set<string>();
+  for (const it of regular) {
+    if (regularNames.has(it.name)) ctx.problem(`同一产品内迭代名称重复：「${it.name}」`);
+    regularNames.add(it.name);
+  }
 
   // 发布版本
   for (const v of data.plane.versions) {

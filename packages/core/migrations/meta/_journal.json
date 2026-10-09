@@ -78,6 +78,20 @@
       "when": 1791443764134,
       "tag": "0010_p2a_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791513645869,
+      "tag": "0011_friendly_zarda",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791513655196,
+      "tag": "0012_p2b1_rls",
+      "breakpoints": true
     }
   ]
 }

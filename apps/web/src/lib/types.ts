@@ -1,6 +1,8 @@
 import type {
   AccountView,
   AttachmentView,
+  BacklinkGroup as CoreBacklinkGroup,
+  BacklinkTargetType as CoreBacklinkTargetType,
   CheckState as CoreCheckState,
   CommentView,
   DocumentCommentView,
@@ -21,6 +23,8 @@ import type {
   IterationMilestone as CoreIterationMilestone,
   IterationScope as CoreIterationScope,
   IterationView,
+  LinkCard as CoreLinkCard,
+  LinkSuggestion as CoreLinkSuggestion,
   MemberTask as CoreMemberTask,
   MemberTasks as CoreMemberTasks,
   MemberView,
@@ -40,6 +44,7 @@ import type {
   ReviewQueue as CoreReviewQueue,
   ReviewState as CoreReviewState,
   StructureNodeView,
+  TaskDetail as CoreTaskDetail,
   TaskView,
   TemplateSection as CoreTemplateSection,
   TemplateView,
@@ -113,3 +118,8 @@ export type DocumentComment = Jsonify<DocumentCommentView>;
 export type DocumentTemplate = Jsonify<TemplateView>;
 export type DocumentReviewQueue = Jsonify<CoreDocumentReviewQueue>;
 export type Attachment = AttachmentView & { url: string };
+export type LinkCard = CoreLinkCard;
+export type LinkSuggestion = CoreLinkSuggestion;
+export type BacklinkTargetType = CoreBacklinkTargetType;
+export type BacklinkGroup = Jsonify<CoreBacklinkGroup>;
+export type TaskDetail = Jsonify<CoreTaskDetail>;
