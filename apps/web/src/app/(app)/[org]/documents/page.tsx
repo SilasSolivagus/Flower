@@ -1,6 +1,6 @@
 'use client';
 
-import { DOCUMENT_STATUS_LABELS, DOCUMENT_STATUSES } from '@flower/core/markdown';
+import { CHANGE_DOCUMENT_STATUSES, DOCUMENT_STATUS_LABELS } from '@flower/core/markdown';
 import { FileText } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -109,7 +109,7 @@ function DocumentsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>全部状态</SelectItem>
-            {DOCUMENT_STATUSES.filter((s) => s !== 'merged').map((s) => (
+            {CHANGE_DOCUMENT_STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
                 {DOCUMENT_STATUS_LABELS[s]}
               </SelectItem>

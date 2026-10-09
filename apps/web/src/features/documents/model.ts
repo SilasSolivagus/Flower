@@ -1,4 +1,4 @@
-import { bestQuoteMatch, DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, normalizeHeading, splitSections, squash, type TemplateSection } from '@flower/core/markdown';
+import { bestQuoteMatch, CHANGE_DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, normalizeHeading, splitSections, squash, type TemplateSection } from '@flower/core/markdown';
 import type { DocumentComment } from '@/lib/types';
 
 export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
@@ -8,6 +8,8 @@ export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
   launched: '#1e8a5a',
   merged: '#0f766e',
   discarded: '#5c6570',
+  active: '#1e8a5a',
+  archived: '#8a9199',
 };
 
 export const PROVIDER_LABEL: Record<ExternalProvider, string> = {
@@ -33,7 +35,7 @@ export function parseDocumentFilter(sp: URLSearchParams): DocumentListFilter {
   const source = sp.get('source') ?? '';
   return {
     product: sp.get('product') ?? '',
-    status: (DOCUMENT_STATUSES as readonly string[]).includes(status) ? (status as DocumentStatus) : '',
+    status: (CHANGE_DOCUMENT_STATUSES as readonly string[]).includes(status) ? (status as DocumentStatus) : '',
     owner: sp.get('owner') ?? '',
     source: source === 'native' || source === 'external' ? source : '',
     q: sp.get('q') ?? '',

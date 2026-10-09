@@ -10,6 +10,8 @@ import {
   createDocument,
   createLocalStorage,
   createRequirement,
+  createStructureNode,
+  documentAffectedNodes,
   documentRevisions,
   documents,
   entityLinks,
@@ -88,6 +90,11 @@ describe('写入数据库', () => {
     await addRequirementComment(t.db, actor, created.id, { body: '导入后的评论' });
     await addRequirementComment(t.db, actor, created.id, { body: '引用 [[PAN-1]]' });
     expect(await t.adminDb.select().from(entityLinks)).toHaveLength(1);
+    const area = await createStructureNode(t.db, actor, product!.id, { name: '导入后新建的业务域' });
+    const mod = await createStructureNode(t.db, actor, product!.id, { parentId: area.id, name: '导入后模块' });
+    const feature = await createStructureNode(t.db, actor, product!.id, { parentId: mod.id, name: '导入后功能点' });
+    const prd = await createDocument(t.db, actor, product!.id, { title: '导入后 PRD' });
+    await t.adminDb.insert(documentAffectedNodes).values({ orgId: actor.orgId, documentId: prd.id, nodeId: feature.id, changeType: 'added' });
     const [iteration] = await t.adminDb.select({ id: iterations.id }).from(iterations).where(eq(iterations.orgId, actor.orgId));
     await t.adminDb.insert(iterationScopeSnapshots).values({ orgId: actor.orgId, iterationId: iteration!.id, requirementId: created.id, snapshotKind: 'committed' });
 
@@ -102,6 +109,7 @@ describe('写入数据库', () => {
     expect(await t.adminDb.select().from(apiTokens)).toEqual([]);
     expect(await t.adminDb.select().from(iterationScopeSnapshots)).toEqual([]);
     expect(await t.adminDb.select().from(entityLinks)).toEqual([]);
+    expect(await t.adminDb.select().from(documentAffectedNodes)).toEqual([]);
     expect(await t.adminDb.select().from(comments).where(eq(comments.body, '导入后的评论'))).toEqual([]);
   });
 

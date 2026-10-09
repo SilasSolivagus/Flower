@@ -10,6 +10,8 @@ describe('PRD 列表筛选', () => {
     expect(documentFilterToSearch(f)).toBe('product=PAN&status=review&owner=m1&source=external&q=%E6%94%AF%E4%BB%98');
     expect(documentFilterToApiQuery(f)).toBe('status=review&owner=m1&source=external&q=%E6%94%AF%E4%BB%98');
     expect(documentFilterToApiQuery({ product: 'PAN', status: '', owner: '', source: '', q: '' })).toBe('');
+    expect(parseDocumentFilter(new URLSearchParams('status=merged')).status).toBe('merged');
+    expect(parseDocumentFilter(new URLSearchParams('status=archived')).status).toBe('');
   });
 
   it('链接与来源文字', () => {

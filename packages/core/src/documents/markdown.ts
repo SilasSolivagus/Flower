@@ -13,6 +13,8 @@ export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
   launched: '已上线',
   merged: '已合入',
   discarded: '已废弃',
+  active: '使用中',
+  archived: '已归档',
 };
 
 export const documentDisplayKey = (productKey: string, number: number): string => `${productKey}-PRD-${number}`;
@@ -22,7 +24,7 @@ export function parseDocumentKey(key: string): { productKey: string; number: num
   return m ? { productKey: m[1]!, number: Number(m[2]) } : null;
 }
 
-/** 可流转的目标状态。launched → merged 属于 P2-B（合入），这里没有。 */
+/** 可流转的目标状态。launched → merged 只由合入自动完成，这里没有。模块文档在使用中与已归档之间切换。 */
 export const DOCUMENT_TRANSITIONS: Record<DocumentStatus, DocumentStatus[]> = {
   draft: ['review', 'discarded'],
   review: ['draft', 'approved', 'discarded'],
@@ -30,6 +32,8 @@ export const DOCUMENT_TRANSITIONS: Record<DocumentStatus, DocumentStatus[]> = {
   launched: [],
   merged: [],
   discarded: ['draft'],
+  active: ['archived'],
+  archived: ['active'],
 };
 
 export const canTransition = (from: DocumentStatus, to: DocumentStatus): boolean => DOCUMENT_TRANSITIONS[from].includes(to);
