@@ -52,6 +52,7 @@ export async function setDocumentCheckItemState(
   assertCheckState(input.state);
   return withOrg(db, actor.orgId, async (tx) => {
     const doc = await loadDocument(tx, documentId, { lock: true });
+    if (doc.kind !== 'change') throw new AppError('invalid', '模块文档没有检查项');
     await requireProductRole(tx, actor, doc.productId, 'editor');
     const item = await documentItem(tx, doc.productId, itemKey);
     const changes = await writeSingleCheck(tx, actor, { type: 'document', id: doc.id }, item, input);
@@ -65,6 +66,7 @@ export async function signDocumentCheckItem(db: Db, actor: Actor, documentId: st
   if (actor.tokenScope?.access === 'read') throw new AppError('forbidden', '只读 Token 不能签字');
   return withOrg(db, actor.orgId, async (tx) => {
     const doc = await loadDocument(tx, documentId, { lock: true });
+    if (doc.kind !== 'change') throw new AppError('invalid', '模块文档没有检查项');
     const role = await requireProductRole(tx, actor, doc.productId, 'viewer');
     const item = await documentItem(tx, doc.productId, itemKey);
     const r = await writeSignoff(tx, actor, role, { type: 'document', id: doc.id }, item, input);

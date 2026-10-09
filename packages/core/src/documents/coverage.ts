@@ -49,6 +49,7 @@ export async function linkRequirementsTx(tx: Tx, actor: Actor, documentId: strin
   if (ids.length === 0 || ids.length > 200) throw new AppError('invalid', '一次关联 1–200 条需求');
   const doc = await loadDocument(tx, documentId, { lock: true });
   await requireProductRole(tx, actor, doc.productId, 'editor');
+  if (doc.kind !== 'change') throw new AppError('invalid', '模块文档不关联需求');
   if (doc.status === 'discarded') throw new AppError('invalid', '已废弃的 PRD 不能再关联需求');
   const rows = await tx
     .select()
