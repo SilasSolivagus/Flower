@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDocument, saveDocumentContent } from '../src/documents/documents';
 import type { Actor } from '../src/domain-types';
 import { createIteration } from '../src/iterations/iterations';
-import { searchLinkTargets } from '../src/links/search';
+import { SUGGESTIONS_PER_KIND, searchLinkTargets } from '../src/links/search';
 import { createRequirement } from '../src/requirements/requirements';
 import { createStructureNode } from '../src/structure/nodes';
 import { createTask } from '../src/tasks/tasks';
@@ -78,5 +78,12 @@ describe('[[ 补全搜索', () => {
     expect((await searchLinkTargets(t.db, guest, { productId: doc, q: '登录' })).map((s) => s.insert)).toEqual(['DOC-1', '迭代:登录专项']);
     expect(await searchLinkTargets(t.db, guest, { productId: doc, q: 'PAN-PRD-1#' })).toEqual([]);
     await expect(searchLinkTargets(t.db, guest, { productId: pan, q: '登录' })).rejects.toMatchObject({ code: 'not_found' });
+  });
+
+  it('每类最多 SUGGESTIONS_PER_KIND 条：超出的匹配被截断', async () => {
+    for (let i = 0; i < 8; i++) await createRequirement(t.db, owner, pan, { title: `批量关键词${i}` });
+    const list = await searchLinkTargets(t.db, owner, { productId: pan, q: '批量关键词' });
+    expect(list).toHaveLength(SUGGESTIONS_PER_KIND);
+    expect(list.every((s) => s.kind === 'requirement')).toBe(true);
   });
 });
