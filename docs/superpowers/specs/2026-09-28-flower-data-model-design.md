@@ -272,7 +272,7 @@ sections 供 Agent 逐节写作，并由系统校验必填小节是否齐全。
 
 ### 6.4 双向链接
 
-- 正文语法：`[[PAN-123]]`、`[[PRD-12]]`、`[[PRD-12#小节]]`、`[[业务域/模块/功能点]]`。需求描述、文档、评论中均可使用。
+- 正文语法：`[[PAN-123]]`、`[[PAN-PRD-12]]`、`[[PAN-PRD-12#小节]]`、`[[PAN-T-12]]`（任务）、`[[迭代:名称]]`、`[[业务域/模块/功能点]]`。需求描述、文档、评论中均可使用。细则见 P2-B1 设计（2026-10-09 修改：文档与任务编号带产品前缀，增加任务与迭代）。
 - `entity_links`：org_id、source_type、source_id、source_section（可空）、target_type（可空）、target_id（可空）、target_text、anchor、origin（wikilink / system / manual）。
 - 保存时解析 wikilink 并重建该来源的链接。目标暂不存在时 target_id 为空，之后创建同名对象时自动接上。存目标 id，改标题不断链；旧编号通过 `entity_aliases` 解析。
 - 模块文档中功能点的历史、需求与变更 PRD 的关联等系统生成的链接，以 origin = system 写入同一张表，反向链接面板一次查全。
