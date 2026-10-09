@@ -7,6 +7,7 @@ export * from './domain-types';
 export * from './db/schema';
 export * from './documents/markdown';
 export * from './links/syntax';
+export * from './links/links';
 export * from './db/client';
 export * from './db/tx';
 export * from './events';

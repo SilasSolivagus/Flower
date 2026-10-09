@@ -6,8 +6,9 @@ import { withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
+import { syncSourceLinks } from '../links/links';
 import { loadRequirement, memberNames } from './context';
-import type { MemberRef } from './requirements';
+import { type MemberRef, productKeyOf } from './requirements';
 
 export type CommentView = {
   id: string;
@@ -66,6 +67,7 @@ export async function addRequirementComment(
       .values({ orgId: actor.orgId, targetType: 'requirement', targetId: requirementId, parentId: input.parentId ?? null, authorMemberId: actor.memberId, body, kind: input.kind ?? 'comment' })
       .returning();
     await tx.insert(commentReads).values({ orgId: actor.orgId, commentId: row!.id, memberId: actor.memberId });
+    await syncSourceLinks(tx, actor.orgId, { type: 'comment', id: row!.id, productKey: await productKeyOf(tx, req.productId) }, body);
     await recordEvent(tx, {
       orgId: actor.orgId,
       productId: req.productId,

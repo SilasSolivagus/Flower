@@ -6,8 +6,9 @@ import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
+import { syncSourceLinks } from '../links/links';
 import { memberNames } from '../requirements/context';
-import type { MemberRef } from '../requirements/requirements';
+import { type MemberRef, productKeyOf } from '../requirements/requirements';
 import type { TextAnchor } from './constants';
 import { loadDocument } from './documents';
 import { locateQuote } from './markdown';
@@ -96,6 +97,7 @@ export async function addDocumentComment(
       })
       .returning();
     await tx.insert(commentReads).values({ orgId: actor.orgId, commentId: row!.id, memberId: actor.memberId });
+    await syncSourceLinks(tx, actor.orgId, { type: 'comment', id: row!.id, productKey: await productKeyOf(tx, doc.productId) }, body);
     await recordEvent(tx, {
       orgId: actor.orgId,
       productId: doc.productId,
