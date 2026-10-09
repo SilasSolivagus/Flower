@@ -3,7 +3,7 @@ import { requirementHref, showOrgBadge, signatureHref, taskHref } from './model'
 
 describe('工作台链接', () => {
   const org = { id: 'o1', slug: 'acme', name: '测试组织' };
-  const base = { org, id: 't1', title: '联调', status: 'todo' as const, planStart: null, progress: 0 };
+  const base = { org, id: 't1', displayKey: 'PAN-T-1', title: '联调', status: 'todo' as const, planStart: null, progress: 0 };
 
   it('需求行链接到详情；任务行优先链接到需求，没有需求时到迭代的甘特页签', () => {
     expect(requirementHref(org, 'PAN-1')).toBe('/acme/requirements/PAN-1');

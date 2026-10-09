@@ -85,6 +85,7 @@ describe('工作台', () => {
         {
           org: { id: owner.orgId, slug: 'acme', name: '测试组织' },
           id: expect.any(String),
+          displayKey: 'PAN-T-1',
           title: '接口联调',
           requirement: { displayKey: 'PAN-1', title: '上传提速' },
           iteration: { id: expect.any(String), name: '迭代0928' },

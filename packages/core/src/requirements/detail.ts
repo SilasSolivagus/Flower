@@ -24,6 +24,7 @@ import { documentDisplayKey, prdCheckState } from '../documents/markdown';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { joinIterationUnmet } from '../iterations/membership';
+import { taskDisplayKey } from '../links/syntax';
 import { buildCheckItemViews, type CheckItemView, requirementCheckStates } from './check-views';
 import { effectiveFields, memberNames, productWorkflowBody } from './context';
 import { displayKey, hydrateList, type MemberRef, type OptionRef, type RequirementListItem } from './requirements';
@@ -50,7 +51,7 @@ export type RequirementDetail = RequirementListItem & {
   blockers: Array<{ id: string; description: string; status: 'active' | 'resolved'; owner: MemberRef | null; createdAt: Date; resolvedAt: Date | null }>;
   relations: Array<{ id: string; type: string; direction: 'out' | 'in'; other: { id: string; displayKey: string; title: string } }>;
   releases: Array<{ id: string; versionName: string; platform: OptionRef | null; status: 'planned' | 'released'; releasedAt: Date | null }>;
-  tasks: Array<{ id: string; title: string; assignee: MemberRef | null; status: 'todo' | 'doing' | 'done'; planStart: string | null; planDays: number | null }>;
+  tasks: Array<{ id: string; displayKey: string; title: string; assignee: MemberRef | null; status: 'todo' | 'doing' | 'done'; planStart: string | null; planDays: number | null }>;
   aliases: string[];
 };
 
@@ -196,7 +197,15 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
         })
         .filter((x): x is NonNullable<typeof x> => x !== null),
       releases: releaseRows.map(({ r }) => ({ id: r.id, versionName: r.versionName, platform: optionRef(r.platformOptionId), status: r.status, releasedAt: r.releasedAt })),
-      tasks: taskRows.map((x) => ({ id: x.id, title: x.title, assignee: ref(x.assigneeMemberId), status: x.status, planStart: x.planStart, planDays: x.planDays })),
+      tasks: taskRows.map((x) => ({
+        id: x.id,
+        displayKey: taskDisplayKey(product!.key, x.number),
+        title: x.title,
+        assignee: ref(x.assigneeMemberId),
+        status: x.status,
+        planStart: x.planStart,
+        planDays: x.planDays,
+      })),
       aliases: aliasRows.map((a) => a.alias).sort(),
     };
   });

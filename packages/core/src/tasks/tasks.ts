@@ -8,6 +8,7 @@ import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
 import { loadIteration } from '../iterations/iterations';
+import { taskDisplayKey } from '../links/syntax';
 import { assertAssignableMember, loadRequirement, memberNames } from '../requirements/context';
 import { displayKey, type MemberRef } from '../requirements/requirements';
 import { displayProgress, STARRED_LIMIT, TASK_FLAGS, type TaskFlag, todayInZone } from './schedule';
@@ -22,6 +23,8 @@ const TASK_NOT_FOUND = '任务不存在';
 export type TaskView = {
   id: string;
   productId: string;
+  number: number;
+  displayKey: string;
   iterationId: string | null;
   requirement: { id: string; displayKey: string; title: string } | null;
   title: string;
@@ -147,6 +150,11 @@ export async function hydrateTasks(tx: Tx, actor: Actor, rows: TaskRow[], today:
         .where(inArray(requirements.id, reqIds))
     : [];
   const names = await memberNames(tx, rows.map((r) => r.assigneeMemberId));
+  const keyRows = await tx
+    .select({ id: products.id, key: products.key })
+    .from(products)
+    .where(inArray(products.id, [...new Set(rows.map((r) => r.productId))]));
+  const keyOf = new Map(keyRows.map((p) => [p.id, p.key]));
   const roles = new Map<string, ProductRole | null>();
   for (const pid of new Set(rows.map((r) => r.productId))) roles.set(pid, await productRoleOf(tx, actor, pid));
   return rows.map((r) => {
@@ -155,6 +163,8 @@ export async function hydrateTasks(tx: Tx, actor: Actor, rows: TaskRow[], today:
     return {
       id: r.id,
       productId: r.productId,
+      number: r.number,
+      displayKey: taskDisplayKey(keyOf.get(r.productId)!, r.number),
       iterationId: r.iterationId,
       requirement: req ? { id: req.id, displayKey: displayKey(req.key, req.number), title: req.title } : null,
       title: r.title,

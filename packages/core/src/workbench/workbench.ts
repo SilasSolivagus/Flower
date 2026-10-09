@@ -19,6 +19,7 @@ export type WorkbenchRequirement = { org: WorkbenchOrg; id: string; displayKey: 
 export type WorkbenchTask = {
   org: WorkbenchOrg;
   id: string;
+  displayKey: string;
   title: string;
   requirement: { displayKey: string; title: string } | null;
   iteration: { id: string; name: string } | null;
@@ -96,6 +97,7 @@ async function orgPart(db: Db, actor: Actor, org: WorkbenchOrg, today: string | 
     const myTasks = taskViews.map((v, i) => ({
       org,
       id: v.id,
+      displayKey: v.displayKey,
       title: v.title,
       requirement: v.requirement ? { displayKey: v.requirement.displayKey, title: v.requirement.title } : null,
       iteration: taskRows[i]!.it,

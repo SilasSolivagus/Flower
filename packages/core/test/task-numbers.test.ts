@@ -4,11 +4,13 @@ import { domainEvents, products, tasks } from '../src/db/schema';
 import { withOrg } from '../src/db/tx';
 import type { Actor } from '../src/domain-types';
 import { createIteration, type IterationView } from '../src/iterations/iterations';
+import { getRequirementByKey } from '../src/requirements/detail';
 import { createRequirement } from '../src/requirements/requirements';
+import { getTaskByKey } from '../src/tasks/queries';
 import { createTask, deleteTask } from '../src/tasks/tasks';
 import { createProduct } from '../src/tenancy/products';
 import { createTestDb } from './db';
-import { regularIteration, seedInstance } from './factories';
+import { asMember, regularIteration, seedInstance } from './factories';
 
 let t: Awaited<ReturnType<typeof createTestDb>>;
 let owner: Actor;
@@ -45,5 +47,25 @@ describe('任务编号', () => {
       tx.select().from(domainEvents).where(and(eq(domainEvents.subjectId, d.id), eq(domainEvents.type, 'task.created'))),
     );
     expect(ev!.payload).toMatchObject({ number: 3, title: '联调' });
+  });
+
+  it('视图带编号：新建、修改与需求详情的任务列表', async () => {
+    const e = await createTask(t.db, owner, { requirementId: docReqId, title: '文档联调' });
+    expect(e).toMatchObject({ number: await numberOf(e.id), displayKey: `DOC-T-${await numberOf(e.id)}` });
+    const detail = await getRequirementByKey(t.db, owner, 'DOC-1');
+    expect(detail.tasks.map((x) => [x.displayKey, x.title])).toEqual([
+      ['DOC-T-1', '文档任务'],
+      [e.displayKey, '文档联调'],
+    ]);
+  });
+
+  it('按编号读取任务：大小写不敏感；不存在或看不到所属产品时一律为「任务不存在」', async () => {
+    const d = await getTaskByKey(t.db, owner, 'pan-t-1');
+    expect(d).toMatchObject({ displayKey: 'PAN-T-1', title: '前端开发', productKey: 'PAN', iteration: { id: sprint.id, name: '迭代0928', status: 'planning' }, requirement: null });
+    expect(d.createdAt).toBeInstanceOf(Date);
+    await expect(getTaskByKey(t.db, owner, 'PAN-T-99')).rejects.toMatchObject({ code: 'not_found', message: '任务不存在' });
+    await expect(getTaskByKey(t.db, owner, 'PAN-99')).rejects.toMatchObject({ code: 'not_found', message: '任务不存在' });
+    const guest = await asMember(t.db, owner, '访客甲', 'guest');
+    await expect(getTaskByKey(t.db, guest, 'PAN-T-1')).rejects.toMatchObject({ code: 'not_found', message: '任务不存在' });
   });
 });
