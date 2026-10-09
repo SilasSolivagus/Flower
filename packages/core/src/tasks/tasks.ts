@@ -197,9 +197,14 @@ export async function createTask(db: Db, actor: Actor, input: TaskCreateInput, o
       await assertStarredRoom(tx, it.id);
     }
     const metaValue = Object.fromEntries(Object.entries(meta).filter(([, v]) => v !== null));
+    const [seq] = await tx
+      .update(products)
+      .set({ taskSeq: sql`${products.taskSeq} + 1` })
+      .where(eq(products.id, productId))
+      .returning({ n: products.taskSeq, key: products.key });
     const [row] = await tx
       .insert(tasks)
-      .values({ orgId: actor.orgId, productId, requirementId: req?.id ?? null, iterationId: it?.id ?? null, ...columns, title: columns.title!, meta: metaValue })
+      .values({ orgId: actor.orgId, productId, number: seq!.n, requirementId: req?.id ?? null, iterationId: it?.id ?? null, ...columns, title: columns.title!, meta: metaValue })
       .returning();
     await recordEvent(tx, {
       orgId: actor.orgId,
@@ -208,7 +213,7 @@ export async function createTask(db: Db, actor: Actor, input: TaskCreateInput, o
       subjectType: 'task',
       subjectId: row!.id,
       actor,
-      payload: { title: row!.title, requirementId: row!.requirementId, iterationId: row!.iterationId },
+      payload: { number: row!.number, title: row!.title, requirementId: row!.requirementId, iterationId: row!.iterationId },
     });
     const [view] = await hydrateTasks(tx, actor, [row!], opts.today ?? (await orgToday(tx, actor.orgId)));
     return view!;

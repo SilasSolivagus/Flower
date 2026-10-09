@@ -20,6 +20,7 @@ import {
 import type { TokenScope } from '../domain-types';
 import { DOCUMENT_STATUSES, EXTERNAL_PROVIDERS, type RevisionSnapshot, type TemplateSection } from '../documents/constants';
 import { newId } from '../ids';
+import { LINK_ORIGINS, LINK_SOURCE_TYPES, LINK_TARGET_TYPES } from '../links/syntax';
 
 const id = () => uuid('id').primaryKey().$defaultFn(newId);
 const ts = (name: string) => timestamp(name, { withTimezone: true });
@@ -100,6 +101,7 @@ export const products = pgTable(
     structureLevelNames: jsonb('structure_level_names').$type<string[]>(),
     requirementSeq: integer('requirement_seq').notNull().default(0),
     documentSeq: integer('document_seq').notNull().default(0),
+    taskSeq: integer('task_seq').notNull().default(0),
     createdAt: createdAt(),
     deletedAt: ts('deleted_at'),
   },
@@ -330,6 +332,7 @@ export const iterations = pgTable(
     check('iterations_type_product', sql`(${t.type} = 'regular') = (${t.productId} is not null)`),
     check('iterations_dates', sql`${t.startDate} <= ${t.endDate}`),
     index('iterations_product').on(t.productId),
+    uniqueIndex('iterations_product_name').on(t.productId, t.name).where(sql`${t.deletedAt} is null`),
   ],
 );
 
@@ -525,6 +528,7 @@ export const tasks = pgTable(
     id: id(),
     orgId: orgRef(),
     productId: productRef(),
+    number: integer('number').notNull(),
     requirementId: uuid('requirement_id').references(() => requirements.id),
     iterationId: uuid('iteration_id').references(() => iterations.id),
     title: text('title').notNull(),
@@ -542,7 +546,12 @@ export const tasks = pgTable(
     createdAt: createdAt(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },
-  (t) => [index('tasks_requirement').on(t.requirementId), index('tasks_assignee').on(t.assigneeMemberId), index('tasks_iteration').on(t.iterationId)],
+  (t) => [
+    uniqueIndex('tasks_product_number').on(t.productId, t.number),
+    index('tasks_requirement').on(t.requirementId),
+    index('tasks_assignee').on(t.assigneeMemberId),
+    index('tasks_iteration').on(t.iterationId),
+  ],
 );
 
 export const comments = pgTable(
@@ -681,4 +690,33 @@ export const attachments = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index('attachments_target').on(t.targetType, t.targetId)],
+);
+
+// ---------- P2-B1：双链 ----------
+
+export const entityLinks = pgTable(
+  'entity_links',
+  {
+    id: id(),
+    orgId: orgRef(),
+    sourceType: text('source_type', { enum: LINK_SOURCE_TYPES }).notNull(),
+    sourceId: uuid('source_id').notNull(),
+    /** PRD 正文中链接所在小节的原始标题；需求描述与评论为空。 */
+    sourceSection: text('source_section'),
+    targetType: text('target_type', { enum: LINK_TARGET_TYPES }),
+    /** 目标不存在（悬空）时为空；新建或改名的目标按 target_text 接上。 */
+    targetId: uuid('target_id'),
+    targetSection: text('target_section'),
+    /** 规范写法：编号大写，迭代与节点带产品前缀。 */
+    targetText: text('target_text').notNull(),
+    /** 引用处所在的一句，最多 120 字。 */
+    context: text('context').notNull().default(''),
+    origin: text('origin', { enum: LINK_ORIGINS }).notNull().default('wikilink'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('entity_links_source').on(t.sourceType, t.sourceId),
+    index('entity_links_target').on(t.targetType, t.targetId),
+    index('entity_links_org_text').on(t.orgId, t.targetText),
+  ],
 );

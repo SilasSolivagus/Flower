@@ -114,6 +114,16 @@ describe('新建与修改迭代', () => {
     await expect(updateIteration(t.db, viewer, target.id, { name: '越权' })).rejects.toMatchObject({ code: 'forbidden' });
     await expect(updateIteration(t.db, readToken, target.id, { name: '越权' })).rejects.toMatchObject({ code: 'forbidden' });
   });
+
+  it('同一产品内迭代不能重名（新建与改名）；不同产品可以同名；删除后可以再用这个名字', async () => {
+    const a = await createIteration(t.db, owner, regular(pan, '重名检查', '2027-03-01', '2027-03-05'));
+    await expect(createIteration(t.db, owner, regular(pan, '重名检查', '2027-03-08', '2027-03-12'))).rejects.toMatchObject({ code: 'conflict', message: '同一产品内已有同名迭代' });
+    const b = await createIteration(t.db, owner, regular(pan, '重名检查二', '2027-03-08', '2027-03-12'));
+    await expect(updateIteration(t.db, owner, b.id, { name: '重名检查' })).rejects.toMatchObject({ code: 'conflict', message: '同一产品内已有同名迭代' });
+    await createIteration(t.db, owner, regular(doc, '重名检查', '2027-03-01', '2027-03-05'));
+    await deleteIteration(t.db, owner, a.id);
+    await createIteration(t.db, owner, regular(pan, '重名检查', '2027-03-15', '2027-03-19'));
+  });
 });
 
 describe('状态流转与承诺快照', () => {

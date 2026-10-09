@@ -87,6 +87,12 @@ describe('导入计划：阻止写入的问题', () => {
     expect(buildImportPlan(makeLegacyData(), m, OPTS).report.problems.join('\n')).toMatch(/常规迭代「.+」与「.+」时间重叠/);
   });
 
+  it('同一产品内常规迭代重名', () => {
+    const m = reviewedMapping();
+    m.iterations.iterations.find((i) => i.name === 'it0330')!.name = 'it0316';
+    expect(buildImportPlan(makeLegacyData(), m, OPTS).report.problems).toContain('同一产品内迭代名称重复：「it0316」');
+  });
+
   it('迭代开始日期晚于结束日期：记录问题且跳过该行', () => {
     const data = makeLegacyData();
     const v2 = data.plane.iterations.find((i) => i.id === 'V2')!;
