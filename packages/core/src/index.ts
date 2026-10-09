@@ -10,6 +10,7 @@ export * from './links/syntax';
 export * from './links/links';
 export * from './links/cards';
 export * from './links/backlinks';
+export * from './links/search';
 export * from './db/client';
 export * from './db/tx';
 export * from './events';
