@@ -1,4 +1,6 @@
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { products } from '../src/db/schema';
 import { createDocument, saveDocumentContent } from '../src/documents/documents';
 import type { Actor } from '../src/domain-types';
 import { createIteration } from '../src/iterations/iterations';
@@ -85,5 +87,27 @@ describe('[[ 补全搜索', () => {
     const list = await searchLinkTargets(t.db, owner, { productId: pan, q: '批量关键词' });
     expect(list).toHaveLength(SUGGESTIONS_PER_KIND);
     expect(list.every((s) => s.kind === 'requirement')).toBe(true);
+  });
+
+  it('需求编号 10 与 100-109 同时匹配前缀时，精确匹配排第一，其余按编号长度再编号升序', async () => {
+    const num = await createProduct(t.db, owner, { name: '编号测试-需求', key: 'NUM' });
+    await createRequirement(t.db, owner, num.id, { title: '编号1' }); // NUM-1
+    await t.adminDb.update(products).set({ requirementSeq: 9 }).where(eq(products.id, num.id));
+    await createRequirement(t.db, owner, num.id, { title: '编号10' }); // NUM-10
+    await t.adminDb.update(products).set({ requirementSeq: 99 }).where(eq(products.id, num.id));
+    for (let i = 100; i <= 109; i++) await createRequirement(t.db, owner, num.id, { title: `编号${i}` }); // NUM-100 ~ NUM-109
+    const list = await searchLinkTargets(t.db, owner, { productId: num.id, q: 'NUM-10' });
+    expect(list.map((s) => s.insert)).toEqual(['NUM-10', 'NUM-100', 'NUM-101', 'NUM-102', 'NUM-103', 'NUM-104']);
+  });
+
+  it('PRD 编号 10 与 100-109 同时匹配前缀时，精确匹配排第一，其余按编号长度再编号升序', async () => {
+    const num = await createProduct(t.db, owner, { name: '编号测试-文档', key: 'NUD' });
+    await createDocument(t.db, owner, num.id, { title: '文档1' }); // NUD-PRD-1
+    await t.adminDb.update(products).set({ documentSeq: 9 }).where(eq(products.id, num.id));
+    await createDocument(t.db, owner, num.id, { title: '文档10' }); // NUD-PRD-10
+    await t.adminDb.update(products).set({ documentSeq: 99 }).where(eq(products.id, num.id));
+    for (let i = 100; i <= 109; i++) await createDocument(t.db, owner, num.id, { title: `文档${i}` }); // NUD-PRD-100 ~ NUD-PRD-109
+    const list = await searchLinkTargets(t.db, owner, { productId: num.id, q: 'NUD-PRD-10' });
+    expect(list.map((s) => s.insert)).toEqual(['NUD-PRD-10', 'NUD-PRD-100', 'NUD-PRD-101', 'NUD-PRD-102', 'NUD-PRD-103', 'NUD-PRD-104']);
   });
 });

@@ -7,7 +7,7 @@ import { documentDisplayKey, normalizeHeading, splitSections } from '../document
 import type { Actor } from '../domain-types';
 import { displayKey as requirementDisplayKey } from '../requirements/requirements';
 import { nodePathTexts } from './links';
-import { type LinkTargetType, taskDisplayKey } from './syntax';
+import { classifyTarget, type LinkTargetType, taskDisplayKey } from './syntax';
 
 export const SUGGESTIONS_PER_KIND = 6;
 
@@ -67,8 +67,10 @@ export async function searchLinkTargets(db: Db, actor: Actor, input: { productId
     const like = `%${escaped}%`;
     const prefix = `${escaped}%`;
     const digits = /^\d{1,9}$/.test(q) ? Number(q) : null;
+    const exact = q ? classifyTarget(q) : null;
     const out: LinkSuggestion[] = [];
 
+    const reqExact = exact?.kind === 'requirement' ? exact : null;
     const reqRows = await tx
       .select({ r: requirements, key: products.key })
       .from(requirements)
@@ -82,13 +84,20 @@ export async function searchLinkTargets(db: Db, actor: Actor, input: { productId
             : eq(requirements.productId, own),
         ),
       )
-      .orderBy(sql`(${requirements.productId} = ${own}) desc`, desc(requirements.updatedAt), desc(requirements.number))
+      .orderBy(
+        sql`(${
+          reqExact ? sql`${requirements.number} = ${reqExact.number} and ${products.key} = ${reqExact.productKey}` : digits !== null ? sql`${requirements.number} = ${digits}` : sql`1 = 0`
+        }) desc`,
+        sql`(${requirements.productId} = ${own}) desc`,
+        ...(q ? [sql`length(${requirements.number}::text) asc`, asc(requirements.number)] : [desc(requirements.updatedAt)]),
+      )
       .limit(SUGGESTIONS_PER_KIND);
     for (const { r, key } of reqRows) {
       const k = requirementDisplayKey(key, r.number);
       out.push({ kind: 'requirement', insert: k, displayKey: k, title: r.title, hint: null, next: 'insert' });
     }
 
+    const docExact = exact?.kind === 'document' ? exact : null;
     const docRows = await tx
       .select({ d: documents, key: products.key })
       .from(documents)
@@ -103,7 +112,13 @@ export async function searchLinkTargets(db: Db, actor: Actor, input: { productId
             : eq(documents.productId, own),
         ),
       )
-      .orderBy(sql`(${documents.productId} = ${own}) desc`, desc(documents.updatedAt), desc(documents.number))
+      .orderBy(
+        sql`(${
+          docExact ? sql`${documents.number} = ${docExact.number} and ${products.key} = ${docExact.productKey}` : digits !== null ? sql`${documents.number} = ${digits}` : sql`1 = 0`
+        }) desc`,
+        sql`(${documents.productId} = ${own}) desc`,
+        ...(q ? [sql`length(${documents.number}::text) asc`, asc(documents.number)] : [desc(documents.updatedAt)]),
+      )
       .limit(SUGGESTIONS_PER_KIND);
     for (const { d, key } of docRows) {
       const k = documentDisplayKey(key, d.number);
@@ -111,6 +126,7 @@ export async function searchLinkTargets(db: Db, actor: Actor, input: { productId
     }
     if (!q) return out;
 
+    const taskExact = exact?.kind === 'task' ? exact : null;
     const taskRows = await tx
       .select({ x: tasks, key: products.key })
       .from(tasks)
@@ -121,7 +137,12 @@ export async function searchLinkTargets(db: Db, actor: Actor, input: { productId
           or(ilike(tasks.title, like), ilike(tasks.alias, like), ilike(sql`${products.key} || '-T-' || ${tasks.number}`, prefix), ...(digits === null ? [] : [eq(tasks.number, digits)])),
         ),
       )
-      .orderBy(sql`(${tasks.productId} = ${own}) desc`, desc(tasks.createdAt), desc(tasks.number))
+      .orderBy(
+        sql`(${taskExact ? sql`${tasks.number} = ${taskExact.number} and ${products.key} = ${taskExact.productKey}` : digits !== null ? sql`${tasks.number} = ${digits}` : sql`1 = 0`}) desc`,
+        sql`(${tasks.productId} = ${own}) desc`,
+        sql`length(${tasks.number}::text) asc`,
+        asc(tasks.number),
+      )
       .limit(SUGGESTIONS_PER_KIND);
     for (const { x, key } of taskRows) {
       const k = taskDisplayKey(key, x.number);
