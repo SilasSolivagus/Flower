@@ -9,8 +9,9 @@ import { recordEvent } from '../events';
 import { relinkDangling } from '../links/links';
 import { productKeyOf } from '../requirements/requirements';
 import type { DocumentStatus } from './constants';
-import { type DocumentDetail, documentDetailInTx, type DocumentRow, writeRevision } from './documents';
+import { type DocumentDetail, commitSystemRevisionTx, documentDetailInTx, documentMarkdownTx, type DocumentRow, writeRevision } from './documents';
 import { documentDisplayKey } from './markdown';
+import { renameFeatureHeading } from './module-sections';
 
 export type ModuleDocumentRow = {
   node: { id: string; name: string; status: 'active' | 'deprecated' };
@@ -114,4 +115,27 @@ export async function listModuleDocuments(db: Db, actor: Actor, productId: strin
       }));
     return { productKey, groups };
   });
+}
+
+/**
+ * 功能点改名：把所在模块文档里该小节的标题改为新名称（保留原编号），写一版（摘要「功能点改名：旧名 → 新名」）。
+ * 没有模块文档或找不到小节时不改。在节点改名的事务里调用；归档的模块文档同样同步，保持小节与结构树一致。
+ */
+export async function syncFeatureRenameTx(tx: Tx, actor: Actor, feature: { id: string; parentId: string | null; oldName: string; newName: string }): Promise<boolean> {
+  if (!feature.parentId) return false;
+  const doc = await findModuleDocument(tx, feature.parentId, { lock: true });
+  if (!doc) return false;
+  const next = renameFeatureHeading(await documentMarkdownTx(tx, doc), feature.oldName, feature.newName);
+  if (next === null) return false;
+  const rev = await commitSystemRevisionTx(tx, actor, doc, next, { summary: `功能点改名：${feature.oldName} → ${feature.newName}`, mergedFrom: null });
+  await recordEvent(tx, {
+    orgId: actor.orgId,
+    productId: doc.productId,
+    type: 'document.section_renamed',
+    subjectType: 'document',
+    subjectId: doc.id,
+    actor,
+    payload: { nodeId: feature.id, revision: rev.number, changes: [{ field: 'section', old: feature.oldName, new: feature.newName }] },
+  });
+  return true;
 }

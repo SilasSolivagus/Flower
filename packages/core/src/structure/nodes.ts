@@ -4,6 +4,7 @@ import type { Db } from '../db/client';
 import { structureNodes } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
+import { syncFeatureRenameTx } from '../documents/module-docs';
 import { AppError, isUniqueViolation } from '../errors';
 import { recordEvent } from '../events';
 import { relinkNodes } from '../links/links';
@@ -139,6 +140,7 @@ export async function updateStructureNode(
     if (next.name !== cur.name) {
       const all = await tx.select({ id: structureNodes.id, parentId: structureNodes.parentId }).from(structureNodes).where(eq(structureNodes.productId, cur.productId));
       await relinkNodes(tx, cur.productId, subtreeIds(all, nodeId));
+      if (cur.depth === 3) await syncFeatureRenameTx(tx, actor, { id: nodeId, parentId: cur.parentId, oldName: cur.name, newName: next.name });
     }
     return view(row);
   });
