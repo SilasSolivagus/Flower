@@ -219,7 +219,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 
 - markdown 是唯一数据源，编辑器为 BlockNote。
 - 变更 PRD 的正文是单个 markdown。
-- 模块文档按小节存储：`document_sections`（document_id、node_id（可空，空表示概述）、sort_key、heading、body）。编辑时整篇显示，保存时按小节拆开。
+- 模块文档为单篇 markdown，按二级标题（功能点名称）定位小节，不建 `document_sections`（2026-10-09 修改，见 P2-B2 设计 §3）。
 
 ### 5.3 修订与合入
 
