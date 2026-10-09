@@ -15,7 +15,7 @@ import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
-import { syncSourceLinks } from '../links/links';
+import { relinkDangling, syncSourceLinks } from '../links/links';
 import { assertAssignableMember, type EffectiveField, effectiveFields, loadRequirement, memberNames, productWorkflowBody } from './context';
 
 export type OptionRef = { id: string; key: string; label: string; color: string | null };
@@ -254,6 +254,7 @@ export async function createRequirement(
     await tx.insert(stateTransitions).values({ orgId: actor.orgId, requirementId: row!.id, fromState: null, toState: body.initial, actorMemberId: actor.memberId, tokenId: actor.tokenId });
     for (const [field, ids] of values) await replaceFieldValues(tx, actor.orgId, row!.id, field, ids);
     await syncSourceLinks(tx, actor.orgId, { type: 'requirement', id: row!.id, productKey: seq!.key }, description);
+    await relinkDangling(tx, { type: 'requirement', id: row!.id, texts: [displayKey(seq!.key, row!.number)] });
     await recordEvent(tx, {
       orgId: actor.orgId,
       productId,

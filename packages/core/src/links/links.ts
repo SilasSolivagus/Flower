@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, like, or } from 'drizzle-orm';
 import { documents, entityAliases, entityLinks, iterations, products, requirements, structureNodes, tasks } from '../db/schema';
 import type { Tx } from '../db/tx';
 import { splitSections } from '../documents/markdown';
@@ -154,4 +154,58 @@ export async function syncSourceLinks(tx: Tx, orgId: string, source: LinkSource,
   }
   if (values.length > 0) await tx.insert(entityLinks).values(values);
   return values.length;
+}
+
+/**
+ * 新建或改名的目标：把同组织内写法相同的悬空链接接上（只更新 target_id 为空的行）。
+ * PRD 加 withSections，同时接上「写法#小节」。在目标的写事务里调用。
+ */
+export async function relinkDangling(tx: Tx, target: { type: LinkTargetType; id: string; texts: string[]; withSections?: boolean }): Promise<number> {
+  if (target.texts.length === 0) return 0;
+  const exact = inArray(entityLinks.targetText, target.texts);
+  // 写法只含产品编号前缀、连字符与数字，用作 LIKE 前缀不需要转义
+  const textMatch = target.withSections ? or(exact, ...target.texts.map((t) => like(entityLinks.targetText, `${t}#%`)))! : exact;
+  const rows = await tx
+    .update(entityLinks)
+    .set({ targetId: target.id })
+    .where(and(eq(entityLinks.targetType, target.type), isNull(entityLinks.targetId), textMatch))
+    .returning({ id: entityLinks.id });
+  return rows.length;
+}
+
+/** 产品内每个节点的规范写法：产品前缀 + 从顶层到该节点的名称路径。 */
+export async function nodePathTexts(tx: Tx, productId: string): Promise<Map<string, string>> {
+  const [p] = await tx.select({ key: products.key }).from(products).where(eq(products.id, productId));
+  const nodes = await tx
+    .select({ id: structureNodes.id, parentId: structureNodes.parentId, name: structureNodes.name })
+    .from(structureNodes)
+    .where(eq(structureNodes.productId, productId));
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const out = new Map<string, string>();
+  for (const n of nodes) {
+    const names: string[] = [];
+    for (let cur: NodeRef | undefined = n; cur; cur = cur.parentId ? byId.get(cur.parentId) : undefined) names.unshift(cur.name);
+    out.set(n.id, [p!.key, ...names].join('/'));
+  }
+  return out;
+}
+
+/** 节点新建、改名或移动后，按新路径接上这些节点的悬空链接。 */
+export async function relinkNodes(tx: Tx, productId: string, nodeIds: Iterable<string>): Promise<number> {
+  const texts = await nodePathTexts(tx, productId);
+  let n = 0;
+  for (const id of nodeIds) {
+    const text = texts.get(id);
+    if (text) n += await relinkDangling(tx, { type: 'structure_node', id, texts: [text] });
+  }
+  return n;
+}
+
+/** 迭代可被引用的写法：常规迭代为所属产品的 `KEY/迭代:名称`；专项为组织内每个产品前缀的同名写法。 */
+export async function iterationLinkTexts(tx: Tx, it: { type: 'regular' | 'special'; productId: string | null; name: string }): Promise<string[]> {
+  const rows =
+    it.type === 'regular'
+      ? await tx.select({ key: products.key }).from(products).where(eq(products.id, it.productId!))
+      : await tx.select({ key: products.key }).from(products).where(isNull(products.deletedAt));
+  return rows.map((p) => `${p.key}/迭代:${it.name}`);
 }

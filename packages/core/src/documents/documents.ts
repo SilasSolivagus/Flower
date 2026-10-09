@@ -6,7 +6,7 @@ import { type Tx, withOrg } from '../db/tx';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
 import { recordEvent } from '../events';
-import { syncSourceLinks } from '../links/links';
+import { relinkDangling, syncSourceLinks } from '../links/links';
 import { assertAssignableMember, memberNames } from '../requirements/context';
 import type { CheckItemView } from '../requirements/check-views';
 import { assertTitle, productKeyOf, displayKey as requirementDisplayKey, type MemberRef } from '../requirements/requirements';
@@ -246,6 +246,7 @@ export async function createDocument(
       actor,
       payload: { number: doc.number, title, source: doc.source, externalUrl: doc.externalUrl, templateId },
     });
+    await relinkDangling(tx, { type: 'document', id: doc.id, texts: [documentDisplayKey(await productKeyOf(tx, productId), doc.number)], withSections: true });
     if (input.requirementIds?.length) await linkRequirementsTx(tx, actor, doc.id, input.requirementIds);
     return documentDetailInTx(tx, actor, doc.id);
   });

@@ -8,6 +8,7 @@ import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
 import { loadIteration } from '../iterations/iterations';
+import { relinkDangling } from '../links/links';
 import { taskDisplayKey } from '../links/syntax';
 import { assertAssignableMember, loadRequirement, memberNames } from '../requirements/context';
 import { displayKey, type MemberRef } from '../requirements/requirements';
@@ -225,6 +226,7 @@ export async function createTask(db: Db, actor: Actor, input: TaskCreateInput, o
       actor,
       payload: { number: row!.number, title: row!.title, requirementId: row!.requirementId, iterationId: row!.iterationId },
     });
+    await relinkDangling(tx, { type: 'task', id: row!.id, texts: [taskDisplayKey(seq!.key, row!.number)] });
     const [view] = await hydrateTasks(tx, actor, [row!], opts.today ?? (await orgToday(tx, actor.orgId)));
     return view!;
   });

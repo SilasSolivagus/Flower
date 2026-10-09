@@ -6,6 +6,7 @@ import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
 import { recordEvent } from '../events';
+import { relinkNodes } from '../links/links';
 import type { StructureNodeView } from '../requirements/lookups';
 
 export const MAX_STRUCTURE_DEPTH = 3;
@@ -103,6 +104,7 @@ export async function createStructureNode(
       actor,
       payload: { name, parentId, depth },
     });
+    await relinkNodes(tx, productId, [row.id]);
     return view(row);
   });
 }
@@ -133,6 +135,10 @@ export async function updateStructureNode(
     }
     if (changes.length > 0) {
       await recordEvent(tx, { orgId: actor.orgId, productId: cur.productId, type: 'structure_node.updated', subjectType: 'structure_node', subjectId: nodeId, actor, payload: { changes } });
+    }
+    if (next.name !== cur.name) {
+      const all = await tx.select({ id: structureNodes.id, parentId: structureNodes.parentId }).from(structureNodes).where(eq(structureNodes.productId, cur.productId));
+      await relinkNodes(tx, cur.productId, subtreeIds(all, nodeId));
     }
     return view(row);
   });
@@ -182,6 +188,7 @@ export async function moveStructureNode(db: Db, actor: Actor, nodeId: string, in
       actor,
       payload: { changes: [{ field: 'parentId', old: node.parentId, new: input.parentId }, { field: 'depth', old: node.depth, new: depth }] },
     });
+    await relinkNodes(tx, node.productId, subtree);
     return view(row);
   });
 }

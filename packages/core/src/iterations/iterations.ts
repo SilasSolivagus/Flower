@@ -7,6 +7,7 @@ import { type Tx, withOrg } from '../db/tx';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError, isUniqueViolation, pgErrorCode } from '../errors';
 import { recordEvent } from '../events';
+import { iterationLinkTexts, relinkDangling } from '../links/links';
 import { memberNames, productWorkflowBody } from '../requirements/context';
 import { displayKey, type MemberRef } from '../requirements/requirements';
 
@@ -255,6 +256,7 @@ export async function createIteration(
       actor,
       payload: { name, type: row.type, startDate, endDate },
     });
+    await relinkDangling(tx, { type: 'iteration', id: row.id, texts: await iterationLinkTexts(tx, row) });
     const [view] = await buildViews(tx, actor, [row], await visibleProductIds(tx, actor));
     return view!;
   });
@@ -291,6 +293,7 @@ export async function updateIteration(
     if (changes.length > 0) {
       await recordEvent(tx, { orgId: actor.orgId, productId: cur.productId, type: 'iteration.updated', subjectType: 'iteration', subjectId: id, actor, payload: { changes } });
     }
+    if (next.name !== cur.name) await relinkDangling(tx, { type: 'iteration', id, texts: await iterationLinkTexts(tx, row) });
     const [view] = await buildViews(tx, actor, [row], visible);
     return view!;
   });

@@ -5,12 +5,12 @@ import { withOrg } from '../src/db/tx';
 import { addDocumentComment } from '../src/documents/comments';
 import { convertExternalDocument, createDocument, type DocumentDetail, restoreRevision, saveDocumentContent } from '../src/documents/documents';
 import type { Actor } from '../src/domain-types';
-import { createIteration, type IterationView } from '../src/iterations/iterations';
+import { createIteration, type IterationView, updateIteration } from '../src/iterations/iterations';
 import type { LinkSourceType } from '../src/links/syntax';
 import { addRequirementComment } from '../src/requirements/comments';
 import { createRequirement, type RequirementListItem, updateRequirement } from '../src/requirements/requirements';
 import type { StructureNodeView } from '../src/requirements/lookups';
-import { createStructureNode } from '../src/structure/nodes';
+import { createStructureNode, moveStructureNode, updateStructureNode } from '../src/structure/nodes';
 import { createTask, type TaskView } from '../src/tasks/tasks';
 import { createProduct } from '../src/tenancy/products';
 import { createTestDb } from './db';
@@ -110,5 +110,52 @@ describe('链接写入', () => {
     expect(await linksOf('comment', c.id)).toMatchObject([{ targetType: 'document', targetId: prd.id, targetText: 'PAN-PRD-1', targetSection: null, context: '参考 [[PAN-PRD-1]]' }]);
     const dc = await addDocumentComment(t.db, editor, prd.id, { body: '对应 [[PAN-T-1]]' });
     expect(await linksOf('comment', dc.id)).toMatchObject([{ targetType: 'task', targetId: task.id }]);
+  });
+});
+
+describe('悬空链接自动接上', () => {
+  let neo: string;
+  beforeAll(async () => {
+    neo = (await createProduct(t.db, owner, { name: '新产品', key: 'NEW' })).id;
+  });
+  const targetIds = async (sourceId: string) => Object.fromEntries((await linksOf('requirement', sourceId)).map((x) => [x.targetText, x.targetId]));
+
+  it('新建需求、PRD（含指向小节的链接）、任务、迭代（含专项）、节点后接上', async () => {
+    const src = await createRequirement(t.db, owner, pan, {
+      title: '先引用后创建',
+      description: '[[NEW-1]] [[NEW-PRD-1]] [[NEW-PRD-1#方案]] [[NEW-T-1]] [[NEW/迭代:一期]] [[NEW/会员/支付]] [[迭代:新专项]]',
+    });
+    expect(Object.values(await targetIds(src.id)).every((id) => id === null)).toBe(true);
+    const r = await createRequirement(t.db, owner, neo, { title: '后建需求' });
+    const d = await createDocument(t.db, owner, neo, { title: '后建 PRD' });
+    const it1 = await createIteration(t.db, owner, regularIteration(neo, '一期', '2026-11-02', '2026-11-13'));
+    const later = await createTask(t.db, owner, { iterationId: it1.id, title: '后建任务' });
+    const top = await createStructureNode(t.db, owner, neo, { name: '会员' });
+    const leaf = await createStructureNode(t.db, owner, neo, { parentId: top.id, name: '支付' });
+    const sp = await createIteration(t.db, owner, { type: 'special', name: '新专项', startDate: '2026-11-02', endDate: '2026-11-20' });
+    expect(await targetIds(src.id)).toEqual({
+      'NEW-1': r.id,
+      'NEW-PRD-1': d.id,
+      'NEW-PRD-1#方案': d.id,
+      'NEW-T-1': later.id,
+      'NEW/迭代:一期': it1.id,
+      'NEW/会员/支付': leaf.id,
+      'PAN/迭代:新专项': sp.id,
+    });
+  });
+
+  it('迭代改名、节点改名或移动后按新的写法接上；已接上的链接不受改名影响', async () => {
+    const it2 = await createIteration(t.db, owner, regularIteration(neo, '二期', '2026-11-16', '2026-11-27'));
+    const growth = await createStructureNode(t.db, owner, neo, { name: '增长中心' });
+    const child = await createStructureNode(t.db, owner, neo, { parentId: growth.id, name: '拉新' });
+    const oldDomain = await createStructureNode(t.db, owner, neo, { name: '旧域' });
+    const moved = await createStructureNode(t.db, owner, neo, { parentId: oldDomain.id, name: '模块甲' });
+    const newDomain = await createStructureNode(t.db, owner, neo, { name: '新域' });
+    const src = await createRequirement(t.db, owner, pan, { title: '改名前后', description: '[[NEW/迭代:二期]] [[NEW/迭代:三期]] [[NEW/增长/拉新]] [[NEW/新域/模块甲]]' });
+    expect(await targetIds(src.id)).toEqual({ 'NEW/迭代:二期': it2.id, 'NEW/迭代:三期': null, 'NEW/增长/拉新': null, 'NEW/新域/模块甲': null });
+    await updateIteration(t.db, owner, it2.id, { name: '三期' });
+    await updateStructureNode(t.db, owner, growth.id, { name: '增长' });
+    await moveStructureNode(t.db, owner, moved.id, { parentId: newDomain.id });
+    expect(await targetIds(src.id)).toEqual({ 'NEW/迭代:二期': it2.id, 'NEW/迭代:三期': it2.id, 'NEW/增长/拉新': child.id, 'NEW/新域/模块甲': moved.id });
   });
 });
