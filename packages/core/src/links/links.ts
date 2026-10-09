@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, like, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, like, or, sql } from 'drizzle-orm';
 import { documents, entityAliases, entityLinks, iterations, products, requirements, structureNodes, tasks } from '../db/schema';
 import type { Tx } from '../db/tx';
 import { splitSections } from '../documents/markdown';
@@ -47,7 +47,7 @@ class Resolver {
     const [a] = await this.tx
       .select({ id: entityAliases.entityId })
       .from(entityAliases)
-      .where(and(eq(entityAliases.alias, text), eq(entityAliases.entityType, 'requirement')));
+      .where(and(sql`lower(${entityAliases.alias}) = lower(${text})`, eq(entityAliases.entityType, 'requirement')));
     return a?.id ?? null;
   }
 

@@ -111,6 +111,12 @@ describe('链接写入', () => {
     const dc = await addDocumentComment(t.db, editor, prd.id, { body: '对应 [[PAN-T-1]]' });
     expect(await linksOf('comment', dc.id)).toMatchObject([{ targetType: 'task', targetId: task.id }]);
   });
+
+  it('旧编号不区分大小写', async () => {
+    await withOrg(t.db, owner.orgId, (tx) => tx.insert(entityAliases).values({ orgId: owner.orgId, entityType: 'requirement', entityId: login.id, alias: 'push-12' }));
+    const src = await createRequirement(t.db, owner, pan, { title: '大写旧编号', description: '[[PUSH-12]]' });
+    expect(await linksOf('requirement', src.id)).toMatchObject([{ targetType: 'requirement', targetId: login.id }]);
+  });
 });
 
 describe('悬空链接自动接上', () => {
