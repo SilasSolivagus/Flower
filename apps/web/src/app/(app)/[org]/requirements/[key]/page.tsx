@@ -114,7 +114,7 @@ export default function RequirementPage() {
           <PrdCard org={org} requirement={r} />
           <FieldsPanel org={org} requirement={r} />
           <Assignments org={org} requirement={r} />
-          <SideLists requirement={r} />
+          <SideLists org={org} requirement={r} />
           <Releases org={org} requirement={r} />
         </div>
       </div>

@@ -52,6 +52,7 @@ function Sections({ data }: { data: Workbench }) {
           <li key={t.id}>
             <Link href={taskHref(t)} className={ROW}>
               <OrgBadge show={badge} name={t.org.name} />
+              <span className="shrink-0 font-mono text-xs text-muted-foreground">{t.displayKey}</span>
               <span className="flex-1 truncate">{t.title}</span>
               {t.requirement && <span className="font-mono text-xs text-muted-foreground">{t.requirement.displayKey}</span>}
               {t.iteration && <span className="text-xs text-muted-foreground">{t.iteration.name}</span>}

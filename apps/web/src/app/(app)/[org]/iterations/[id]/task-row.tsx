@@ -80,6 +80,9 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
         </TableCell>
         <TableCell className="overflow-hidden">
           <div className="flex min-w-0 items-center gap-2">
+            <Link href={`/${org}/tasks/${t.displayKey}`} className="shrink-0 font-mono text-[12px] text-muted-foreground hover:underline">
+              {t.displayKey}
+            </Link>
             <Input
               key={fieldKey('alias', t.alias)}
               aria-label={`别名 ${label}`}
