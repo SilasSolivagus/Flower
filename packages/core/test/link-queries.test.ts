@@ -5,7 +5,7 @@ import { withOrg } from '../src/db/tx';
 import { addDocumentComment } from '../src/documents/comments';
 import { createDocument, type DocumentDetail, saveDocumentContent } from '../src/documents/documents';
 import type { Actor } from '../src/domain-types';
-import { createIteration, type IterationView } from '../src/iterations/iterations';
+import { createIteration, deleteIteration, type IterationView } from '../src/iterations/iterations';
 import { listBacklinks } from '../src/links/backlinks';
 import { type LinkCard, listDocumentLinkCards } from '../src/links/cards';
 import { addRequirementComment, listRequirementComments } from '../src/requirements/comments';
@@ -99,6 +99,15 @@ describe('链接卡', () => {
     expect(cards[victim.displayKey]).toMatchObject({ state: 'canceled', status: { label: '已取消' }, href: `requirements/${victim.displayKey}` });
     expect(cards[gone.displayKey]).toMatchObject({ state: 'deleted', href: null });
     expect(cards[tmp.displayKey]).toMatchObject({ state: 'deleted', title: null, href: null });
+  });
+
+  it('迭代删除后来源再保存，链接卡显示已删除', async () => {
+    const doomed = await createIteration(t.db, owner, regularIteration(pan, '待删迭代', '2026-04-06', '2026-04-17'));
+    const src = await createRequirement(t.db, owner, pan, { title: '引用方三', description: '[[迭代:待删迭代]]' });
+    await deleteIteration(t.db, owner, doomed.id);
+    await updateRequirement(t.db, owner, src.id, { description: '排期 [[迭代:待删迭代]]' });
+    const cards = byText((await getRequirementByKey(t.db, owner, src.displayKey)).links);
+    expect(cards['PAN/迭代:待删迭代']).toMatchObject({ state: 'deleted', href: null });
   });
 
   it('评论的链接卡随评论返回；PRD 正文的链接卡单独读取', async () => {

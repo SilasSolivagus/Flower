@@ -124,12 +124,24 @@ function sectionStarts(body: string): Array<{ start: number; heading: string | n
 /**
  * 重建一个来源的 [[ ]] 链接：删除该来源全部 wikilink 行后按正文重新解析写入，在来源对象的写事务里调用。
  * 同一小节内指向同一规范写法的只记一条；已存在的组合保留原来的 created_at（「被引用」显示第一次引用的时间）。
+ * 按写法解析不到、但原来已接上的链接沿用原目标：迭代、节点改名或被删除后，原文里的旧写法仍指向它。
  */
 export async function syncSourceLinks(tx: Tx, orgId: string, source: LinkSource, text: string, opts: { markdown?: boolean } = {}): Promise<number> {
   const body = text.replace(/\r\n?/g, '\n');
   const mine = and(eq(entityLinks.sourceType, source.type), eq(entityLinks.sourceId, source.id), eq(entityLinks.origin, 'wikilink'));
-  const before = await tx.select({ sourceSection: entityLinks.sourceSection, targetText: entityLinks.targetText, createdAt: entityLinks.createdAt }).from(entityLinks).where(mine);
+  const before = await tx
+    .select({
+      sourceSection: entityLinks.sourceSection,
+      targetText: entityLinks.targetText,
+      targetType: entityLinks.targetType,
+      targetId: entityLinks.targetId,
+      targetSection: entityLinks.targetSection,
+      createdAt: entityLinks.createdAt,
+    })
+    .from(entityLinks)
+    .where(mine);
   const firstSeen = new Map(before.map((r) => [`${r.sourceSection ?? ''}\u0000${r.targetText}`, r.createdAt]));
+  const linked = new Map(before.filter((r) => r.targetId).map((r) => [r.targetText, { targetType: r.targetType, targetId: r.targetId, targetSection: r.targetSection }]));
   await tx.delete(entityLinks).where(mine);
   const sections = opts.markdown ? sectionStarts(body) : [];
   const resolver = new Resolver(tx);
@@ -137,7 +149,9 @@ export async function syncSourceLinks(tx: Tx, orgId: string, source: LinkSource,
   const values: Array<typeof entityLinks.$inferInsert> = [];
   for (const link of parseWikilinks(body)) {
     const sourceSection = sections.filter((s) => s.start <= link.start).at(-1)?.heading ?? null;
-    const resolved = await resolver.resolve(link.target, source.productKey);
+    const fresh = await resolver.resolve(link.target, source.productKey);
+    const kept = fresh.targetId ? undefined : linked.get(fresh.targetText);
+    const resolved = kept ? { ...fresh, ...kept } : fresh;
     const key = `${sourceSection ?? ''}\u0000${resolved.targetText}`;
     if (seen.has(key)) continue;
     seen.add(key);

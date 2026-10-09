@@ -45,7 +45,7 @@ test('迭代改名后链接不断；PRD 小节有效、改名后失效；迭代�
 
   await ok(
     request.put(`/api/v1/orgs/acme/documents/${doc.id}/content`, {
-      data: { baseVersion: doc.version + 1, markdown: `## 1. 现状\n\n排期见 [[迭代:迭代0316-改]]，任务 [[${task.displayKey}]]。` },
+      data: { baseVersion: doc.version + 1, markdown: `## 1. 现状\n\n排期见 [[迭代:迭代0316]]，任务 [[${task.displayKey}]]。` },
     }),
   );
   await page.reload();
@@ -61,6 +61,8 @@ test('迭代改名后链接不断；PRD 小节有效、改名后失效；迭代�
   await expect(page.getByRole('region', { name: /被引用/ }).getByRole('link', { name: new RegExp(`^${doc.displayKey} `) })).toBeVisible();
 
   await page.goto(`/acme/documents/${doc.displayKey}`);
+  // 迭代改名后 PRD 按原文再保存，正文里的旧写法仍指向该迭代，链接卡显示新名称
+  await expect(page.getByRole('region', { name: '正文' }).getByRole('link', { name: '迭代:迭代0316-改 规划中' })).toBeVisible();
   await expect(page.getByRole('region', { name: /被引用/ }).getByRole('link', { name: new RegExp(`^${src.displayKey} `) })).toBeVisible();
 });
 

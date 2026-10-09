@@ -158,4 +158,16 @@ describe('悬空链接自动接上', () => {
     await moveStructureNode(t.db, owner, moved.id, { parentId: newDomain.id });
     expect(await targetIds(src.id)).toEqual({ 'NEW/迭代:二期': it2.id, 'NEW/迭代:三期': it2.id, 'NEW/增长/拉新': child.id, 'NEW/新域/模块甲': moved.id });
   });
+
+  it('迭代或节点改名后，来源按原文再保存，链接仍指向原目标', async () => {
+    const it4 = await createIteration(t.db, owner, regularIteration(neo, '四期', '2026-12-01', '2026-12-11'));
+    const ops = await createStructureNode(t.db, owner, neo, { name: '运营' });
+    const src = await createRequirement(t.db, owner, pan, { title: '改名后重存', description: '[[NEW/迭代:四期]] [[NEW/运营]]' });
+    await updateIteration(t.db, owner, it4.id, { name: '四期改' });
+    await updateStructureNode(t.db, owner, ops.id, { name: '运营中心' });
+    await updateRequirement(t.db, owner, src.id, { description: '排期 [[NEW/迭代:四期]] [[NEW/运营]]' });
+    expect(await targetIds(src.id)).toEqual({ 'NEW/迭代:四期': it4.id, 'NEW/运营': ops.id });
+    const rows = await linksOf('requirement', src.id);
+    expect(Object.fromEntries(rows.map((r) => [r.targetText, r.targetType]))).toEqual({ 'NEW/迭代:四期': 'iteration', 'NEW/运营': 'structure_node' });
+  });
 });
