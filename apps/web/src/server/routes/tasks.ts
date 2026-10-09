@@ -2,6 +2,7 @@ import {
   createTask,
   deleteTask,
   getIterationGantt,
+  getTaskByKey,
   listMemberTasks,
   listRequirementTasks,
   TASK_FLAGS,
@@ -36,6 +37,8 @@ export function registerTaskRoutes(app: App, deps: ApiDeps): void {
   app.get('/orgs/:org/members/:id/tasks', async (c) =>
     c.json(await listMemberTasks(deps.db, c.get('actor'), c.req.param('id'), { includeFinished: c.req.query('all') === '1' })),
   );
+
+  app.get('/orgs/:org/tasks/:key', async (c) => c.json({ task: await getTaskByKey(deps.db, c.get('actor'), c.req.param('key')) }));
 
   app.post('/orgs/:org/tasks', async (c) => {
     const body = await readJson(

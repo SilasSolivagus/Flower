@@ -5,6 +5,8 @@ import { toast } from 'sonner';
 import { ApiError, api } from './api';
 import type {
   Account,
+  BacklinkGroup,
+  BacklinkTargetType,
   DocumentComment,
   DocumentDetail,
   DocumentListItem,
@@ -21,6 +23,8 @@ import type {
   IterationScope,
   Invitation,
   LevelNames,
+  LinkCard,
+  LinkSuggestion,
   Member,
   MemberTasks,
   MyOrg,
@@ -35,6 +39,7 @@ import type {
   RevisionDiff,
   ReviewQueue,
   StructureNode,
+  TaskDetail,
   Token,
   Workbench,
   WorkflowDefinition,
@@ -78,6 +83,10 @@ export const qk = {
   documentComments: (o: string, id: string) => ['org', o, 'documents', 'comments', id] as const,
   documentReviews: (o: string, productId: string) => ['org', o, 'documents', 'reviews', productId] as const,
   templates: (o: string, scope: string) => ['org', o, 'templates', scope] as const,
+  backlinks: (o: string, type: string, id: string) => ['org', o, 'links', 'backlinks', type, id] as const,
+  documentLinks: (o: string, id: string) => ['org', o, 'links', 'document', id] as const,
+  linkSearch: (o: string, productId: string, q: string) => ['org', o, 'links', 'search', productId, q] as const,
+  task: (o: string, key: string) => ['org', o, 'tasks', 'detail', key] as const,
 };
 
 export const useSetupStatus = () => useQuery({ queryKey: qk.setup, queryFn: () => api<InstanceStatus>('/setup/status') });
@@ -266,6 +275,28 @@ export const useTemplates = (o: string, opts: { productId?: string; usable?: boo
     select: (d) => d.templates,
     enabled,
   });
+
+/** 链接相关查询的公共前缀：需求描述、PRD 正文、评论保存后统一失效（链接卡、「被引用」、补全）。 */
+export const linkKeys = (o: string) => ['org', o, 'links'] as const;
+
+export const useBacklinks = (o: string, type: BacklinkTargetType, id: string) =>
+  useQuery({
+    queryKey: qk.backlinks(o, type, id),
+    queryFn: () => api<{ groups: BacklinkGroup[] }>(`/orgs/${o}/backlinks?${new URLSearchParams({ type, id })}`),
+    select: (d) => d.groups,
+  });
+export const useDocumentLinks = (o: string, id: string) =>
+  useQuery({ queryKey: qk.documentLinks(o, id), queryFn: () => api<{ cards: LinkCard[] }>(`/orgs/${o}/documents/${id}/links`), select: (d) => d.cards });
+export const useLinkSearch = (o: string, productId: string, q: string, enabled: boolean) =>
+  useQuery({
+    queryKey: qk.linkSearch(o, productId, q.trim()),
+    queryFn: () => api<{ suggestions: LinkSuggestion[] }>(`/orgs/${o}/links/search?${new URLSearchParams({ product: productId, q: q.trim() })}`),
+    select: (d) => d.suggestions,
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+export const useTask = (o: string, key: string) =>
+  useQuery({ queryKey: qk.task(o, key), queryFn: () => api<{ task: TaskDetail }>(`/orgs/${o}/tasks/${encodeURIComponent(key)}`), select: (d) => d.task });
 
 type MutationOptions<TData, TVars> = {
   invalidate?: ReadonlyArray<readonly unknown[]>;
