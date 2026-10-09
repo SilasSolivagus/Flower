@@ -223,7 +223,8 @@ export function fillTemplate(body: string, vars: { date: string; author: string 
   return body.replaceAll('{{date}}', vars.date).replaceAll('{{author}}', vars.author);
 }
 
-const normHeading = (s: string): string => s.replace(/^[\d.、\s]+/, '').replace(/\s+/g, '');
+/** 小节标题的比较形式：去掉开头的数字编号与全部空白。必填小节、评论所在小节与 [[PRD#小节]] 共用。 */
+export const normalizeHeading = (s: string): string => s.replace(/^[\d.、\s]+/, '').replace(/\s+/g, '');
 
 /**
  * 缺少或未填写的必填小节（按模板顺序返回模板里的标题）。标题去掉开头的数字编号与空白后相等即为同一小节；
@@ -248,7 +249,7 @@ export function missingRequiredSections(markdown: string, template: { body: stri
   return template.sections
     .filter((t) => t.required)
     .filter((t) => {
-      const i = sections.findIndex((s) => s.heading !== null && normHeading(s.heading) === normHeading(t.heading));
+      const i = sections.findIndex((s) => s.heading !== null && normalizeHeading(s.heading) === normalizeHeading(t.heading));
       if (i === -1) return true;
       const own = [sections[i]!];
       for (let j = i + 1; j < sections.length && sections[j]!.level > sections[i]!.level; j++) own.push(sections[j]!);
