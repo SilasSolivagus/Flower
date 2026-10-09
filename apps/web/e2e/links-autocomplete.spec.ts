@@ -19,8 +19,8 @@ test('需求描述：输入 [[ 弹出补全，按标题搜索、回车插入；E
   await input.click();
   await page.keyboard.type('依赖 [[登录');
   const list = page.getByRole('listbox', { name: '链接补全' });
-  // 等防抖查询结算为「登录」：期间列表可能先显示防抖前的默认建议（本产品最近更新的需求），故先等列表收敛到唯一一条再按回车
-  await expect(list.getByRole('option')).toHaveCount(1);
+  // 等列表落定到「登录」这次查询（不是防抖前的默认建议）再按回车
+  await expect(list).not.toHaveAttribute('aria-busy', 'true');
   await expect(list.getByRole('option', { name: /PAN-1.*登录改版/ })).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(input).toHaveValue('依赖 [[PAN-1]]');
@@ -46,11 +46,12 @@ test('需求评论：选中 PRD 后继续选小节，上下键选择；发表后
   await input.click();
   await page.keyboard.type('PRD 见 [[PAN-PRD');
   const list = page.getByRole('listbox', { name: '链接补全' });
-  // 同上：等防抖查询结算为「PAN-PRD」后列表收敛到唯一一条再按回车
-  await expect(list.getByRole('option')).toHaveCount(1);
+  // 同上：等列表落定到「PAN-PRD」这次查询再按回车
+  await expect(list).not.toHaveAttribute('aria-busy', 'true');
   await expect(list.getByRole('option', { name: /PAN-PRD-1.*登录 PRD/ })).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(input).toHaveValue('PRD 见 [[PAN-PRD-1#');
+  await expect(list).not.toHaveAttribute('aria-busy', 'true');
   await expect(list.getByRole('option', { name: /整篇/ })).toBeVisible();
   await expect(list.getByRole('option')).toHaveCount(3);
   await page.keyboard.press('ArrowDown');
@@ -70,7 +71,9 @@ test('PRD 评论区的输入框同样支持 [[ 补全', async ({ page, request }
   const input = page.getByRole('region', { name: /^评论/ }).getByRole('textbox', { name: '发表评论' });
   await input.click();
   await page.keyboard.type('对应 [[PAN-1');
-  await expect(page.getByRole('listbox', { name: '链接补全' }).getByRole('option', { name: /PAN-1.*登录改版/ })).toBeVisible();
+  const list = page.getByRole('listbox', { name: '链接补全' });
+  await expect(list).not.toHaveAttribute('aria-busy', 'true');
+  await expect(list.getByRole('option', { name: /PAN-1.*登录改版/ })).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(input).toHaveValue('对应 [[PAN-1]]');
 });
@@ -93,4 +96,29 @@ test('划词评论对话框：输入 [[ 弹出补全，Esc 只关闭补全列表
   await page.keyboard.press('Escape');
   await expect(list).toBeHidden();
   await expect(dialog).toBeVisible();
+});
+
+test('打完查询立刻按回车：防抖还没落定时不插入陈旧结果，等列表落定后回车才插入正确的目标', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  await createRequirement(request, productId, '登录改版');
+  const src = await createRequirement(request, productId, '引用方');
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/requirements/${src.displayKey}`);
+  const desc = page.getByRole('region', { name: '描述' });
+  await desc.getByRole('button', { name: '编辑' }).click();
+  const input = desc.getByRole('textbox', { name: '描述' });
+  await input.click();
+  await page.keyboard.type('依赖 [[');
+  const list = page.getByRole('listbox', { name: '链接补全' });
+  // 先等查询为空时的默认建议加载出来，确保列表不是空的（否则这次回车会被当成普通换行）
+  await expect(list).toBeVisible();
+  // 紧接着打完查询立刻按回车：防抖 150ms 还没过去，列表此时显示的还是上一次（空查询）的默认建议
+  await page.keyboard.type('登录');
+  await page.keyboard.press('Enter');
+  await expect(input).toHaveValue('依赖 [[登录');
+  // 等列表落定到「登录」这次查询，回车才真正插入
+  await expect(list).not.toHaveAttribute('aria-busy', 'true');
+  await expect(list.getByRole('option', { name: /PAN-1.*登录改版/ })).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(input).toHaveValue('依赖 [[PAN-1]]');
 });

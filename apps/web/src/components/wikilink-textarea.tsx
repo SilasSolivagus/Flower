@@ -36,16 +36,19 @@ export function WikilinkTextarea({ org, productId, value, onValueChange, onOpenC
   }
 
   // 防抖查询：至少 150ms 不再变化才传给 useLinkSearch；keepPreviousData 让列表在等待期间不闪烁
-  const [debouncedQuery, setDebouncedQuery] = useState(q?.query ?? '');
+  const query = q?.query ?? null;
+  const [debouncedQuery, setDebouncedQuery] = useState(query ?? '');
   useEffect(() => {
-    if (q === null) return;
-    const timer = setTimeout(() => setDebouncedQuery(q.query), DEBOUNCE_MS);
+    if (query === null) return;
+    const timer = setTimeout(() => setDebouncedQuery(query), DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [q]);
+  }, [query]);
 
   const search = useLinkSearch(org, productId, debouncedQuery, open);
   const items = open ? (search.data ?? []) : [];
   const index = Math.min(active, Math.max(items.length - 1, 0));
+  // 结果是否对应当前输入：防抖未落定或正在用上一次查询的结果占位时都算未结算，回车不应采用
+  const settled = q !== null && debouncedQuery.trim() === q.query.trim() && !search.isPlaceholderData;
 
   useEffect(() => {
     onOpenChange?.(open && items.length > 0);
@@ -64,7 +67,8 @@ export function WikilinkTextarea({ org, productId, value, onValueChange, onOpenC
   };
 
   const keyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (open && q && !e.nativeEvent.isComposing) {
+    // Safari 下确认输入法组字的 Enter：isComposing 已为 false，但 keyCode 仍是 229
+    if (open && q && !e.nativeEvent.isComposing && e.keyCode !== 229) {
       if (items.length > 0 && e.key === 'ArrowDown') {
         e.preventDefault();
         setActive((index + 1) % items.length);
@@ -76,8 +80,9 @@ export function WikilinkTextarea({ org, productId, value, onValueChange, onOpenC
         return;
       }
       if (items.length > 0 && e.key === 'Enter') {
+        // 列表还没落定到当前输入时，回车不采用上一次查询留下的结果；继续显示旧列表，不吞掉这次按键之外的副作用
         e.preventDefault();
-        pick(index);
+        if (settled) pick(index);
         return;
       }
       if (e.key === 'Escape') {
@@ -109,7 +114,13 @@ export function WikilinkTextarea({ org, productId, value, onValueChange, onOpenC
         }}
       />
       {open && items.length > 0 && (
-        <ul id={listId} role="listbox" aria-label="链接补全" className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover p-1 text-[13px] shadow-md">
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label="链接补全"
+          aria-busy={!settled}
+          className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover p-1 text-[13px] shadow-md"
+        >
           {items.map((s, i) => (
             <li
               key={`${s.kind}:${s.insert}`}
