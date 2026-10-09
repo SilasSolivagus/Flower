@@ -7,8 +7,8 @@ import { QueryError } from '@/components/load-error';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
 import { WikiText } from '@/components/wiki-text';
+import { WikilinkTextarea } from '@/components/wikilink-textarea';
 import type { SelectionAnchor } from '@/features/documents/editor/selection';
 import { ANCHOR_STATE_LABEL, groupThreads } from '@/features/documents/model';
 import { formatDateTime } from '@/features/requirements/format';
@@ -107,7 +107,7 @@ export function DocumentComments({ org, doc }: { org: string; doc: DocumentDetai
                     add.mutate({ body: reply, parentId: c.id }, { onSuccess: () => setReplyTo(null) });
                   }}
                 >
-                  <Textarea aria-label="回复内容" className="min-h-16 text-[13px]" value={reply} onChange={(e) => setReply(e.target.value)} />
+                  <WikilinkTextarea org={org} productId={doc.productId} aria-label="回复内容" className="min-h-16 text-[13px]" value={reply} onValueChange={setReply} />
                   <div className="flex gap-2">
                     <Button type="submit" size="sm" disabled={add.isPending || !reply.trim()}>
                       发送回复
@@ -129,7 +129,7 @@ export function DocumentComments({ org, doc }: { org: string; doc: DocumentDetai
           add.mutate({ body }, { onSuccess: () => setBody('') });
         }}
       >
-        <Textarea aria-label="发表评论" placeholder="对整篇 PRD 的意见" className="min-h-20 text-[13px]" value={body} onChange={(e) => setBody(e.target.value)} />
+        <WikilinkTextarea org={org} productId={doc.productId} aria-label="发表评论" placeholder="对整篇 PRD 的意见" className="min-h-20 text-[13px]" value={body} onValueChange={setBody} />
         <FormError error={add.error} />
         <div className="flex justify-end">
           <Button type="submit" size="sm" disabled={add.isPending || !body.trim()}>
@@ -142,9 +142,10 @@ export function DocumentComments({ org, doc }: { org: string; doc: DocumentDetai
 }
 
 /** 选中正文文字后的评论对话框。 */
-export function AnchorCommentDialog({ documentId, anchor, onClose }: { documentId: string; anchor: SelectionAnchor | null; onClose: () => void }) {
+export function AnchorCommentDialog({ documentId, productId, anchor, onClose }: { documentId: string; productId: string; anchor: SelectionAnchor | null; onClose: () => void }) {
   const { org } = useParams<{ org: string }>();
   const [body, setBody] = useState('');
+  const [completing, setCompleting] = useState(false);
   const add = useApiMutation(() => api(`/orgs/${org}/documents/${documentId}/comments`, { method: 'POST', body: { body, anchor } }), {
     silentError: true,
     invalidate: [qk.documentComments(org, documentId), linkKeys(org)],
@@ -164,12 +165,12 @@ export function AnchorCommentDialog({ documentId, anchor, onClose }: { documentI
         }
       }}
     >
-      <DialogContent>
+      <DialogContent onEscapeKeyDown={(e) => { if (completing) e.preventDefault(); }}>
         <DialogHeader>
           <DialogTitle>评论选中的文字</DialogTitle>
         </DialogHeader>
         <blockquote className="border-l-2 pl-2 text-[13px] text-muted-foreground">{anchor?.quote}</blockquote>
-        <Textarea aria-label="评论内容" className="min-h-20 text-[13px]" value={body} onChange={(e) => setBody(e.target.value)} />
+        <WikilinkTextarea org={org} productId={productId} aria-label="评论内容" className="min-h-20 text-[13px]" value={body} onValueChange={setBody} onOpenChange={setCompleting} />
         <FormError error={add.error} />
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

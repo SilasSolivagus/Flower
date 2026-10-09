@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { WikiText } from '@/components/wiki-text';
+import { WikilinkTextarea } from '@/components/wikilink-textarea';
 import { formatDateTime } from '@/features/requirements/format';
 import { api } from '@/lib/api';
 import { linkKeys, qk, useApiMutation, useRequirementComments } from '@/lib/queries';
 
-export function Comments({ org, requirementId, productKey }: { org: string; requirementId: string; productKey: string }) {
+export function Comments({ org, requirementId, productId, productKey }: { org: string; requirementId: string; productId: string; productKey: string }) {
   const comments = useRequirementComments(org, requirementId);
   const [body, setBody] = useState('');
   const add = useApiMutation(() => api(`/orgs/${org}/requirements/${requirementId}/comments`, { method: 'POST', body: { body } }), {
@@ -49,7 +49,7 @@ export function Comments({ org, requirementId, productKey }: { org: string; requ
           add.mutate(undefined);
         }}
       >
-        <Textarea aria-label="写评论" placeholder="写评论…" value={body} maxLength={10000} onChange={(e) => setBody(e.target.value)} />
+        <WikilinkTextarea org={org} productId={productId} aria-label="写评论" placeholder="写评论…" value={body} maxLength={10000} onValueChange={setBody} />
         <div className="flex justify-end">
           <Button type="submit" size="sm" disabled={!body.trim() || add.isPending}>
             发表

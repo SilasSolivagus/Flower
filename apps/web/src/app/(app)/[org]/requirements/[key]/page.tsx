@@ -9,8 +9,8 @@ import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Textarea } from '@/components/ui/textarea';
 import { WikiText } from '@/components/wiki-text';
+import { WikilinkTextarea } from '@/components/wikilink-textarea';
 import { api } from '@/lib/api';
 import { documentKeys, linkKeys, qk, requirementKeys, useApiMutation, useRequirement } from '@/lib/queries';
 import { Blockers } from './blockers';
@@ -82,7 +82,7 @@ export default function RequirementPage() {
                   patch.mutate({ description }, { onSuccess: () => setEditingDesc(false) });
                 }}
               >
-                <Textarea aria-label="描述" className="min-h-48 text-[13px]" value={description} onChange={(e) => setDescription(e.target.value)} />
+                <WikilinkTextarea org={org} productId={r.productId} aria-label="描述" className="min-h-48 text-[13px]" value={description} onValueChange={setDescription} />
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="ghost" size="sm" onClick={() => setEditingDesc(false)}>
                     取消
@@ -111,7 +111,7 @@ export default function RequirementPage() {
           <Blockers org={org} requirement={r} />
           <Relations org={org} requirement={r} />
           <Backlinks org={org} type="requirement" id={r.id} />
-          <Comments org={org} requirementId={r.id} productKey={r.productKey} />
+          <Comments org={org} requirementId={r.id} productId={r.productId} productKey={r.productKey} />
           <History requirement={r} />
         </div>
         <div className="flex flex-col gap-4">

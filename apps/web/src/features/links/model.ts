@@ -1,5 +1,5 @@
 import { canonicalWikiText } from '@flower/core/links';
-import type { LinkCard } from '@/lib/types';
+import type { LinkCard, LinkSuggestion } from '@/lib/types';
 
 /** 「被引用」每一条的来源说明：需求描述 / PRD 的小节 / 评论。 */
 export function backlinkViaLabel(item: { via: 'description' | 'body' | 'comment'; section: string | null }): string {
@@ -34,3 +34,33 @@ export function cardLabel(card: LinkCard | null, target: string, label: string |
   if (!card) return `${target} 未解析`;
   return [card.displayKey, label ?? card.title, card.status?.label, LINK_STATE_NOTE[card.state]].filter(Boolean).join(' ');
 }
+
+export type WikiQuery = { start: number; query: string };
+
+const MAX_QUERY = 60;
+
+/** 光标前正在输入的 [[ 补全：最近一个未转义的 [[ 到光标之间的文字，不含 [、]、换行，最多 60 字。 */
+export function activeWikiQuery(value: string, caret: number): WikiQuery | null {
+  const before = value.slice(0, caret);
+  const start = before.lastIndexOf('[[');
+  if (start === -1 || before[start - 1] === '\\') return null;
+  const query = before.slice(start + 2);
+  if (query.length > MAX_QUERY || /[[\]\n]/.test(query)) return null;
+  return { start, query };
+}
+
+/** 选中补全项：闭合为 [[insert]]；选的是 PRD（next 为 sections）时改为 [[insert#，继续选小节。 */
+export function applyCompletion(value: string, q: WikiQuery, caret: number, s: Pick<LinkSuggestion, 'insert' | 'next'>): { value: string; caret: number } {
+  const head = value.slice(0, q.start);
+  const inserted = s.next === 'sections' ? `[[${s.insert}#` : `[[${s.insert}]]`;
+  return { value: head + inserted + value.slice(caret), caret: head.length + inserted.length };
+}
+
+export const SUGGESTION_KIND_LABEL: Record<LinkSuggestion['kind'], string> = {
+  requirement: '需求',
+  document: 'PRD',
+  section: '小节',
+  task: '任务',
+  iteration: '迭代',
+  structure_node: '结构树',
+};

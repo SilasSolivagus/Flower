@@ -235,7 +235,7 @@ export function EditorPane({ org, doc, onReload, ref }: { org: string; doc: Docu
           </Button>
         )}
       </div>
-      <AnchorCommentDialog documentId={doc.id} anchor={commenting} onClose={() => setCommenting(null)} />
+      <AnchorCommentDialog documentId={doc.id} productId={doc.productId} anchor={commenting} onClose={() => setCommenting(null)} />
     </section>
   );
 }

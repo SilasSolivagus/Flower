@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LinkCard } from '@/lib/types';
-import { backlinkViaLabel, cardFor, cardHref, cardLabel, isGrey } from './model';
+import { activeWikiQuery, applyCompletion, backlinkViaLabel, cardFor, cardHref, cardLabel, isGrey } from './model';
 
 describe('「被引用」的来源说明', () => {
   it('需求描述、PRD 小节（无小节时为正文）、评论', () => {
@@ -44,5 +44,22 @@ describe('链接卡', () => {
     ).toBe('PAN-PRD-1#方案 登录 PRD 草稿 小节已失效');
     expect(cardLabel(card({ state: 'hidden', displayKey: 'DOC-1', title: null, status: null, href: null }), 'DOC-1')).toBe('DOC-1');
     expect(cardLabel(null, 'PAN-9')).toBe('PAN-9 未解析');
+  });
+});
+
+describe('[[ 补全', () => {
+  it('光标前未闭合、未转义、不跨行的 [[ 才算正在补全', () => {
+    expect(activeWikiQuery('见 [[登录', 6)).toEqual({ start: 2, query: '登录' });
+    expect(activeWikiQuery('见 [[', 4)).toEqual({ start: 2, query: '' });
+    expect(activeWikiQuery('见 [[PAN-1]] 和', 12)).toBeNull();
+    expect(activeWikiQuery('[[登\n录', 5)).toBeNull();
+    expect(activeWikiQuery('\\[[登录', 5)).toBeNull();
+    expect(activeWikiQuery('见 [[登录', 3)).toBeNull();
+  });
+
+  it('选中后闭合；选 PRD 时改为 [[KEY#，光标落在插入内容之后', () => {
+    const q = activeWikiQuery('见 [[登录 吧', 6)!;
+    expect(applyCompletion('见 [[登录 吧', q, 6, { insert: 'PAN-1', next: 'insert' })).toEqual({ value: '见 [[PAN-1]] 吧', caret: 11 });
+    expect(applyCompletion('见 [[登录 吧', q, 6, { insert: 'PAN-PRD-1', next: 'sections' })).toEqual({ value: '见 [[PAN-PRD-1# 吧', caret: 14 });
   });
 });
