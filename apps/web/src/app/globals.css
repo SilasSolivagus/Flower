@@ -111,3 +111,12 @@
 a.wikilink-card:hover {
   text-decoration: underline;
 }
+
+/* PRD 编辑器：未解决的划词评论 */
+.comment-anchor {
+  background: rgba(251, 191, 36, 0.28);
+  cursor: pointer;
+}
+.comment-anchor-active {
+  background: rgba(251, 191, 36, 0.6);
+}

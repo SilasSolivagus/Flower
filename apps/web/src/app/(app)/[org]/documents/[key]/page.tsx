@@ -27,6 +27,8 @@ function DocumentPage() {
   const [converting, setConverting] = useState(false);
   // 正文被外部替换（冲突后重新加载、恢复版本、导入）时加一，让编辑器按最新正文重新挂载
   const [epoch, setEpoch] = useState(0);
+  // 正文里点击的评论高亮：评论区滚动并标出这一条，正文里的高亮加深
+  const [focus, setFocus] = useState<{ id: string; seq: number } | null>(null);
   const reload = async () => {
     // 取数失败时不重新挂载编辑器，免得它用旧正文覆盖掉错误提示前的状态
     if ((await q.refetch()).isError) return;
@@ -64,8 +66,8 @@ function DocumentPage() {
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-w-0 flex-col gap-4">
-          {d.source === 'native' ? <EditorPane key={`${d.id}:${epoch}`} ref={editor} org={org} doc={d} onReload={() => void reload()} section={searchParams.get('section')} /> : <ExternalCard org={org} doc={d} onConvert={() => setConverting(true)} />}
-          <DocumentComments org={org} doc={d} />
+          {d.source === 'native' ? <EditorPane key={`${d.id}:${epoch}`} ref={editor} org={org} doc={d} onReload={() => void reload()} section={searchParams.get('section')} activeCommentId={focus?.id ?? null} onAnchorClick={(id) => setFocus((f) => ({ id, seq: (f?.seq ?? 0) + 1 }))} /> : <ExternalCard org={org} doc={d} onConvert={() => setConverting(true)} />}
+          <DocumentComments org={org} doc={d} focus={focus} />
           <Backlinks org={org} type="document" id={d.id} />
         </div>
         <SidePanel org={org} doc={d} onReload={() => void reload()} saveEditor={saveEditor} />

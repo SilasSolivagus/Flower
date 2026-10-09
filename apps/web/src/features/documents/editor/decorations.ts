@@ -2,11 +2,12 @@ import { createExtension } from '@blocknote/core';
 import { type TextPart, wikiRangesInBlock } from '@flower/core/links';
 import { type EditorState, Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
+import { type EditorAnchor, locateAnchorRange, type TextSegment } from '@/features/documents/model';
 import { cardFor, cardLabel, isGrey, LINK_STATE_NOTE } from '@/features/links/model';
 import type { LinkCard } from '@/lib/types';
 
-/** 推给编辑器的显示数据：正文里 [[ ]] 的链接卡。只影响显示，不改正文。 */
-export type DecorationInput = { org: string; productKey: string; cards: LinkCard[] };
+/** 推给编辑器的显示数据：正文里 [[ ]] 的链接卡与要高亮的评论锚点。只影响显示，不改正文。 */
+export type DecorationInput = { org: string; productKey: string; cards: LinkCard[]; anchors: EditorAnchor[]; activeAnchorId: string | null };
 type State = { input: DecorationInput | null; set: DecorationSet };
 type Doc = EditorState['doc'];
 
@@ -31,13 +32,17 @@ function chip(card: LinkCard | null, target: string, org: string): HTMLElement {
 function build(doc: Doc, input: DecorationInput | null): DecorationSet {
   if (!input) return DecorationSet.empty;
   const decos: Decoration[] = [];
+  const segments: TextSegment[] = [];
   doc.descendants((node, pos) => {
     if (!node.isTextblock) return true;
-    if (node.type.spec.code) return false;
     const parts: TextPart[] = [];
     node.forEach((child, offset) => {
-      if (child.isText) parts.push({ text: child.text ?? '', pos: pos + 1 + offset, code: child.marks.some((m) => m.type.name === 'code') });
+      if (!child.isText) return;
+      const part = { text: child.text ?? '', pos: pos + 1 + offset, code: child.marks.some((m) => m.type.name === 'code') };
+      parts.push(part);
+      segments.push({ text: part.text, pos: part.pos });
     });
+    if (node.type.spec.code) return false;
     for (const r of wikiRangesInBlock(parts)) {
       const card = cardFor(input.cards, r.target, input.productKey);
       decos.push(Decoration.inline(r.from, r.to, { class: isGrey(card) ? 'wikilink wikilink-grey' : 'wikilink' }));
@@ -51,6 +56,16 @@ function build(doc: Doc, input: DecorationInput | null): DecorationSet {
     }
     return false;
   });
+  for (const a of input.anchors) {
+    const range = locateAnchorRange(segments, a);
+    if (!range) continue;
+    decos.push(
+      Decoration.inline(range.from, range.to, {
+        class: a.id === input.activeAnchorId ? 'comment-anchor comment-anchor-active' : 'comment-anchor',
+        'data-comment-id': a.id,
+      }),
+    );
+  }
   return DecorationSet.create(doc, decos);
 }
 

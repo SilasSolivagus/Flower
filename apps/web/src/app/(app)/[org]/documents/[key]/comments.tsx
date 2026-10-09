@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FormError } from '@/components/form-error';
 import { QueryError } from '@/components/load-error';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import { formatDateTime } from '@/features/requirements/format';
 import { api } from '@/lib/api';
 import { linkKeys, qk, useApiMutation, useDocumentComments, useOrg } from '@/lib/queries';
 import type { DocumentComment, DocumentDetail } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 function Quote({ c }: { c: DocumentComment }) {
   if (!c.anchor && c.anchorState !== 'unanchored') return null;
@@ -32,7 +33,11 @@ function Quote({ c }: { c: DocumentComment }) {
 }
 
 /** PRD 评论区：整篇评论、回复、标为已解决；划词评论显示引用原文、所在小节与失效标记。 */
-export function DocumentComments({ org, doc }: { org: string; doc: DocumentDetail }) {
+export function DocumentComments({ org, doc, focus = null }: { org: string; doc: DocumentDetail; focus?: { id: string; seq: number } | null }) {
+  // 正文里点了某条评论的高亮：滚动到这条（seq 变化时同一条也会再滚动一次）
+  useEffect(() => {
+    if (focus) document.getElementById(`comment-${focus.id}`)?.scrollIntoView({ block: 'center' });
+  }, [focus]);
   const orgQ = useOrg(org);
   const list = useDocumentComments(org, doc.id);
   const [body, setBody] = useState('');
@@ -64,7 +69,12 @@ export function DocumentComments({ org, doc }: { org: string; doc: DocumentDetai
       ) : (
         <ul className="mb-3 flex flex-col divide-y">
           {groupThreads(list.data).map(({ comment: c, replies }) => (
-            <li key={c.id} className="flex flex-col gap-2 py-3">
+            <li
+              key={c.id}
+              id={`comment-${c.id}`}
+              aria-current={focus?.id === c.id ? 'true' : undefined}
+              className={cn('flex flex-col gap-2 py-3', focus?.id === c.id && '-mx-2 rounded-sm bg-amber-50 px-2 dark:bg-amber-900/20')}
+            >
               <Quote c={c} />
               <p className="text-[12px] text-muted-foreground">
                 {c.author?.displayName ?? '已删除的成员'} · <span className="font-mono">{formatDateTime(c.createdAt)}</span>

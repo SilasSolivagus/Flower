@@ -12,9 +12,9 @@ import type { DecorationInput } from '@/features/documents/editor/decorations';
 import type { PrdEditorHandle } from '@/features/documents/editor/prd-editor';
 import { type SelectionAnchor, selectionAnchor } from '@/features/documents/editor/selection';
 import { uploadDataImages } from '@/features/documents/import';
-import { findSectionIndex, type SaveState, saveStateLabel } from '@/features/documents/model';
+import { editorAnchors, findSectionIndex, type SaveState, saveStateLabel } from '@/features/documents/model';
 import { ApiError, api, apiUpload } from '@/lib/api';
-import { linkKeys, qk, useApiMutation, useDocumentLinks } from '@/lib/queries';
+import { linkKeys, qk, useApiMutation, useDocumentComments, useDocumentLinks } from '@/lib/queries';
 import type { Attachment, DocumentDetail, LinkSuggestion } from '@/lib/types';
 import { AnchorCommentDialog } from './comments';
 
@@ -45,6 +45,8 @@ export function EditorPane({
   doc,
   onReload,
   section,
+  activeCommentId = null,
+  onAnchorClick,
   ref,
 }: {
   org: string;
@@ -52,6 +54,10 @@ export function EditorPane({
   onReload: () => void;
   /** 地址栏 ?section=：编辑器渲染后滚动到这个小节。 */
   section?: string | null;
+  /** 评论区当前选中的评论：正文里对应的高亮加深。 */
+  activeCommentId?: string | null;
+  /** 点击正文里的评论高亮。 */
+  onAnchorClick?: (commentId: string) => void;
   ref?: Ref<EditorPaneHandle>;
 }) {
   const editable = doc.myRole !== 'viewer';
@@ -73,7 +79,12 @@ export function EditorPane({
   const qc = useQueryClient();
   const router = useRouter();
   const links = useDocumentLinks(org, doc.id);
-  const decorations = useMemo<DecorationInput>(() => ({ org, productKey: doc.productKey, cards: links.data ?? [] }), [org, doc.productKey, links.data]);
+  const comments = useDocumentComments(org, doc.id);
+  const anchors = useMemo(() => editorAnchors(comments.data ?? []), [comments.data]);
+  const decorations = useMemo<DecorationInput>(
+    () => ({ org, productKey: doc.productKey, cards: links.data ?? [], anchors, activeAnchorId: activeCommentId }),
+    [org, doc.productKey, links.data, anchors, activeCommentId],
+  );
   const searchLinks = useCallback(
     (q: string) => api<{ suggestions: LinkSuggestion[] }>(`/orgs/${org}/links/search?${new URLSearchParams({ product: doc.productId, q })}`).then((r) => r.suggestions),
     [org, doc.productId],
@@ -240,13 +251,17 @@ export function EditorPane({
     return () => clearInterval(timer);
   }, [section]);
 
-  /** 点击正文里的链接卡：站内跳转（编辑区是可编辑区域，浏览器不会自己跟随链接）。 */
+  /** 点击正文里的链接卡：站内跳转（编辑区是可编辑区域，浏览器不会自己跟随链接）；点击评论高亮：交给评论区定位。 */
   const onBodyClick = (e: MouseEvent<HTMLDivElement>) => {
-    const link = (e.target as HTMLElement).closest<HTMLElement>('[data-wikilink-href]');
+    const target = e.target as HTMLElement;
+    const link = target.closest<HTMLElement>('[data-wikilink-href]');
     if (link?.dataset.wikilinkHref) {
       e.preventDefault();
       router.push(link.dataset.wikilinkHref);
+      return;
     }
+    const anchor = target.closest<HTMLElement>('[data-comment-id]');
+    if (anchor?.dataset.commentId) onAnchorClick?.(anchor.dataset.commentId);
   };
 
   return (
