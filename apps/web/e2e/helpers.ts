@@ -127,3 +127,51 @@ export async function textFits(input: Locator): Promise<boolean> {
     return ctx.measureText(el.value).width + (el.type === 'number' ? 16 : 0) <= inner;
   });
 }
+
+export async function createDocument(
+  request: APIRequestContext,
+  productId: string,
+  data: { title: string; templateId?: string; externalUrl?: string; requirementIds?: string[] },
+): Promise<{ id: string; displayKey: string; version: number }> {
+  return (await json<{ document: { id: string; displayKey: string; version: number } }>(request.post(`/api/v1/orgs/acme/products/${productId}/documents`, { data }))).document;
+}
+
+/** 1×1 像素的 PNG（base64），图片上传与导入用例共用。 */
+export const PNG_1PX_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+export async function presetTemplateId(request: APIRequestContext, productId: string): Promise<string> {
+  return (await json<{ templates: Array<{ id: string }> }>(request.get(`/api/v1/orgs/acme/templates?product=${productId}&usable=1`))).templates[0]!.id;
+}
+
+/** 以所有者身份签发一个只读、全部产品的 Token。 */
+export async function readToken(request: APIRequestContext): Promise<string> {
+  const me = (await json<{ me: { memberId: string } }>(request.get('/api/v1/orgs/acme'))).me.memberId;
+  return (await json<{ token: string }>(request.post('/api/v1/orgs/acme/tokens', { data: { memberId: me, name: '只读', scope: { products: 'all', access: 'read' } } }))).token;
+}
+
+/** 给产品换上带 PRD 联动的流程：「PRD」跟随 PRD 状态；「PRD 评审」挂在 PRD 上，由产品管理员会签；进入「开发中」需要 PRD 评审通过。 */
+export async function applyPrdWorkflow(request: APIRequestContext, productId: string): Promise<void> {
+  const wf = await json<{ version: { id: string } }>(
+    request.post('/api/v1/orgs/acme/workflows', {
+      data: {
+        name: 'PRD 流程',
+        body: {
+          states: [
+            { key: 'backlog', label: '收集', color: '#94a3b8', order: 1, group: '', category: 'backlog' },
+            { key: 'doing', label: '开发中', color: '#f59e0b', order: 2, group: '', category: 'started' },
+          ],
+          initial: 'backlog',
+          transitions: [
+            { from: '*', to: 'backlog', conditions: [] },
+            { from: '*', to: 'doing', conditions: [{ type: 'check_item', item: 'prd_review', in: ['passed'] }] },
+          ],
+          checkItems: [
+            { key: 'prd', label: 'PRD', scope: 'requirement', type: 'single', auto: 'prd_status' },
+            { key: 'prd_review', label: 'PRD 评审', scope: 'document', type: 'signoff', signers: [{ by: 'product_role', ref: 'admin' }], signoffRule: 'all' },
+          ],
+        },
+      },
+    }),
+  );
+  await ok(request.put(`/api/v1/orgs/acme/products/${productId}/workflow`, { data: { versionId: wf.version.id } }));
+}

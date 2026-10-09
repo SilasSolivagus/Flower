@@ -58,7 +58,7 @@ export function loadPush(path: string): PushData {
       requirements: all(
         db,
         `select id, title, alias, requester, owner, line, priority, platforms, developers, brief, status, source, version_id, created_at,
-          last_edited_by, last_edited_at, plane_id, merged_into from requirements order by created_at, id`,
+          last_edited_by, last_edited_at, plane_id, prd_url, merged_into from requirements order by created_at, id`,
       ),
       versions: all(db, 'select id, name, start_date, release_date, status, created_at from versions order by release_date, id'),
       ganttTasks: all(
@@ -85,17 +85,41 @@ export function loadPush(path: string): PushData {
   }
 }
 
+const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
+
 export async function loadPrd(url: string): Promise<PrdData> {
   const sql = postgres(url, { max: 1, onnotice: () => {} });
   try {
     const domains = await sql<PrdData['domains']>`select name, type, "group", status, display_order from prd_domains order by display_order, name`;
-    const users = await sql<PrdData['users']>`select email, name from users order by email`;
+    const users = await sql<PrdData['users']>`select id, email, name from users order by email`;
+    const pages = await sql<Array<Omit<PrdData['pages'][number], 'created_at' | 'updated_at'> & { created_at: Date; updated_at: Date }>>`
+      select id::text, title, markdown, version, prd_meta->>'status' as status, prd_meta->>'ownerUserId' as owner_user_id,
+             created_by, updated_by, created_at, updated_at, linked_requirement_id
+      from pages where deleted_at is null order by created_at, id`;
+    const live = sql`(select id from pages where deleted_at is null)`;
+    const versions = await sql<Array<Omit<PrdData['pageVersions'][number], 'created_at'> & { created_at: Date }>>`
+      select page_id::text, version, title, markdown, diff_summary, author_id, created_at
+      from page_versions where page_id in ${live} order by page_id, version`;
+    const attachments = await sql<Array<Omit<PrdData['attachments'][number], 'created_at' | 'size_bytes'> & { created_at: Date; size_bytes: string }>>`
+      select id::text, page_id::text, uploader_id, storage_key, filename, mime, size_bytes, width, height, created_at
+      from attachments where page_id in ${live} order by created_at, id`;
+    const comments = await sql<Array<Omit<PrdData['comments'][number], 'created_at' | 'resolved_at'> & { created_at: Date; resolved_at: Date | null }>>`
+      select id::text, page_id::text, parent_comment_id::text, body_markdown, resolved_at, resolved_by, author_id, created_at
+      from comments where page_id in ${live} order by created_at, id`;
     const [c] = await sql<Array<PrdData['counts']>>`
-      select (select count(*)::int from pages where deleted_at is null) as pages,
+      select (select count(*)::int from pages) as pages,
              (select count(*)::int from page_versions) as "pageVersions",
              (select count(*)::int from attachments) as attachments,
              (select count(*)::int from comments) as comments`;
-    return { domains: [...domains], users: [...users], counts: c! };
+    return {
+      domains: [...domains],
+      users: [...users],
+      pages: pages.map((p) => ({ ...p, created_at: iso(p.created_at)!, updated_at: iso(p.updated_at)! })),
+      pageVersions: versions.map((v) => ({ ...v, created_at: iso(v.created_at)! })),
+      attachments: attachments.map((a) => ({ ...a, size_bytes: Number(a.size_bytes), created_at: iso(a.created_at)! })),
+      comments: comments.map((x) => ({ ...x, resolved_at: iso(x.resolved_at), created_at: iso(x.created_at)! })),
+      counts: c!,
+    };
   } finally {
     await sql.end();
   }

@@ -1,7 +1,14 @@
 import type {
   AccountView,
+  AttachmentView,
   CheckState as CoreCheckState,
   CommentView,
+  DocumentCommentView,
+  DocumentDetail as CoreDocumentDetail,
+  DocumentListItem as CoreDocumentListItem,
+  DocumentReviewQueue as CoreDocumentReviewQueue,
+  DocumentStatus as CoreDocumentStatus,
+  ExternalProvider as CoreExternalProvider,
   FieldOptionView,
   FieldView,
   FunctionTagView,
@@ -27,11 +34,15 @@ import type {
   RequirementDetail as CoreRequirementDetail,
   RequirementList as CoreRequirementList,
   RequirementListItem as CoreRequirementListItem,
+  RevisionDiff as CoreRevisionDiff,
+  RevisionListItem,
   ReviewFilterState as CoreReviewFilterState,
   ReviewQueue as CoreReviewQueue,
   ReviewState as CoreReviewState,
   StructureNodeView,
   TaskView,
+  TemplateSection as CoreTemplateSection,
+  TemplateView,
   TokenScope as CoreTokenScope,
   TokenView,
   Workbench as CoreWorkbench,
@@ -90,3 +101,15 @@ export type ReviewQueue = Jsonify<CoreReviewQueue>;
 export type ReviewState = CoreReviewState;
 export type ReviewFilterState = CoreReviewFilterState;
 export type Workbench = Jsonify<CoreWorkbench>;
+export type CheckItem = RequirementDetail['checkItems'][number];
+export type DocumentStatus = CoreDocumentStatus;
+export type ExternalProvider = CoreExternalProvider;
+export type TemplateSection = CoreTemplateSection;
+export type DocumentListItem = Jsonify<CoreDocumentListItem>;
+export type DocumentDetail = Jsonify<CoreDocumentDetail>;
+export type DocumentRevision = Jsonify<RevisionListItem>;
+export type RevisionDiff = CoreRevisionDiff;
+export type DocumentComment = Jsonify<DocumentCommentView>;
+export type DocumentTemplate = Jsonify<TemplateView>;
+export type DocumentReviewQueue = Jsonify<CoreDocumentReviewQueue>;
+export type Attachment = AttachmentView & { url: string };

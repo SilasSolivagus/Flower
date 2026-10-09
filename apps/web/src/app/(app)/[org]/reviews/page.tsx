@@ -24,9 +24,10 @@ import {
   waitingText,
 } from '@/features/reviews/model';
 import { CHECK_STATE_LABEL } from '@/lib/labels';
-import { useProducts, useRequirement, useReviewQueue } from '@/lib/queries';
+import { qk, requirementKeys, useProducts, useRequirement, useReviewQueue } from '@/lib/queries';
 import type { CheckState, ReviewFilterState, ReviewQueue } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { DocumentReviews } from './document-reviews';
 
 const ANY = 'any';
 
@@ -37,7 +38,14 @@ function RowDetail({ org, displayKey }: { org: string; displayKey: string }) {
     if (q.isError) return <QueryError error={q.error} noAccessMessage="需求不存在，或你没有查看权限。" retryMessage="加载检查项失败，请重试。" onRetry={() => q.refetch()} />;
     return <Skeleton className="h-24" />;
   }
-  return <CheckItems org={org} requirement={q.data} />;
+  return (
+    <CheckItems
+      items={q.data.checkItems}
+      canEdit={q.data.myRole !== 'viewer'}
+      basePath={`/orgs/${org}/requirements/${q.data.id}/checks`}
+      invalidate={[requirementKeys(org), qk.workbench]}
+    />
+  );
 }
 
 function QueueTable({ org, queue }: { org: string; queue: ReviewQueue }) {
@@ -244,6 +252,7 @@ export default function ReviewsPage() {
         }
       />
       {body}
+      {product && <DocumentReviews org={org} productId={product.id} />}
     </>
   );
 }

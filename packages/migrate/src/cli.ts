@@ -1,7 +1,7 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { accounts, type Actor, createDb, type Db, listProducts, resolveActor } from '@flower/core';
+import { accounts, type Actor, createDb, createLocalStorage, type Db, listProducts, resolveActor } from '@flower/core';
 import { eq } from 'drizzle-orm';
 import type { LegacyData } from './legacy-types';
 import { loadPlane, loadPrd, loadPush } from './load';
@@ -11,12 +11,13 @@ import { buildPerfCases, measure } from './perf';
 import { type RejoinEntry, rejoinAccounts } from './rejoin';
 import { renderReport } from './report';
 import { suggestMapping } from './suggest';
-import { writeImport } from './write';
+import { fileSummary, writeImport } from './write';
 
 const USAGE = `用法：
   suggest --plane <123plane.db> --push <push.db> --prd-url <postgres url> --mapping <目录>
   import  --plane … --push … --prd-url … --mapping <目录> --out <报告目录> [--org-slug pan123] [--org-name 123云盘]
           [--product-key PAN] [--product-name 123云盘] [--as-of YYYY-MM-DD] [--owner-email 邮箱] [--replace] [--dry-run]
+          [--uploads <prd_uploads 导出目录>] [--storage <附件存储目录，缺省读 FLOWER_STORAGE_DIR>]
   perf --org-slug pan123 --owner-email 邮箱 [--product-key PAN] [--runs 20]（读取 DATABASE_URL）
   rejoin --org-slug pan123 --owner-email 邮箱 --accounts <账号清单.json>（读取 DATABASE_URL；重导后让已有账号重新加入）
 import 写库时读取环境变量 DATABASE_ADMIN_URL。`;
@@ -52,6 +53,8 @@ async function main(): Promise<void> {
       'dry-run': { type: 'boolean', default: false },
       runs: { type: 'string', default: '20' },
       accounts: { type: 'string' },
+      uploads: { type: 'string' },
+      storage: { type: 'string' },
     },
   });
   const need = (k: 'plane' | 'push' | 'prd-url' | 'mapping' | 'out') => v[k] ?? fail(`缺少参数 --${k}`);
@@ -125,6 +128,7 @@ async function main(): Promise<void> {
     productName: v['product-name']!,
     asOf: v['as-of']!,
     owner,
+    uploadsDir: v.uploads && existsSync(v.uploads) ? v.uploads : undefined,
   });
   const out = need('out');
   mkdirSync(out, { recursive: true });
@@ -143,7 +147,9 @@ async function main(): Promise<void> {
   if (!adminUrl) fail('写入数据库需要 DATABASE_ADMIN_URL');
   const { db, close } = createDb(adminUrl, { max: 2 });
   try {
-    await writeImport(db, plan, { replace: v.replace! });
+    const storageDir = v.storage ?? process.env.FLOWER_STORAGE_DIR;
+    const files = await writeImport(db, plan, { replace: v.replace!, storage: storageDir ? createLocalStorage(storageDir) : undefined, uploadsDir: v.uploads });
+    for (const line of fileSummary(storageDir, files, v.replace!)) console.log(line);
   } finally {
     await close();
   }

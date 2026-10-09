@@ -1,0 +1,131 @@
+import { DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, splitSections, type TemplateSection } from '@flower/core/markdown';
+import type { DocumentComment } from '@/lib/types';
+
+export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
+  draft: '#8a9199',
+  review: '#2f6fd6',
+  approved: '#1f6f54',
+  launched: '#1e8a5a',
+  merged: '#0f766e',
+  discarded: '#5c6570',
+};
+
+export const PROVIDER_LABEL: Record<ExternalProvider, string> = {
+  wecom: '企业微信文档',
+  feishu: '飞书文档',
+  tencent_docs: '腾讯文档',
+  notion: 'Notion',
+  yuque: '语雀',
+  google_docs: 'Google 文档',
+  other: '外部链接',
+};
+
+export function sourceLabel(d: { source: 'native' | 'external'; externalProvider: ExternalProvider | null }): string {
+  return d.source === 'native' ? 'Flower 文档' : PROVIDER_LABEL[d.externalProvider ?? 'other'];
+}
+
+export const documentHref = (org: string, displayKey: string): string => `/${org}/documents/${displayKey}`;
+
+export type DocumentListFilter = { product: string; status: DocumentStatus | ''; owner: string; source: 'native' | 'external' | ''; q: string };
+
+export function parseDocumentFilter(sp: URLSearchParams): DocumentListFilter {
+  const status = sp.get('status') ?? '';
+  const source = sp.get('source') ?? '';
+  return {
+    product: sp.get('product') ?? '',
+    status: (DOCUMENT_STATUSES as readonly string[]).includes(status) ? (status as DocumentStatus) : '',
+    owner: sp.get('owner') ?? '',
+    source: source === 'native' || source === 'external' ? source : '',
+    q: sp.get('q') ?? '',
+  };
+}
+
+function toParams(f: DocumentListFilter, keys: Array<keyof DocumentListFilter>): string {
+  const p = new URLSearchParams();
+  for (const k of keys) if (f[k]) p.set(k, f[k]);
+  return p.toString();
+}
+
+/** 地址栏：带上产品。 */
+export const documentFilterToSearch = (f: DocumentListFilter): string => toParams(f, ['product', 'status', 'owner', 'source', 'q']);
+/** 接口查询串：产品在路径里，不重复。 */
+export const documentFilterToApiQuery = (f: DocumentListFilter): string => toParams(f, ['status', 'owner', 'source', 'q']);
+
+/** 「关联需求」输入框：逗号、顿号、空白分隔的需求编号，转大写、去重。 */
+export function parseRequirementKeys(input: string): string[] {
+  const keys = input
+    .split(/[\s,，、;；]+/)
+    .map((s) => s.trim().toUpperCase())
+    .filter((s) => /^[A-Z][A-Z0-9]{1,9}-\d{1,9}$/.test(s));
+  return [...new Set(keys)];
+}
+
+export type SaveState = 'saved' | 'dirty' | 'saving';
+
+export function saveStateLabel(state: SaveState, editable: boolean): string {
+  if (!editable) return '只读';
+  return state === 'saving' ? '保存中…' : state === 'dirty' ? '未保存' : '已保存';
+}
+
+const CONTEXT_CHARS = 32;
+
+/** 划词评论的前后文（W3C TextQuoteSelector 的 prefix / suffix），各取 32 个字符。 */
+export function clipContext(before: string, after: string): { prefix: string; suffix: string } {
+  return { prefix: before.slice(-CONTEXT_CHARS), suffix: after.slice(0, CONTEXT_CHARS) };
+}
+
+export type Thread = { comment: DocumentComment; replies: DocumentComment[] };
+
+/** 评论按顶层分组（保持时间顺序），回复挂在所属评论下；上级不存在的回复当作顶层显示。 */
+export function groupThreads(comments: DocumentComment[]): Thread[] {
+  const ids = new Set(comments.map((c) => c.id));
+  const threads = comments.filter((c) => !c.parentId || !ids.has(c.parentId)).map((comment) => ({ comment, replies: [] as DocumentComment[] }));
+  const byId = new Map(threads.map((t) => [t.comment.id, t]));
+  for (const c of comments) if (c.parentId && byId.has(c.parentId)) byId.get(c.parentId)!.replies.push(c);
+  return threads;
+}
+
+export const SECTION_CHANGE_LABEL = { added: '新增', removed: '删除', modified: '修改' } as const;
+export const ANCHOR_STATE_LABEL = { stale: '已失效', unanchored: '未定位' } as const;
+
+export const IMPORT_LIMITS = { markdownBytes: 2 * 1024 * 1024, docxBytes: 20 * 1024 * 1024 } as const;
+
+const DATA_IMAGE = /!\[[^\]]*\]\((data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/=]+))\)/g;
+const REMOTE_IMAGE = /!\[[^\]]*\]\(https?:\/\/[^)\s]+\)/g;
+
+/** 正文里可以转存为附件的 data: 图片（PNG、JPEG、GIF、WebP），按内容去重。 */
+export function findDataImages(markdown: string): Array<{ src: string; mime: string; base64: string }> {
+  const out = new Map<string, { src: string; mime: string; base64: string }>();
+  for (const m of markdown.matchAll(DATA_IMAGE)) if (!out.has(m[1]!)) out.set(m[1]!, { src: m[1]!, mime: m[2]!, base64: m[3]! });
+  return [...out.values()];
+}
+
+export function replaceImageSources(markdown: string, map: Map<string, string>): string {
+  return markdown.replace(/(!\[[^\]]*\]\()([^)\s]+)(\))/g, (all, open: string, src: string, close: string) => (map.has(src) ? `${open}${map.get(src)}${close}` : all));
+}
+
+/** 指向外部网址的图片：不抓取（需要外部平台登录），保留原链接。 */
+export const countRemoteImages = (markdown: string): number => [...markdown.matchAll(REMOTE_IMAGE)].length;
+
+export function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+export function importSummary(markdown: string): { chars: number; sections: number; images: number; remoteImages: number } {
+  return {
+    chars: markdown.length,
+    sections: splitSections(markdown).filter((s) => s.heading !== null).length,
+    images: findDataImages(markdown).length,
+    remoteImages: countRemoteImages(markdown),
+  };
+}
+
+/** 模板编辑时「从正文提取小节」：正文里的二级标题，默认选填。 */
+export function sectionsFromBody(body: string): TemplateSection[] {
+  return splitSections(body)
+    .filter((s) => s.level === 2 && s.heading)
+    .map((s) => ({ heading: s.heading!, required: false }));
+}

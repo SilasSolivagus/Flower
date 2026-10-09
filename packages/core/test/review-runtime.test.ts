@@ -44,6 +44,8 @@ describe('整体评审状态', () => {
     expect(reviewStarted(items, { feasibility: 'not_started', prd: 'not_needed', doc_check: 'passed' })).toBe(false);
     expect(reviewStarted(items, { feasibility: 'passed', prd: 'not_needed', doc_check: 'not_started' })).toBe(true);
     expect(reviewStarted(items, { feasibility: 'not_started', prd: 'not_started', doc_check: 'not_started' })).toBe(true);
+    const withAuto: CheckItem[] = [...items, { key: 'prd_auto', label: 'PRD', scope: 'requirement', type: 'single', auto: 'prd_status', defaultState: 'not_started' }];
+    expect(reviewStarted(withAuto, { feasibility: 'not_started', prd: 'not_needed', doc_check: 'not_started', prd_auto: 'in_progress' })).toBe(false);
   });
 });
 

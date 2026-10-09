@@ -72,3 +72,43 @@ export function sessionMeta(c: Context): { ip: string | null; userAgent: string 
     userAgent: c.req.header('user-agent') ?? null,
   };
 }
+
+/** 逗号分隔的查询参数 → 去空白后的列表；空时为 undefined。 */
+export const csvParam = (v: string | undefined): string[] | undefined => {
+  const list = v?.split(',').map((s) => s.trim()).filter(Boolean);
+  return list?.length ? list : undefined;
+};
+
+/**
+ * multipart 不是 JSON，普通表单就能跨站提交，所以上传接口自己拒绝跨站请求：
+ * 浏览器带 Sec-Fetch-Site 时只接受 same-origin 与 none；不带时，有 Origin 就要求与请求的 host 一致。
+ * 两者都没有的是非浏览器客户端（如 Token），不受 CSRF 影响。
+ */
+function assertSameOrigin(c: Context): void {
+  const site = c.req.header('sec-fetch-site');
+  const origin = c.req.header('origin');
+  const sameOrigin = site !== undefined ? site === 'same-origin' || site === 'none' : origin === undefined || URL.parse(origin)?.host === new URL(c.req.url).host;
+  if (!sameOrigin) throw new AppError('forbidden', '不接受来自其他站点的上传请求');
+}
+
+/**
+ * 读取 multipart 上传的 file 字段。先拒绝跨站请求；没有 Content-Length 或明显超过上限时不读请求体直接拒绝；
+ * 文件本身的大小与类型由服务函数按文件头再校验一次。
+ */
+export async function readUpload(c: Context, maxBytes: number, tooLarge: string): Promise<{ filename: string; bytes: Uint8Array }> {
+  assertSameOrigin(c);
+  const contentType = (c.req.header('content-type') ?? '').toLowerCase();
+  if (!contentType.startsWith('multipart/form-data')) throw new AppError('invalid', '请求必须使用 multipart/form-data');
+  const length = c.req.header('content-length');
+  if (length === undefined) throw new AppError('invalid', '上传请求缺少 Content-Length');
+  if (Number(length) > maxBytes + 64 * 1024) throw new AppError('invalid', tooLarge);
+  let body: Record<string, string | File>;
+  try {
+    body = (await c.req.parseBody()) as Record<string, string | File>;
+  } catch {
+    throw new AppError('invalid', '上传内容无法解析');
+  }
+  const file = body.file;
+  if (!(file instanceof File)) throw new AppError('invalid', '缺少文件');
+  return { filename: file.name, bytes: new Uint8Array(await file.arrayBuffer()) };
+}

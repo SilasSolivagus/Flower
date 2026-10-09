@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, api, isAccessDenied, unmetFrom } from './api';
+import { ApiError, api, apiUpload, isAccessDenied, unmetFrom } from './api';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -49,6 +49,16 @@ describe('api', () => {
       }),
     );
     await expect(api('/x')).rejects.toMatchObject({ status: 0, code: 'network', message: '网络连接失败，请检查网络后重试' });
+  });
+
+  it('上传用 FormData，不设 content-type（由浏览器带上 boundary）', async () => {
+    const f = mockFetch(201, { attachment: { id: 'a' } });
+    await expect(apiUpload('/orgs/acme/documents/d/attachments', new Blob(['x']), 'a.png')).resolves.toEqual({ attachment: { id: 'a' } });
+    const init = f.mock.calls[0]![1] as RequestInit;
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get('file')).toBeInstanceOf(Blob);
+    expect(init.headers).toBeUndefined();
   });
 });
 

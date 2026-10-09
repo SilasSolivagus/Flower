@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 export type FlowerConfig = {
   databaseUrl: string;
   databaseAdminUrl: string;
@@ -12,6 +14,7 @@ export type ServerConfig = {
   secretKey: string;
   publicUrl: string;
   isProduction: boolean;
+  storageDir: string;
 };
 
 export class ConfigError extends Error {}
@@ -59,5 +62,6 @@ export function loadServerConfig(env: Record<string, string | undefined> = proce
     secretKey,
     publicUrl: env.FLOWER_PUBLIC_URL ?? 'http://localhost:3000',
     isProduction: env.NODE_ENV === 'production',
+    storageDir: env.FLOWER_STORAGE_DIR || path.join(process.cwd(), '.flower-storage'),
   };
 }

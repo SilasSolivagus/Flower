@@ -1,4 +1,4 @@
-import type { AccountView, Actor, Db } from '@flower/core';
+import type { AccountView, Actor, Db, FileStorage } from '@flower/core';
 import { Hono } from 'hono';
 import { authenticate, orgActor } from './auth-middleware';
 import { errorHandler } from './http';
@@ -11,15 +11,17 @@ import { registerOrgRoutes } from './routes/orgs';
 import { registerProductRoutes } from './routes/products';
 import { registerTokenRoutes } from './routes/tokens';
 import { registerDefinitionRoutes } from './routes/definitions';
+import { registerDocumentRoutes } from './routes/documents';
 import { registerIterationRoutes } from './routes/iterations';
 import { registerReleaseRoutes } from './routes/releases';
 import { registerRequirementRoutes } from './routes/requirements';
 import { registerReviewRoutes } from './routes/reviews';
 import { registerStructureRoutes } from './routes/structure';
 import { registerTaskRoutes } from './routes/tasks';
+import { registerTemplateRoutes } from './routes/templates';
 import { registerWorkbenchRoutes } from './routes/workbench';
 
-export type ApiDeps = { db: Db; secureCookies: boolean; publicUrl: string };
+export type ApiDeps = { db: Db; secureCookies: boolean; publicUrl: string; storage: FileStorage };
 export type ApiEnv = {
   Variables: {
     account: AccountView | null;
@@ -53,5 +55,7 @@ export function createApi(deps: ApiDeps): App {
   registerTaskRoutes(app, deps);
   registerReviewRoutes(app, deps);
   registerWorkbenchRoutes(app, deps);
+  registerDocumentRoutes(app, deps);
+  registerTemplateRoutes(app, deps);
   return app;
 }

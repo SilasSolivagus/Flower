@@ -5,6 +5,12 @@ import { toast } from 'sonner';
 import { ApiError, api } from './api';
 import type {
   Account,
+  DocumentComment,
+  DocumentDetail,
+  DocumentListItem,
+  DocumentReviewQueue,
+  DocumentRevision,
+  DocumentTemplate,
   Field,
   FunctionTag,
   InstanceStatus,
@@ -26,6 +32,7 @@ import type {
   RequirementComment,
   RequirementDetail,
   RequirementList,
+  RevisionDiff,
   ReviewQueue,
   StructureNode,
   Token,
@@ -64,6 +71,13 @@ export const qk = {
   workbench: ['me', 'workbench'] as const,
   memberTasks: (o: string, memberId: string, all: boolean) => ['org', o, 'tasks', 'member', memberId, all ? 'all' : 'open'] as const,
   releases: (o: string, query: string) => ['org', o, 'releases', query] as const,
+  documents: (o: string, productId: string, query: string) => ['org', o, 'documents', 'list', productId, query] as const,
+  document: (o: string, key: string) => ['org', o, 'documents', 'detail', key] as const,
+  documentRevisions: (o: string, id: string) => ['org', o, 'documents', 'revisions', id] as const,
+  documentDiff: (o: string, id: string, from: number, to: number) => ['org', o, 'documents', 'diff', id, from, to] as const,
+  documentComments: (o: string, id: string) => ['org', o, 'documents', 'comments', id] as const,
+  documentReviews: (o: string, productId: string) => ['org', o, 'documents', 'reviews', productId] as const,
+  templates: (o: string, scope: string) => ['org', o, 'templates', scope] as const,
 };
 
 export const useSetupStatus = () => useQuery({ queryKey: qk.setup, queryFn: () => api<InstanceStatus>('/setup/status') });
@@ -206,6 +220,51 @@ export const useProductIterations = (o: string, productId: string | undefined) =
     queryFn: () => api<{ iterations: IterationBrief[] }>(`/orgs/${o}/products/${productId}/iterations`),
     select: (d) => d.iterations,
     enabled: !!productId,
+  });
+
+/** PRD 相关查询的公共前缀：PRD、修订、评论、检查项变化后统一失效。 */
+export const documentKeys = (o: string) => ['org', o, 'documents'] as const;
+export const templateKeys = (o: string) => ['org', o, 'templates'] as const;
+
+export const useDocuments = (o: string, productId: string | undefined, query: string) =>
+  useQuery({
+    queryKey: qk.documents(o, productId ?? '', query),
+    queryFn: () => api<{ documents: DocumentListItem[] }>(`/orgs/${o}/products/${productId}/documents?${query}`),
+    select: (d) => d.documents,
+    enabled: !!productId,
+    placeholderData: keepPreviousData,
+  });
+export const useDocument = (o: string, key: string) =>
+  useQuery({ queryKey: qk.document(o, key), queryFn: () => api<{ document: DocumentDetail }>(`/orgs/${o}/documents/${encodeURIComponent(key)}`), select: (d) => d.document });
+export const useDocumentRevisions = (o: string, id: string, enabled = true) =>
+  useQuery({
+    queryKey: qk.documentRevisions(o, id),
+    queryFn: () => api<{ revisions: DocumentRevision[] }>(`/orgs/${o}/documents/${id}/revisions`),
+    select: (d) => d.revisions,
+    enabled,
+  });
+export const useDocumentDiff = (o: string, id: string, from: number, to: number) =>
+  useQuery({
+    queryKey: qk.documentDiff(o, id, from, to),
+    queryFn: () => api<{ diff: RevisionDiff }>(`/orgs/${o}/documents/${id}/diff?from=${from}&to=${to}`),
+    select: (d) => d.diff,
+    enabled: from > 0 && to > 0 && from !== to,
+  });
+export const useDocumentComments = (o: string, id: string) =>
+  useQuery({ queryKey: qk.documentComments(o, id), queryFn: () => api<{ comments: DocumentComment[] }>(`/orgs/${o}/documents/${id}/comments`), select: (d) => d.comments });
+export const useDocumentReviews = (o: string, productId: string | undefined) =>
+  useQuery({
+    queryKey: qk.documentReviews(o, productId ?? ''),
+    queryFn: () => api<{ queue: DocumentReviewQueue }>(`/orgs/${o}/products/${productId}/document-reviews`),
+    select: (d) => d.queue,
+    enabled: !!productId,
+  });
+export const useTemplates = (o: string, opts: { productId?: string; usable?: boolean }, enabled = true) =>
+  useQuery({
+    queryKey: qk.templates(o, `${opts.productId ?? 'org'}:${opts.usable ? 'usable' : 'all'}`),
+    queryFn: () => api<{ templates: DocumentTemplate[] }>(`/orgs/${o}/templates?${new URLSearchParams({ ...(opts.productId ? { product: opts.productId } : {}), ...(opts.usable ? { usable: '1' } : {}) })}`),
+    select: (d) => d.templates,
+    enabled,
   });
 
 type MutationOptions<TData, TVars> = {

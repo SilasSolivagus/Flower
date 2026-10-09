@@ -78,12 +78,22 @@ describe('validateWorkflowBody', () => {
     expect(msgs).toContain('普通检查项不能设置签字人或会签规则');
   });
 
-  it('自动同步 PRD 状态的检查项必须作用于 PRD', () => {
-    const msgs = issuesOf({
+  it('自动同步 PRD 状态的检查项必须是作用于需求的普通检查项，且最多一个', () => {
+    const onDocument = issuesOf({
       ...valid,
-      checkItems: [...valid.checkItems, { key: 'prd', label: 'PRD', scope: 'requirement', type: 'single', auto: 'prd_status' }],
+      checkItems: [...valid.checkItems, { key: 'prd', label: 'PRD', scope: 'document', type: 'single', auto: 'prd_status' }],
     });
-    expect(msgs).toContain('自动同步 PRD 状态的检查项作用范围必须是 PRD');
+    expect(onDocument).toContain('自动同步 PRD 状态的检查项必须作用于需求，且为普通检查项');
+    const two = issuesOf({
+      ...valid,
+      checkItems: [
+        ...valid.checkItems,
+        { key: 'prd', label: 'PRD', scope: 'requirement', type: 'single', auto: 'prd_status' },
+        { key: 'prd2', label: 'PRD2', scope: 'requirement', type: 'single', auto: 'prd_status' },
+      ],
+    });
+    expect(two).toContain('最多只能有一个自动同步 PRD 状态的检查项');
+    expect(issuesOf({ ...valid, checkItems: [...valid.checkItems, { key: 'prd', label: 'PRD', scope: 'requirement', type: 'single', auto: 'prd_status' }] })).toEqual([]);
   });
 
   it('检查项条件 in 为空数组时返回中文提示', () => {

@@ -38,6 +38,8 @@ test('P0 验收：从初始化到签发 Agent Token 的完整路线', async ({ p
   await page.getByRole('button', { name: '查看林澄' }).click();
   await page.getByRole('dialog', { name: '林澄' }).getByRole('checkbox', { name: '产品经理' }).check();
   await page.getByRole('dialog', { name: '林澄' }).getByRole('button', { name: '保存' }).click();
+  // 保存成功后抽屉才关闭；不等它就跳页会中断还没发出的请求
+  await expect(page.getByRole('dialog', { name: '林澄' })).toBeHidden();
 
   // 4. 建产品
   await page.goto('/pan/settings/products');

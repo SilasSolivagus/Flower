@@ -55,7 +55,7 @@ type ReqRow = typeof requirements.$inferSelect;
 
 export const displayKey = (productKey: string, number: number): string => `${productKey}-${number}`;
 
-function assertTitle(title: string): string {
+export function assertTitle(title: string): string {
   const t = title.trim();
   if (!t || t.length > 200) throw new AppError('invalid', '标题不能为空，且不超过 200 个字符');
   return t;
@@ -66,7 +66,7 @@ function assertDescription(d: string): string {
   return d;
 }
 
-async function productKeyOf(tx: Tx, productId: string): Promise<string> {
+export async function productKeyOf(tx: Tx, productId: string): Promise<string> {
   const [p] = await tx.select({ key: products.key }).from(products).where(eq(products.id, productId));
   if (!p) throw new AppError('not_found', '产品不存在');
   return p.key;

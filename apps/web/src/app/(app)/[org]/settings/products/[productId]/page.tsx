@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TemplateEditor } from '@/components/template-editor';
 import { isOrgAdminRole } from '@/features/shell/nav';
 import { api } from '@/lib/api';
 import { qk, useApiMutation, useOrg, useProduct } from '@/lib/queries';
@@ -62,6 +63,7 @@ export default function ProductDetailPage() {
           <TabsTrigger value="workflow">流程</TabsTrigger>
           <TabsTrigger value="fields">字段与层级</TabsTrigger>
           <TabsTrigger value="structure">结构树</TabsTrigger>
+          <TabsTrigger value="templates">文档模板</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">
           <section className="flex max-w-lg flex-col gap-4 rounded-lg border bg-card p-4">
@@ -93,6 +95,9 @@ export default function ProductDetailPage() {
         </TabsContent>
         <TabsContent value="structure">
           <StructureTab org={org} productId={productId} />
+        </TabsContent>
+        <TabsContent value="templates">
+          <TemplateEditor org={org} productId={productId} />
         </TabsContent>
       </Tabs>
     </>

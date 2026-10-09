@@ -41,6 +41,7 @@ export async function listReviewQueue(db: Db, actor: Actor, productId: string, f
     const role = await requireProductRole(tx, actor, productId, 'viewer');
     const body = await productWorkflowBody(tx, productId);
     const items = body.checkItems.filter((c) => c.scope === 'requirement');
+    const reviewItems = items.filter((c) => !c.auto);
     const columns = items.map((c) => ({ key: c.key, label: c.label, type: c.type }));
     const stats: Record<ReviewState, number> = { not_started: 0, in_progress: 0, rejected: 0, passed: 0 };
     const openKeys = body.states.filter((s) => s.category !== 'completed' && s.category !== 'canceled').map((s) => s.key);
@@ -72,7 +73,7 @@ export async function listReviewQueue(db: Db, actor: Actor, productId: string, f
         title: r.title,
         state: stateOf(info, productId, r.stateKey),
         owner: r.ownerMemberId ? { id: r.ownerMemberId, displayName: names.get(r.ownerMemberId) ?? '已删除的成员' } : null,
-        reviewState: reviewStateOf(items.map((c) => snap.states[c.key]!)),
+        reviewState: reviewStateOf(reviewItems.map((c) => snap.states[c.key]!)),
         cells,
         waiting: canSign ? waitingFor(items, snap, who, role === 'admin') : [],
       };

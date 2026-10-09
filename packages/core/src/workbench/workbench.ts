@@ -1,13 +1,14 @@
 import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { productRoleOf, visibleProductIds } from '../access/permissions';
 import type { Db } from '../db/client';
-import { checkItemResults, commentReads, comments, iterations, products, requirements, tasks } from '../db/schema';
+import { checkItemResults, commentReads, comments, documents, iterations, products, requirements, tasks } from '../db/schema';
 import { withOrg } from '../db/tx';
+import { documentDisplayKey } from '../documents/markdown';
 import type { Actor } from '../domain-types';
 import { type StateInfo, stateInfoByProduct, stateOf } from '../iterations/iterations';
 import { memberNames, productWorkflowBody } from '../requirements/context';
 import { displayKey } from '../requirements/requirements';
-import { checkSnapshots, signerIdentity, waitingFor } from '../reviews/snapshot';
+import { checkSnapshots, documentSnapshots, signerIdentity, waitingFor } from '../reviews/snapshot';
 import { hydrateTasks, orgToday, type TaskStatus } from '../tasks/tasks';
 import { listMyOrganizations } from '../tenancy/orgs';
 
@@ -27,7 +28,10 @@ export type WorkbenchTask = {
 };
 export type WorkbenchSignature = {
   org: WorkbenchOrg;
-  requirementId: string;
+  /** 需求上的签字为需求 id，PRD 上的签字为 null。 */
+  requirementId: string | null;
+  /** PRD 上的签字为 PRD id，需求上的签字为 null。 */
+  documentId: string | null;
   displayKey: string;
   title: string;
   itemKey: string;
@@ -131,8 +135,41 @@ async function orgPart(db: Db, actor: Actor, org: WorkbenchOrg, today: string | 
           signatures.push({
             org,
             requirementId: r.id,
+            documentId: null,
             displayKey: keyFor(r),
             title: r.title,
+            itemKey: w.itemKey,
+            itemLabel: item.label,
+            ruleIndex: w.ruleIndex,
+            onBehalfOf: w.onBehalf ? (signerNames.get(item.signers![w.ruleIndex]!.ref) ?? '已删除的成员') : null,
+          });
+        }
+      }
+    }
+
+    // 等我签字（PRD）：评审中的 PRD 上、作用于 PRD 的会签检查项
+    const docRows = await tx
+      .select()
+      .from(documents)
+      .where(and(inArray(documents.productId, visible), eq(documents.status, 'review'), isNull(documents.deletedAt)));
+    for (const pid of new Set(docRows.map((d) => d.productId))) {
+      const body = await productWorkflowBody(tx, pid);
+      const items = body.checkItems.filter((c) => c.scope === 'document');
+      if (items.length === 0) continue;
+      const rows = docRows.filter((d) => d.productId === pid);
+      const role = (await productRoleOf(tx, actor, pid))!;
+      const who = await signerIdentity(tx, actor, role);
+      const snaps = await documentSnapshots(tx, body, rows.map((d) => d.id));
+      const signerNames = await memberNames(tx, items.flatMap((c) => (c.signers ?? []).filter((s) => s.by === 'member').map((s) => s.ref)));
+      for (const d of rows) {
+        for (const w of waitingFor(items, snaps.get(d.id)!, who, role === 'admin', true)) {
+          const item = items.find((c) => c.key === w.itemKey)!;
+          signatures.push({
+            org,
+            requirementId: null,
+            documentId: d.id,
+            displayKey: documentDisplayKey(keyOf.get(pid)!, d.number),
+            title: d.title,
             itemKey: w.itemKey,
             itemLabel: item.label,
             ruleIndex: w.ruleIndex,

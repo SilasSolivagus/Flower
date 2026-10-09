@@ -59,7 +59,7 @@ export function buildWorkflowV1Body(tagIdByName: Map<string, string>, bossMember
         signoffRule: 'all',
         defaultState: 'not_started',
       },
-      { key: 'prd', label: 'PRD', scope: 'requirement', type: 'single', defaultState: 'not_started' },
+      { key: 'prd', label: 'PRD', scope: 'requirement', type: 'single', auto: 'prd_status', defaultState: 'not_started' },
       { key: 'ai_review', label: 'AI 预审', scope: 'requirement', type: 'single', defaultState: 'not_started' },
     ],
   };

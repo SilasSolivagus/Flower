@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ConfigError, loadConfig, loadServerConfig } from '../src/config';
 
@@ -36,6 +37,7 @@ describe('loadServerConfig', () => {
       secretKey: 'x'.repeat(48),
       publicUrl: 'http://localhost:3000',
       isProduction: false,
+      storageDir: path.join(process.cwd(), '.flower-storage'),
     });
   });
 
@@ -46,5 +48,9 @@ describe('loadServerConfig', () => {
 
   it('密钥过短时拒绝', () => {
     expect(() => loadServerConfig({ ...serverEnv, FLOWER_SECRET_KEY: 'short' })).toThrow(/至少 32 个字符/);
+  });
+
+  it('附件存储目录可由 FLOWER_STORAGE_DIR 指定', () => {
+    expect(loadServerConfig({ ...serverEnv, FLOWER_STORAGE_DIR: '/data/storage' }).storageDir).toBe('/data/storage');
   });
 });

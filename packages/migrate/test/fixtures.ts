@@ -12,7 +12,7 @@ export const planeReq = (r: Partial<PlaneRequirement> & { id: string; title: str
 const pushReq = (r: Partial<PushRequirement> & { id: number; title: string }): PushRequirement => ({
   alias: null, requester: null, owner: null, line: '功能', priority: 'P2', platforms: '[]', developers: '[]', brief: null,
   status: '待排期', source: '原创', version_id: '', created_at: '2026-03-02 00:00:00', last_edited_by: null, last_edited_at: null,
-  plane_id: '', merged_into: null, ...r,
+  plane_id: '', prd_url: null, merged_into: null, ...r,
 });
 
 export function makeLegacyData(): LegacyData {
@@ -93,8 +93,12 @@ export function makeLegacyData(): LegacyData {
         { name: '会员与支付', type: '产品域', group: '增长组', status: 'active', display_order: 1 },
         { name: '跨盘迁移', type: '产品域', group: '基础组', status: 'active', display_order: 2 },
       ],
-      users: [{ email: 'zhangsan@example.com', name: '张三' }],
-      counts: { pages: 2, pageVersions: 5, attachments: 3, comments: 1 },
+      users: [{ id: 'pu1', email: 'zhangsan@example.com', name: '张三' }],
+      pages: [],
+      pageVersions: [],
+      attachments: [],
+      comments: [],
+      counts: { pages: 0, pageVersions: 0, attachments: 0, comments: 0 },
     },
   };
 }
@@ -133,4 +137,37 @@ export function reviewedMapping(data: LegacyData = makeLegacyData()): Mapping {
     { name: '跨盘迁移', description: '产品域 · 基础组', aliases: ['跨盘迁移'] },
   ];
   return m;
+}
+
+export const LEGACY_FILE = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa.png';
+export const INLINE_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+/** 两份 prd 页面（全部为虚构内容）：一份已上线、挂在 X001 上，正文引用旧附件并内嵌一张图片；一份开发中。另有已删除页面的计数。 */
+export function withPrdPages(data: LegacyData = makeLegacyData()): LegacyData {
+  data.prd.users.push({ id: 'pu2', email: 'lisi@example.com', name: '李四' });
+  const title = '[会员] 批量下载 - 2026-03-01';
+  data.prd.pages = [
+    {
+      id: 'pg1', title, markdown: `## 背景\n\n![](/api/files/${LEGACY_FILE})\n\n![](data:image/png;base64,${INLINE_PNG})\n\n当前正文`, version: 3, status: 'launched',
+      owner_user_id: 'pu2', created_by: 'pu1', updated_by: 'pu1', created_at: '2026-03-01T00:00:00.000Z', updated_at: '2026-03-05T00:00:00.000Z', linked_requirement_id: 'X001',
+    },
+    {
+      id: 'pg2', title: '草稿页', markdown: '## 背景\n\n草稿', version: 1, status: 'in_dev', owner_user_id: null, created_by: 'pu2', updated_by: 'pu2',
+      created_at: '2026-03-02T00:00:00.000Z', updated_at: '2026-03-02T00:00:00.000Z', linked_requirement_id: null,
+    },
+  ];
+  data.prd.pageVersions = [
+    { page_id: 'pg1', version: 1, title, markdown: '## 背景\n\n第一版', diff_summary: null, author_id: 'pu1', created_at: '2026-03-01T00:00:00.000Z' },
+    { page_id: 'pg1', version: 3, title, markdown: `## 背景\n\n![](data:image/png;base64,${INLINE_PNG})\n\n第三版`, diff_summary: '补图', author_id: 'pu2', created_at: '2026-03-03T00:00:00.000Z' },
+    { page_id: 'pg2', version: 1, title: '草稿页', markdown: '## 背景\n\n草稿', diff_summary: null, author_id: 'pu2', created_at: '2026-03-02T00:00:00.000Z' },
+  ];
+  data.prd.attachments = [
+    { id: 'att1', page_id: 'pg1', uploader_id: 'pu1', storage_key: LEGACY_FILE, filename: '截图.png', mime: 'image/png', size_bytes: 1234, width: null, height: null, created_at: '2026-03-01T00:00:00.000Z' },
+  ];
+  data.prd.comments = [
+    { id: 'c1', page_id: 'pg1', parent_comment_id: null, body_markdown: '这里要确认', resolved_at: null, resolved_by: null, author_id: 'pu2', created_at: '2026-03-02T00:00:00.000Z' },
+    { id: 'c2', page_id: 'pg1', parent_comment_id: 'c1', body_markdown: '已确认', resolved_at: '2026-03-03T00:00:00.000Z', resolved_by: 'pu1', author_id: 'pu1', created_at: '2026-03-03T00:00:00.000Z' },
+  ];
+  data.prd.counts = { pages: 3, pageVersions: 4, attachments: 2, comments: 3 };
+  return data;
 }

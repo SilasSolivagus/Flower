@@ -1,9 +1,14 @@
+import { mkdtempSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createLocalStorage } from '@flower/core';
 import { createTestDb } from '@flower/core/testing';
 import { type App, createApi } from '@/server/api';
 
 export async function makeApp(): Promise<{ app: App; cleanup: () => Promise<void> }> {
   const t = await createTestDb();
-  const app = createApi({ db: t.db, secureCookies: false, publicUrl: 'http://localhost:3000' });
+  const storage = createLocalStorage(mkdtempSync(path.join(os.tmpdir(), 'flower-api-storage-')));
+  const app = createApi({ db: t.db, secureCookies: false, publicUrl: 'http://localhost:3000', storage });
   return { app, cleanup: t.cleanup };
 }
 
@@ -43,4 +48,27 @@ export async function initAndLogin(app: App): Promise<string> {
   });
   if (r.status !== 201) throw new Error(`初始化失败：${JSON.stringify(r.body)}`);
   return sessionFrom(r.res);
+}
+
+/** multipart 上传一个文件（字段名 file）。和浏览器一样带 Content-Length；headers 可追加或覆盖请求头，值为 null 时去掉该头。 */
+export async function upload(
+  app: App,
+  pathname: string,
+  opts: { session?: string; token?: string; file: Blob; filename: string; headers?: Record<string, string | null> },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<{ status: number; body: any }> {
+  const form = new FormData();
+  form.set('file', opts.file, opts.filename);
+  const encoded = new Request('http://localhost/', { method: 'POST', body: form });
+  const body = new Uint8Array(await encoded.arrayBuffer());
+  const headers: Record<string, string> = { 'content-type': encoded.headers.get('content-type')!, 'content-length': String(body.byteLength) };
+  if (opts.session) headers.cookie = `flower_session=${opts.session}`;
+  if (opts.token) headers.authorization = `Bearer ${opts.token}`;
+  for (const [k, v] of Object.entries(opts.headers ?? {})) {
+    if (v === null) delete headers[k];
+    else headers[k] = v;
+  }
+  const res = await app.request(`/api/v1${pathname}`, { method: 'POST', headers, body });
+  const text = await res.text();
+  return { status: res.status, body: text ? JSON.parse(text) : null };
 }

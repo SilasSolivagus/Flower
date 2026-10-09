@@ -52,6 +52,11 @@ export function availableTransitions(body: WorkflowBody, from: string, ctx: Cond
   return out;
 }
 
+/** 作用于需求、跟随 PRD 状态的「PRD」检查项；流程里没有时为 null。 */
+export function prdAutoItem(body: WorkflowBody): CheckItem | null {
+  return body.checkItems.find((c) => c.auto === 'prd_status' && c.scope === 'requirement') ?? null;
+}
+
 export function checkStatesFor(body: WorkflowBody, results: Array<{ itemKey: string; state: CheckState }>): Record<string, CheckState> {
   const byKey = new Map(results.map((r) => [r.itemKey, r.state]));
   return Object.fromEntries(body.checkItems.map((c) => [c.key, byKey.get(c.key) ?? c.defaultState]));
@@ -104,9 +109,9 @@ export function reviewStateOf(states: CheckState[]): ReviewState {
   return 'in_progress';
 }
 
-/** 需求的评审是否已经开始：任一需求检查项不在它的默认状态。 */
+/** 需求的评审是否已经开始：任一需求检查项不在它的默认状态。跟随 PRD 状态的 auto 项不算（挂上 PRD 不等于开始评审）。 */
 export function reviewStarted(items: CheckItem[], checks: Record<string, CheckState>): boolean {
-  return items.some((c) => c.scope === 'requirement' && checks[c.key] !== undefined && checks[c.key] !== c.defaultState);
+  return items.some((c) => c.scope === 'requirement' && !c.auto && checks[c.key] !== undefined && checks[c.key] !== c.defaultState);
 }
 
 /**

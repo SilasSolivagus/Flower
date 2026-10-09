@@ -26,7 +26,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 
 - **数据库**：PostgreSQL 17，镜像 `pgvector/pgvector:pg17`；ORM 用 drizzle。
 - **存储策略**：业务实体用关系表加外键；流程配置存为带版本的 JSON 定义（zod 校验）；运行时取值用关系表。
-- **主键**：新建数据用 UUIDv7；迁移导入的行使用由来源键 SHA-1 派生的确定性 UUID（v5 位布局），重复导入得到相同 ID。人可读编号按产品自增（如 `PAN-123`、`PRD-12`）：需求编号由 `products.requirement_seq` 以 `update … returning` 分配；P2 文档编号届时另加列或引入计数表。旧编号存 `legacy_key`。
+- **主键**：新建数据用 UUIDv7；迁移导入的行使用由来源键 SHA-1 派生的确定性 UUID（v5 位布局），重复导入得到相同 ID。人可读编号按产品自增（如 `PAN-123`、`PRD-12`）：需求编号由 `products.requirement_seq` 以 `update … returning` 分配；文档编号由 `products.document_seq` 以同样方式分配，显示为 `{product.key}-PRD-{n}`（P2-A 计划「设计决定」）。旧编号存 `legacy_key`。
 - **租户隔离**：所有租户数据表带 `org_id`。应用层在每个事务开头设置当前组织并强制过滤；Postgres 行级安全（RLS）策略用同一个值再校验一次。
 - **软删除**：业务实体带 `deleted_at`。字典选项只停用不删除。
 - **审计**：领域事件表即审计日志（见 §6.1），不另建日志表。
@@ -98,7 +98,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
                  type: "single" | "signoff",
                  signers?: [{ by: "function_tag" | "member" | "product_role", ref }],
                  signoffRule?: "all" | "any",
-                 auto?: "prd_status",                 // 由系统自动更新，不可手改
+                 auto?: "prd_status",                 // 作用于需求的普通检查项；需求被 PRD 覆盖时跟随 PRD 状态、不可手改（P2-A）
                  defaultState: CheckState }],
 }
 // CheckState 固定：not_started | in_progress | passed | rejected | not_needed
@@ -206,7 +206,7 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 
 ### 5.1 两类文档
 
-`documents`：org_id、product_id、number、kind（change / module）、title、owner_member_id、template_id、node_id（仅 module，必填；每个模块节点只有一份）、status、current_revision_id、version（乐观锁）、legacy_key、created_by、deleted_at。
+`documents`：org_id、product_id、number、kind（change / module）、source（native / external，外部 PRD 只存 external_url 与 external_provider，见 P2-A 设计）、title、owner_member_id、template_id、node_id（仅 module，必填；每个模块节点只有一份）、status、current_revision_id、version（乐观锁）、legacy_key、created_by、deleted_at。
 
 | | 变更 PRD（change） | 模块文档（module） |
 |---|---|---|
@@ -375,8 +375,8 @@ push 主状态映射到检查项与迭代：评审中 → 检查项 in_progress�
 
 **PRD**
 
-- 外部 PRD 链接不迁移：123plane 的 prd_link（186 个，多为企微文档）和 push 的 prd_url 都不导入。今后 PRD 统一写在 Flower 的文档模块里。
-- 123plane 的 prd_status 迁移为"PRD"检查项的手工状态，不附链接。
+- 外部 PRD 链接迁移为外部 PRD（2026-10-08 修改，原决定为不迁移）：123plane 的 prd_link 与 push 的 prd_url 按规范化网址去重，建成 `source = external` 的变更 PRD 并挂到对应需求；两边网址不一致时以 123plane 为准，差异写入对账报告。详见 `2026-10-08-flower-p2a-change-prd-design.md` §6。
+- 123plane 的 prd_status 迁移为"PRD"检查项的状态；需求挂上 PRD（prd 系统页面或外部链接）后，该项改为跟随 PRD 状态，改写前后不同的列入对账报告（P2-A）。
 - prd 系统的 11 份未删除页面 → 变更 PRD 正文文档，连同 114 条修订、99 个附件、6 条评论（anchor_state = unanchored）。
 
 **迭代与发布版本**

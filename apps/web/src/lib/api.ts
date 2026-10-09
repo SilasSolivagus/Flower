@@ -12,16 +12,10 @@ export class ApiError extends Error {
 /** 请求没有到达服务器（断网、DNS 失败、连接被重置等）时的提示。 */
 export const NETWORK_ERROR_MESSAGE = '网络连接失败，请检查网络后重试';
 
-export async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
-  const hasBody = init.body !== undefined;
+async function send<T>(path: string, init: RequestInit): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`/api/v1${path}`, {
-      method: init.method ?? 'GET',
-      headers: hasBody ? { 'content-type': 'application/json' } : {},
-      body: hasBody ? JSON.stringify(init.body) : undefined,
-      credentials: 'same-origin',
-    });
+    res = await fetch(`/api/v1${path}`, { ...init, credentials: 'same-origin' });
   } catch {
     throw new ApiError(0, 'network', NETWORK_ERROR_MESSAGE, null);
   }
@@ -32,6 +26,22 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
     throw new ApiError(res.status, e?.code ?? 'internal', e?.message ?? '服务暂时不可用，请稍后重试', e?.details ?? null);
   }
   return data as T;
+}
+
+export async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+  const hasBody = init.body !== undefined;
+  return send<T>(path, {
+    method: init.method ?? 'GET',
+    headers: hasBody ? { 'content-type': 'application/json' } : {},
+    body: hasBody ? JSON.stringify(init.body) : undefined,
+  });
+}
+
+/** multipart 上传一个文件（字段名 file）。不设 content-type，由浏览器带上 boundary。 */
+export async function apiUpload<T>(path: string, file: Blob, filename: string): Promise<T> {
+  const form = new FormData();
+  form.set('file', file, filename);
+  return send<T>(path, { method: 'POST', body: form });
 }
 
 /** 「条件未满足」类错误的 details.unmet；其他形状返回空数组。 */

@@ -3,19 +3,20 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { CheckItems } from '@/components/check-items';
+import { EditableTitle } from '@/components/editable-title';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
-import { requirementKeys, useApiMutation, useRequirement } from '@/lib/queries';
+import { documentKeys, qk, requirementKeys, useApiMutation, useRequirement } from '@/lib/queries';
 import { Blockers } from './blockers';
 import { Comments } from './comments';
 import { FieldsPanel } from './fields-panel';
 import { History } from './history';
 import { Assignments } from './assignments';
+import { PrdCard } from './prd-card';
 import { Relations } from './relations';
 import { Releases } from './releases';
 import { SideLists } from './side-lists';
@@ -27,8 +28,6 @@ export default function RequirementPage() {
   const router = useRouter();
   const q = useRequirement(org, decodedKey);
   const r = q.data;
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [title, setTitle] = useState('');
   const [editingDesc, setEditingDesc] = useState(false);
   const [description, setDescription] = useState('');
   const patch = useApiMutation((body: { title?: string; description?: string }) => api(`/orgs/${org}/requirements/${r!.id}`, { method: 'PATCH', body }), {
@@ -50,31 +49,7 @@ export default function RequirementPage() {
     <>
       <PageHeader
         crumbs={[{ label: '需求', href: `/${org}/requirements?product=${r.productKey}` }, { label: r.displayKey }]}
-        title={
-          editingTitle ? (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                patch.mutate({ title }, { onSuccess: () => setEditingTitle(false) });
-              }}
-            >
-              <Input aria-label="标题" className="h-9 text-xl font-semibold" value={title} autoFocus maxLength={200} onChange={(e) => setTitle(e.target.value)} onBlur={() => setEditingTitle(false)} />
-            </form>
-          ) : (
-            <button
-              type="button"
-              disabled={!canEdit}
-              className="text-left disabled:cursor-default"
-              onClick={() => {
-                setTitle(r.title);
-                setEditingTitle(true);
-              }}
-            >
-              <span className="mr-2 font-mono text-base text-muted-foreground">{r.displayKey}</span>
-              {r.title}
-            </button>
-          )
-        }
+        title={<EditableTitle displayKey={r.displayKey} title={r.title} canEdit={canEdit} onSubmit={(title, close) => patch.mutate({ title }, { onSuccess: close })} />}
         description={r.aliases.length > 0 ? `旧编号：${r.aliases.join('、')}` : undefined}
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -119,7 +94,16 @@ export default function RequirementPage() {
               <p className="whitespace-pre-wrap text-[13px] leading-6">{r.description || <span className="text-muted-foreground">暂无描述</span>}</p>
             )}
           </section>
-          <CheckItems org={org} requirement={r} />
+          <CheckItems items={r.checkItems} canEdit={canEdit} basePath={`/orgs/${org}/requirements/${r.id}/checks`} invalidate={[requirementKeys(org), qk.workbench]} />
+          {r.changeDocument && (
+            <CheckItems
+              title="PRD 检查项"
+              items={r.documentCheckItems}
+              canEdit={canEdit}
+              basePath={`/orgs/${org}/documents/${r.changeDocument.id}/checks`}
+              invalidate={[requirementKeys(org), documentKeys(org), qk.workbench]}
+            />
+          )}
           <Blockers org={org} requirement={r} />
           <Relations org={org} requirement={r} />
           <Comments org={org} requirementId={r.id} />
@@ -127,6 +111,7 @@ export default function RequirementPage() {
         </div>
         <div className="flex flex-col gap-4">
           <StatusPanel org={org} requirement={r} />
+          <PrdCard org={org} requirement={r} />
           <FieldsPanel org={org} requirement={r} />
           <Assignments org={org} requirement={r} />
           <SideLists requirement={r} />

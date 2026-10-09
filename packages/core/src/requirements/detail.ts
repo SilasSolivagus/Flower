@@ -3,8 +3,7 @@ import { productRoleOf } from '../access/permissions';
 import type { Db } from '../db/client';
 import {
   blockers,
-  checkItemResults,
-  checkItemSignoffs,
+  documents,
   entityAliases,
   fieldDefinitions,
   fieldOptions,
@@ -20,30 +19,15 @@ import {
   tasks,
 } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
+import type { DocumentStatus } from '../documents/constants';
+import { documentDisplayKey, prdCheckState } from '../documents/markdown';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { joinIterationUnmet } from '../iterations/membership';
-import { signerIdentity } from '../reviews/snapshot';
+import { buildCheckItemViews, type CheckItemView, requirementCheckStates } from './check-views';
 import { effectiveFields, memberNames, productWorkflowBody } from './context';
-import type { CheckState } from './labels';
 import { displayKey, hydrateList, type MemberRef, type OptionRef, type RequirementListItem } from './requirements';
-import { availableTransitions, checkStatesFor, matchingSignerRules, type TransitionOption, type UnmetCondition } from './workflow-runtime';
-
-export type CheckItemView = {
-  key: string;
-  label: string;
-  type: 'single' | 'signoff';
-  state: CheckState;
-  note: string | null;
-  meta: Record<string, unknown>;
-  updatedAt: Date | null;
-  updatedBy: MemberRef | null;
-  signers: Array<{ index: number; by: 'function_tag' | 'member' | 'product_role'; ref: string; label: string }>;
-  signoffRule: 'all' | 'any' | null;
-  signoffs: Array<{ id: string; signer: MemberRef; actedBy: MemberRef | null; ruleIndex: number; decision: 'passed' | 'rejected'; note: string | null; at: Date }>;
-  canSign: number[];
-  canSignOnBehalf: number[];
-};
+import { availableTransitions, type TransitionOption, type UnmetCondition } from './workflow-runtime';
 
 export type RequirementDetail = RequirementListItem & {
   productKey: string;
@@ -55,6 +39,10 @@ export type RequirementDetail = RequirementListItem & {
   workflow: { states: Array<{ key: string; label: string; color: string; category: string; group: string; order: number }> };
   fields: Array<{ key: string; label: string; cardinality: 'single' | 'multi'; options: OptionRef[] }>;
   checkItems: CheckItemView[];
+  /** 所挂的变更 PRD。 */
+  changeDocument: { id: string; displayKey: string; title: string; status: DocumentStatus; source: 'native' | 'external' } | null;
+  /** 所挂 PRD 上作用于 PRD 的检查项（覆盖的需求共享）。 */
+  documentCheckItems: CheckItemView[];
   transitions: TransitionOption[];
   joinIterationUnmet: UnmetCondition[];
   history: Array<{ from: string | null; to: string; actor: MemberRef | null; forced: boolean; reason: string | null; at: Date }>;
@@ -65,8 +53,6 @@ export type RequirementDetail = RequirementListItem & {
   tasks: Array<{ id: string; title: string; assignee: MemberRef | null; status: 'todo' | 'doing' | 'done'; planStart: string | null; planDays: number | null }>;
   aliases: string[];
 };
-
-const PRODUCT_ROLE_SIGNER_LABEL: Record<string, string> = { admin: '产品管理员', editor: '产品编辑', viewer: '产品只读成员' };
 
 async function resolveKey(tx: Tx, key: string): Promise<typeof requirements.$inferSelect> {
   const m = /^([A-Z][A-Z0-9]{1,9})-(\d{1,9})$/.exec(key.trim());
@@ -113,10 +99,6 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
         .map((v) => ({ id: v.id, key: v.key, label: v.label, color: v.color })),
     }));
 
-    const results = await tx.select().from(checkItemResults).where(and(eq(checkItemResults.targetType, 'requirement'), eq(checkItemResults.targetId, row.id)));
-    const signoffs = results.length
-      ? await tx.select().from(checkItemSignoffs).where(inArray(checkItemSignoffs.resultId, results.map((r) => r.id))).orderBy(asc(checkItemSignoffs.at), asc(checkItemSignoffs.id))
-      : [];
     const history = await tx
       .select()
       .from(stateTransitions)
@@ -135,24 +117,16 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
       .where(eq(requirementReleases.requirementId, row.id));
     const taskRows = await tx.select().from(tasks).where(eq(tasks.requirementId, row.id)).orderBy(asc(tasks.planStart), asc(tasks.createdAt));
     const aliasRows = await tx.select({ alias: entityAliases.alias }).from(entityAliases).where(eq(entityAliases.entityId, row.id));
+    const [docRow] = row.changeDocumentId ? await tx.select().from(documents).where(and(eq(documents.id, row.changeDocumentId), isNull(documents.deletedAt))) : [];
 
-    const signerMemberIds = body.checkItems.flatMap((c) => c.signers ?? []).filter((s) => s.by === 'member').map((s) => s.ref);
     const names = await memberNames(tx, [
-      ...signoffs.flatMap((s) => [s.signerMemberId, s.actedByMemberId]),
-      ...results.map((r) => r.updatedBy),
       ...history.map((h) => h.actorMemberId),
       ...assignments.map((a) => a.memberId),
       ...blockerRows.map((b) => b.ownerMemberId),
       ...taskRows.map((x) => x.assigneeMemberId),
-      ...signerMemberIds,
     ]);
     const ref = (id: string | null): MemberRef | null => (id ? { id, displayName: names.get(id) ?? '已删除的成员' } : null);
-    const tagIds = [
-      ...new Set([
-        ...assignments.map((a) => a.functionTagId).filter((x): x is string => !!x),
-        ...body.checkItems.flatMap((c) => c.signers ?? []).filter((s) => s.by === 'function_tag').map((s) => s.ref),
-      ]),
-    ];
+    const tagIds = [...new Set(assignments.map((a) => a.functionTagId).filter((x): x is string => !!x))];
     const tagRows = tagIds.length ? await tx.select({ id: functionTags.id, name: functionTags.name }).from(functionTags).where(inArray(functionTags.id, tagIds)) : [];
     const tagName = new Map(tagRows.map((x) => [x.id, x.name]));
     const optionIds = [
@@ -178,42 +152,12 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
       .filter((x) => x.r.productId === row.productId || otherRoles.get(x.r.productId))
       .map((x) => ({ id: x.r.id, number: x.r.number, title: x.r.title, productKey: x.productKey }));
 
-    const identity = await signerIdentity(tx, actor, role);
-    const states = checkStatesFor(body, results.map((r) => ({ itemKey: r.itemKey, state: r.state })));
-    const checkItems: CheckItemView[] = body.checkItems
-      .filter((c) => c.scope === 'requirement')
-      .map((c) => {
-        const result = results.find((r) => r.itemKey === c.key);
-        const signers = (c.signers ?? []).map((s, index) => ({
-          index,
-          by: s.by,
-          ref: s.ref,
-          label: s.by === 'function_tag' ? (tagName.get(s.ref) ?? '已删除的标签') : s.by === 'member' ? (names.get(s.ref) ?? '已删除的成员') : (PRODUCT_ROLE_SIGNER_LABEL[s.ref] ?? s.ref),
-        }));
-        return {
-          key: c.key,
-          label: c.label,
-          type: c.type,
-          state: states[c.key]!,
-          note: result?.note ?? null,
-          meta: result?.meta ?? {},
-          updatedAt: result?.updatedAt ?? null,
-          updatedBy: ref(result?.updatedBy ?? null),
-          signers,
-          signoffRule: c.signoffRule ?? null,
-          signoffs: signoffs
-            .filter((s) => s.resultId === result?.id)
-            .map((s) => ({ id: s.id, signer: ref(s.signerMemberId)!, actedBy: ref(s.actedByMemberId), ruleIndex: s.signerRuleIndex, decision: s.decision, note: s.note, at: s.at })),
-          canSign: c.type === 'signoff' && actor.tokenScope?.access !== 'read' ? matchingSignerRules(c, identity) : [],
-          canSignOnBehalf:
-            c.type === 'signoff' && role === 'admin' && actor.tokenScope?.access !== 'read'
-              ? signers.filter((s) => s.by === 'member' && s.ref !== actor.memberId).map((s) => s.index)
-              : [],
-        };
-      });
-
+    const checkItems = await buildCheckItemViews(tx, actor, role, body.checkItems.filter((c) => c.scope === 'requirement'), { type: 'requirement', id: row.id }, { autoState: docRow ? prdCheckState(docRow.status) : null });
+    const documentCheckItems = docRow
+      ? await buildCheckItemViews(tx, actor, role, body.checkItems.filter((c) => c.scope === 'document'), { type: 'document', id: docRow.id }, { autoState: null })
+      : [];
     const ctx = {
-      checks: states,
+      checks: await requirementCheckStates(tx, body, row),
       filledFields: new Set(fieldList.filter((f) => f.options.length > 0).map((f) => f.key)),
       hasIteration: row.iterationId !== null,
       hasChangeDocument: row.changeDocumentId !== null,
@@ -231,6 +175,8 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
       workflow: { states: [...body.states].sort((a, b) => a.order - b.order).map((s) => ({ key: s.key, label: s.label, color: s.color, category: s.category, group: s.group, order: s.order })) },
       fields: fieldList,
       checkItems,
+      changeDocument: docRow ? { id: docRow.id, displayKey: documentDisplayKey(product!.key, docRow.number), title: docRow.title, status: docRow.status, source: docRow.source } : null,
+      documentCheckItems,
       transitions: availableTransitions(body, row.stateKey, ctx, lookup),
       joinIterationUnmet: await joinIterationUnmet(tx, body, row),
       history: history.map((h) => ({ from: h.fromState, to: h.toState, actor: ref(h.actorMemberId), forced: h.forced, reason: h.reason, at: h.at })),

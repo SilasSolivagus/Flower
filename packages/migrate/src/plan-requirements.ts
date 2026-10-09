@@ -104,6 +104,7 @@ export function buildRequirements(ctx: PlanContext): void {
     const number = index + 1;
     const { plane, push } = pair;
     const id = plane ? reqIdOfPlane.get(plane.id)! : reqIdOfPush.get(push!.id)!;
+    ctx.requirementSources.push({ id, number, plane, push });
     const createdAt = ctx.time(plane ? plane.created_at : push!.created_at);
     const updatedAt = ctx.time(plane?.updated_at ?? push?.last_edited_at, createdAt);
 

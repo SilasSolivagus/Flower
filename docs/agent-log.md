@@ -20,6 +20,23 @@
 
 ## 记录
 
+### 2026-10-09 · 本地 · P2-A 变更 PRD
+- 分支 / PR：`feat/p2a-change-prd`，PR #12
+- 做了什么：
+  - 数据模型：documents、document_revisions、document_templates、attachments（RLS），products.document_seq，requirements.change_document_id 外键。
+  - Flower 内 PRD（BlockNote，自动保存与乐观锁，同一作者 5 分钟内合并修订，按小节对比与恢复，划词评论与已失效标记）与外部 PRD（链接、状态、覆盖需求、会签、评论）；三种导入；模板与必填小节；图片附件存本地卷。
+  - 「PRD」检查项改为作用于需求、跟随 PRD 状态；PRD 上的会签结果覆盖的需求共享；等我签字与 PRD 评审表包含评审中的 PRD。
+  - 迁移：prd 系统页面、修订、附件、评论；123plane 与 push 的 PRD 链接导入为外部 PRD。
+- 怎么验证的：
+  - `pnpm test`：core 309、web 154、migrate 110，全部通过；typecheck 通过；web lint 0 错误 0 警告。
+  - 全量 e2e：91 passed、1 skipped（`editor-perf.spec.ts`，需要 `EDITOR_BENCH`）、0 failed，跑了两次；`./scripts/smoke.sh` 通过。
+  - 迁移对账（Task 17，2026-10-09，`--as-of 2026-09-29 --replace`，用户已确认）：prd 系统 11 份未删除页面（104 条修订、98 个附件 + 6 张内嵌图片、3 条评论、0 条需求关联）；外部 PRD 192 份（关联需求 242 条）；「PRD」检查项改写 100 条；读只读 SQL 复查与报告一致。
+  - 大文档性能复测（Task 1 基线 vs 真实数据）与 1440px / 760px 界面复验结论均见 `docs/p2a-validation.md`。
+- 留给对方：
+  - 本机 DNS 不可达时，e2e 应用的数据库连接改用 `127.0.0.1`，否则 `getaddrinfo` 会阻塞约 30 秒。
+  - 留观的非阻塞项：编辑器保存后 `setQueryData` 不比对版本号，可能多弹一次冲突提示；SVG 粘贴为 `data:` 图片保存会 400；迁移工具按姓名回退匹配成员、需求关联覆盖写入、导入中途存储错误、标题裁剪、仅统计 `merged` 的需求个数几处小问题；`setCheckItemState` 加锁未排除软删除的 PRD。
+  - P2-B 范围见计划「留给 P2-B」一行。
+
 ### 2026-10-08 · 本地 · 合并服务端成员校验（PR #9），P1 收尾
 - 分支 / PR：`docs/progress-after-p9`
 - 做了什么：

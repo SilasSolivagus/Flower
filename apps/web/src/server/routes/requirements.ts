@@ -25,12 +25,7 @@ import {
 import type { Context } from 'hono';
 import { z } from 'zod';
 import type { ApiDeps, ApiEnv, App } from '../api';
-import { readJson } from '../http';
-
-const csv = (v: string | undefined): string[] | undefined => {
-  const list = v?.split(',').map((s) => s.trim()).filter(Boolean);
-  return list?.length ? list : undefined;
-};
+import { csvParam as csv, readJson } from '../http';
 
 function filterFrom(c: Context<ApiEnv>): RequirementFilter {
   const q = (k: string) => c.req.query(k);
