@@ -19,6 +19,35 @@ ALTER TABLE "entity_links" ADD CONSTRAINT "entity_links_org_id_organizations_id_
 CREATE INDEX "entity_links_source" ON "entity_links" USING btree ("source_type","source_id");--> statement-breakpoint
 CREATE INDEX "entity_links_target" ON "entity_links" USING btree ("target_type","target_id");--> statement-breakpoint
 CREATE INDEX "entity_links_org_text" ON "entity_links" USING btree ("org_id","target_text");--> statement-breakpoint
+-- 加唯一索引前先处理已有的重名：同一产品内未删除的常规迭代按 created_at、id 排序，第 2 个起改名为「名称（N）」，N 取未被占用的最小值（从 2 开始）
+DO $$
+DECLARE
+  r record;
+  n integer;
+  candidate text;
+BEGIN
+  FOR r IN
+    SELECT d.id, d.product_id, d.name
+    FROM (
+      SELECT id, product_id, name, row_number() OVER (PARTITION BY product_id, name ORDER BY created_at, id) AS rn
+      FROM iterations
+      WHERE deleted_at IS NULL AND product_id IS NOT NULL
+    ) AS d
+    WHERE d.rn > 1
+    ORDER BY d.product_id, d.name, d.rn
+  LOOP
+    n := 2;
+    LOOP
+      candidate := r.name || '（' || n || '）';
+      EXIT WHEN NOT EXISTS (
+        SELECT 1 FROM iterations WHERE product_id = r.product_id AND deleted_at IS NULL AND name = candidate
+      );
+      n := n + 1;
+    END LOOP;
+    UPDATE iterations SET name = candidate WHERE id = r.id;
+  END LOOP;
+END
+$$;--> statement-breakpoint
 CREATE UNIQUE INDEX "iterations_product_name" ON "iterations" USING btree ("product_id","name") WHERE "iterations"."deleted_at" is null;--> statement-breakpoint
 CREATE UNIQUE INDEX "tasks_product_number" ON "tasks" USING btree ("product_id","number");--> statement-breakpoint
 UPDATE "tasks" AS t SET "number" = n.rn
