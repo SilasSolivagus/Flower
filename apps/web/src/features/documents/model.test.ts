@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { DocumentComment } from '@/lib/types';
 import { base64ToBytes, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, findDataImages, groupThreads, importSummary, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
 
 describe('PRD 列表筛选', () => {
@@ -42,7 +43,7 @@ describe('评论', () => {
 
   it('按顶层评论分组，回复挂在所属评论下，找不到上级的回复当作顶层', () => {
     const c = (id: string, parentId: string | null) =>
-      ({ id, parentId, author: null, body: id, anchor: null, anchorState: null, resolvedAt: null, resolvedBy: null, createdAt: '2026-10-08T00:00:00Z' }) as const;
+      ({ id, parentId, author: null, body: id, anchor: null, anchorState: null, resolvedAt: null, resolvedBy: null, createdAt: '2026-10-08T00:00:00Z', links: [] as DocumentComment['links'] }) as const;
     expect(groupThreads([c('a', null), c('b', null), c('a1', 'a'), c('x1', 'gone')]).map((t) => [t.comment.id, t.replies.map((r) => r.id)])).toEqual([
       ['a', ['a1']],
       ['b', []],

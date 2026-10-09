@@ -8,6 +8,8 @@ export * from './db/schema';
 export * from './documents/markdown';
 export * from './links/syntax';
 export * from './links/links';
+export * from './links/cards';
+export * from './links/backlinks';
 export * from './db/client';
 export * from './db/tx';
 export * from './events';

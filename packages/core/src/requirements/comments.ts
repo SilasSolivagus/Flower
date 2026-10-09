@@ -6,6 +6,7 @@ import { withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
+import { type LinkCard, linkCardsFor, sourceKey } from '../links/cards';
 import { syncSourceLinks } from '../links/links';
 import { loadRequirement, memberNames } from './context';
 import { type MemberRef, productKeyOf } from './requirements';
@@ -18,6 +19,7 @@ export type CommentView = {
   kind: 'comment' | 'update';
   createdAt: Date;
   read: boolean;
+  links: LinkCard[];
 };
 
 const onRequirement = (requirementId: string) => and(eq(comments.targetType, 'requirement'), eq(comments.targetId, requirementId));
@@ -34,6 +36,7 @@ export async function listRequirementComments(db: Db, actor: Actor, requirementI
       .where(and(onRequirement(requirementId), eq(commentReads.memberId, actor.memberId)));
     const readSet = new Set(reads.map((r) => r.commentId));
     const names = await memberNames(tx, rows.map((r) => r.authorMemberId));
+    const cards = await linkCardsFor(tx, actor, rows.map((c) => ({ type: 'comment' as const, id: c.id })));
     return rows.map((c) => ({
       id: c.id,
       parentId: c.parentId,
@@ -42,6 +45,7 @@ export async function listRequirementComments(db: Db, actor: Actor, requirementI
       kind: c.kind,
       createdAt: c.createdAt,
       read: readSet.has(c.id),
+      links: cards.get(sourceKey('comment', c.id))!,
     }));
   });
 }
@@ -78,6 +82,7 @@ export async function addRequirementComment(
       payload: { commentId: row!.id, kind: row!.kind },
     });
     const names = await memberNames(tx, [actor.memberId]);
+    const cards = await linkCardsFor(tx, actor, [{ type: 'comment', id: row!.id }]);
     return {
       id: row!.id,
       parentId: row!.parentId,
@@ -86,6 +91,7 @@ export async function addRequirementComment(
       kind: row!.kind,
       createdAt: row!.createdAt,
       read: true,
+      links: cards.get(sourceKey('comment', row!.id))!,
     };
   });
 }

@@ -6,6 +6,7 @@ import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
+import { type LinkCard, linkCardsFor, sourceKey } from '../links/cards';
 import { syncSourceLinks } from '../links/links';
 import { memberNames } from '../requirements/context';
 import { type MemberRef, productKeyOf } from '../requirements/requirements';
@@ -23,13 +24,15 @@ export type DocumentCommentView = {
   resolvedAt: Date | null;
   resolvedBy: MemberRef | null;
   createdAt: Date;
+  links: LinkCard[];
 };
 type CommentRow = typeof comments.$inferSelect;
 
 const onDocument = (documentId: string) => and(eq(comments.targetType, 'document'), eq(comments.targetId, documentId));
 
-async function views(tx: Tx, rows: CommentRow[]): Promise<DocumentCommentView[]> {
+async function views(tx: Tx, actor: Actor, rows: CommentRow[]): Promise<DocumentCommentView[]> {
   const names = await memberNames(tx, rows.flatMap((r) => [r.authorMemberId, r.resolvedBy]));
+  const cards = await linkCardsFor(tx, actor, rows.map((c) => ({ type: 'comment' as const, id: c.id })));
   const ref = (id: string | null): MemberRef | null => (id ? { id, displayName: names.get(id) ?? '已删除的成员' } : null);
   return rows.map((c) => ({
     id: c.id,
@@ -41,6 +44,7 @@ async function views(tx: Tx, rows: CommentRow[]): Promise<DocumentCommentView[]>
     resolvedAt: c.resolvedAt,
     resolvedBy: ref(c.resolvedBy),
     createdAt: c.createdAt,
+    links: cards.get(sourceKey('comment', c.id))!,
   }));
 }
 
@@ -49,7 +53,7 @@ export async function listDocumentComments(db: Db, actor: Actor, documentId: str
     const doc = await loadDocument(tx, documentId);
     await requireProductRole(tx, actor, doc.productId, 'viewer');
     const rows = await tx.select().from(comments).where(onDocument(documentId)).orderBy(asc(comments.createdAt), asc(comments.id));
-    return views(tx, rows);
+    return views(tx, actor, rows);
   });
 }
 
@@ -107,7 +111,7 @@ export async function addDocumentComment(
       actor,
       payload: { commentId: row!.id, anchored: anchor !== null },
     });
-    return (await views(tx, [row!]))[0]!;
+    return (await views(tx, actor, [row!]))[0]!;
   });
 }
 
@@ -134,7 +138,7 @@ export async function setDocumentCommentResolved(db: Db, actor: Actor, commentId
       actor,
       payload: { commentId, changes: [{ field: 'resolved', old: !input.resolved, new: input.resolved }] },
     });
-    return (await views(tx, [row!]))[0]!;
+    return (await views(tx, actor, [row!]))[0]!;
   });
 }
 

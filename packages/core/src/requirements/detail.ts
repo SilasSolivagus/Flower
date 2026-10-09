@@ -24,6 +24,7 @@ import { documentDisplayKey, prdCheckState } from '../documents/markdown';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { joinIterationUnmet } from '../iterations/membership';
+import { type LinkCard, linkCardsFor, sourceKey } from '../links/cards';
 import { taskDisplayKey } from '../links/syntax';
 import { buildCheckItemViews, type CheckItemView, requirementCheckStates } from './check-views';
 import { effectiveFields, memberNames, productWorkflowBody } from './context';
@@ -33,6 +34,8 @@ import { availableTransitions, type TransitionOption, type UnmetCondition } from
 export type RequirementDetail = RequirementListItem & {
   productKey: string;
   description: string;
+  /** 描述里 [[ ]] 的链接卡。 */
+  links: LinkCard[];
   createdAt: Date;
   stateChangedAt: Date;
   myRole: ProductRole;
@@ -157,6 +160,7 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
     const documentCheckItems = docRow
       ? await buildCheckItemViews(tx, actor, role, body.checkItems.filter((c) => c.scope === 'document'), { type: 'document', id: docRow.id }, { autoState: null })
       : [];
+    const links = (await linkCardsFor(tx, actor, [{ type: 'requirement', id: row.id }])).get(sourceKey('requirement', row.id))!;
     const ctx = {
       checks: await requirementCheckStates(tx, body, row),
       filledFields: new Set(fieldList.filter((f) => f.options.length > 0).map((f) => f.key)),
@@ -169,6 +173,7 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
       ...base!,
       productKey: product!.key,
       description: row.description,
+      links,
       createdAt: row.createdAt,
       stateChangedAt: row.stateChangedAt,
       myRole: role,
