@@ -8,11 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
+import { WikiText } from '@/components/wiki-text';
 import type { SelectionAnchor } from '@/features/documents/editor/selection';
 import { ANCHOR_STATE_LABEL, groupThreads } from '@/features/documents/model';
 import { formatDateTime } from '@/features/requirements/format';
 import { api } from '@/lib/api';
-import { qk, useApiMutation, useDocumentComments, useOrg } from '@/lib/queries';
+import { linkKeys, qk, useApiMutation, useDocumentComments, useOrg } from '@/lib/queries';
 import type { DocumentComment, DocumentDetail } from '@/lib/types';
 
 function Quote({ c }: { c: DocumentComment }) {
@@ -37,7 +38,7 @@ export function DocumentComments({ org, doc }: { org: string; doc: DocumentDetai
   const [body, setBody] = useState('');
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [reply, setReply] = useState('');
-  const invalidate = [qk.documentComments(org, doc.id)];
+  const invalidate = [qk.documentComments(org, doc.id), linkKeys(org)];
   const add = useApiMutation((v: { body: string; parentId?: string }) => api(`/orgs/${org}/documents/${doc.id}/comments`, { method: 'POST', body: v }), {
     silentError: true,
     invalidate,
@@ -69,13 +70,13 @@ export function DocumentComments({ org, doc }: { org: string; doc: DocumentDetai
                 {c.author?.displayName ?? '已删除的成员'} · <span className="font-mono">{formatDateTime(c.createdAt)}</span>
                 {c.resolvedAt && <span className="ml-2 rounded-sm bg-muted px-1.5">已解决</span>}
               </p>
-              <p className="whitespace-pre-wrap text-[13px]">{c.body}</p>
+              <WikiText org={org} text={c.body} cards={c.links} productKey={doc.productKey} className="text-[13px]" />
               {replies.length > 0 && (
                 <ul className="ml-4 flex flex-col gap-2 border-l pl-3">
                   {replies.map((r) => (
                     <li key={r.id} className="text-[13px]">
                       <span className="text-[12px] text-muted-foreground">{r.author?.displayName ?? '已删除的成员'}：</span>
-                      <span className="whitespace-pre-wrap">{r.body}</span>
+                      <WikiText org={org} text={r.body} cards={r.links} productKey={doc.productKey} as="span" />
                     </li>
                   ))}
                 </ul>
@@ -146,7 +147,7 @@ export function AnchorCommentDialog({ documentId, anchor, onClose }: { documentI
   const [body, setBody] = useState('');
   const add = useApiMutation(() => api(`/orgs/${org}/documents/${documentId}/comments`, { method: 'POST', body: { body, anchor } }), {
     silentError: true,
-    invalidate: [qk.documentComments(org, documentId)],
+    invalidate: [qk.documentComments(org, documentId), linkKeys(org)],
     success: '已发表',
     onSuccess: () => {
       setBody('');

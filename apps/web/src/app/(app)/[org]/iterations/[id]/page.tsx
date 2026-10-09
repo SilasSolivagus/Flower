@@ -2,6 +2,7 @@
 
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
+import { Backlinks } from '@/components/backlinks';
 import { ConfirmAction } from '@/components/confirm-action';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
@@ -134,6 +135,7 @@ function IterationPage() {
           <ReleasesTab org={org} iteration={it} />
         </TabsContent>
       </Tabs>
+      <Backlinks org={org} type="iteration" id={it.id} />
     </>
   );
 }

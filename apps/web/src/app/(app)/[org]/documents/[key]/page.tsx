@@ -2,6 +2,7 @@
 
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useRef, useState } from 'react';
+import { Backlinks } from '@/components/backlinks';
 import { EditableTitle } from '@/components/editable-title';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
@@ -65,6 +66,7 @@ function DocumentPage() {
         <div className="flex min-w-0 flex-col gap-4">
           {d.source === 'native' ? <EditorPane key={`${d.id}:${epoch}`} ref={editor} org={org} doc={d} onReload={() => void reload()} /> : <ExternalCard org={org} doc={d} onConvert={() => setConverting(true)} />}
           <DocumentComments org={org} doc={d} />
+          <Backlinks org={org} type="document" id={d.id} />
         </div>
         <SidePanel org={org} doc={d} onReload={() => void reload()} saveEditor={saveEditor} />
       </div>
