@@ -38,7 +38,9 @@ export async function recordEvent(tx: Tx, e: EventInput): Promise<string> {
     try {
       await tx.transaction((sp) => matchNotificationRules(sp, ev));
     } catch (err) {
-      console.warn(`[notify] 事件规则匹配失败，本事件不推送：event=${id} type=${e.type}：${err instanceof Error ? err.message : String(err)}`);
+      // drizzle 的查询错误把 SQL 与参数写进 message，只记底层原因
+      const cause = err instanceof Error && err.cause instanceof Error ? err.cause : err;
+      console.warn(`[notify] 事件规则匹配失败，本事件不推送：event=${id} type=${e.type}：${cause instanceof Error ? cause.message : String(cause)}`);
     }
   }
   return id;

@@ -74,11 +74,19 @@ export async function matchNotificationRules(tx: Tx, ev: MatchEvent): Promise<vo
     .where(and(eq(notificationRules.productId, ev.productId), eq(notificationRules.enabled, true), arrayContains(notificationRules.eventTypes, [ev.type])))
     .for('key share');
   if (rules.length === 0) return;
-  const filters = rules.map((r) => parseRuleFilter(r.filter));
-  const facts = filters.some((f) => Object.keys(f).length > 0) ? await eventFactsTx(tx, ev) : null;
+  // 存储的过滤条件有误时只跳过该规则，其余规则照常匹配
+  const parsed = rules.flatMap((rule) => {
+    try {
+      return [{ rule, filter: parseRuleFilter(rule.filter) }];
+    } catch {
+      console.warn(`[notify] 事件规则的过滤条件有误，已跳过：rule=${rule.id} event=${ev.id}`);
+      return [];
+    }
+  });
+  const facts = parsed.some((p) => Object.keys(p.filter).length > 0) ? await eventFactsTx(tx, ev) : null;
   const now = new Date();
-  for (const [i, rule] of rules.entries()) {
-    if (facts && !ruleMatches(filters[i]!, facts)) continue;
+  for (const { rule, filter } of parsed) {
+    if (facts && !ruleMatches(filter, facts)) continue;
     if (rule.mode === 'digest') {
       await tx.insert(notificationDigestItems).values({ orgId: ev.orgId, ruleId: rule.id, scheduleId: rule.digestScheduleId!, eventId: ev.id }).onConflictDoNothing();
       continue;

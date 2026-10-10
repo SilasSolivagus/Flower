@@ -1,9 +1,11 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { domainEvents, notificationDeliveries, notificationDigestItems, notificationRules, requirements } from '../src/db/schema';
+import { withOrg } from '../src/db/tx';
 import { listFields } from '../src/definitions/fields';
 import { createDocument, transitionDocument } from '../src/documents/documents';
 import type { Actor } from '../src/domain-types';
+import { recordEvent } from '../src/events';
 import { updateChannel } from '../src/notifications/channels';
 import { ruleMatches } from '../src/notifications/match';
 import { createRule, deleteRule, listRules, updateRule } from '../src/notifications/rules';
@@ -146,21 +148,58 @@ describe('事件规则', () => {
     await expect(deleteRule(t.db, pa, used.id)).rejects.toThrow('已有发送记录的规则只能停用');
   });
 
-  it('匹配出错只回滚推送部分：业务写入与领域事件照常提交，记一条警告', async () => {
-    const rule = await createRule(t.db, owner, otherProductId, { name: '会出错的规则', eventTypes: ['requirement.created'], channelIds: [channelId], filter: { priorities: ['p0'] } });
-    await t.adminDb.update(notificationRules).set({ filter: { priorities: 'p0' } as never }).where(eq(notificationRules.id, rule.id));
+  it('存储的过滤条件有误时只跳过该规则：同产品的其他规则照常写待发记录，业务写入提交，记一条警告', async () => {
+    const bad = await createRule(t.db, owner, otherProductId, { name: '过滤条件损坏', eventTypes: ['requirement.created'], channelIds: [channelId], filter: { priorities: ['p0'] } });
+    const good = await createRule(t.db, owner, otherProductId, { name: '正常规则', eventTypes: ['requirement.created'], channelIds: [channelId] });
+    await t.adminDb.update(notificationRules).set({ filter: { priorities: 'p0' } as never }).where(eq(notificationRules.id, bad.id));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
-      const req = await createRequirement(t.db, owner, otherProductId, { title: '匹配出错时的需求' });
+      const req = await createRequirement(t.db, owner, otherProductId, { title: '过滤条件损坏时的需求' });
+      expect(await t.adminDb.select({ id: requirements.id }).from(requirements).where(eq(requirements.id, req.id))).toHaveLength(1);
+      const [event] = await t.adminDb.select().from(domainEvents).where(and(eq(domainEvents.subjectId, req.id), eq(domainEvents.type, 'requirement.created')));
+      expect(await deliveriesOf(bad.id)).toHaveLength(0);
+      expect(await deliveriesOf(good.id)).toMatchObject([{ eventId: event!.id, status: 'pending' }]);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0]![0])).toContain(bad.id);
+      expect(String(warn.mock.calls[0]![0])).toContain(event!.id);
+    } finally {
+      warn.mockRestore();
+      await t.adminDb.update(notificationRules).set({ enabled: false }).where(eq(notificationRules.id, bad.id));
+    }
+  });
+
+  it('匹配中出现数据库错误时回滚到 savepoint：外层事务仍可用，业务写入与领域事件照常提交', async () => {
+    const rule = await createRule(t.db, owner, otherProductId, { name: '写入会报错', eventTypes: ['requirement.created'], channelIds: [channelId] });
+    // 只对这条规则的待发记录报错，在 savepoint 里制造一个真实的 Postgres 错误
+    await t.adminDb.execute(
+      sql.raw(`create function test_reject_delivery() returns trigger language plpgsql as $$ begin raise exception 'test: delivery rejected'; end $$;
+        create trigger test_reject_delivery before insert on notification_deliveries for each row when (new.rule_id = '${rule.id}') execute function test_reject_delivery();`),
+    );
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const req = await createRequirement(t.db, owner, otherProductId, { title: '数据库报错时的需求' });
       expect(await t.adminDb.select({ id: requirements.id }).from(requirements).where(eq(requirements.id, req.id))).toHaveLength(1);
       const [event] = await t.adminDb.select().from(domainEvents).where(and(eq(domainEvents.subjectId, req.id), eq(domainEvents.type, 'requirement.created')));
       expect(event).toBeDefined();
-      expect(await deliveriesOf(rule.id)).toHaveLength(0);
+      expect(await t.adminDb.select().from(notificationDeliveries).where(eq(notificationDeliveries.eventId, event!.id))).toHaveLength(0);
       expect(warn).toHaveBeenCalledTimes(1);
       expect(String(warn.mock.calls[0]![0])).toContain(event!.id);
-      expect(String(warn.mock.calls[0]![0])).toContain('requirement.created');
+      expect(String(warn.mock.calls[0]![0])).toContain('test: delivery rejected');
+      expect(String(warn.mock.calls[0]![0])).not.toContain('params');
+
+      // 同一事务里 recordEvent 之后的语句仍能执行
+      const after = await withOrg(t.db, owner.orgId, async (tx) => {
+        const id = await recordEvent(tx, { orgId: owner.orgId, productId: otherProductId, type: 'requirement.created', subjectType: 'requirement', subjectId: req.id, actor: owner });
+        const [row] = await tx.select({ id: domainEvents.id }).from(domainEvents).where(eq(domainEvents.id, id));
+        return row;
+      });
+      expect(after).toBeDefined();
+      expect(await t.adminDb.select({ id: domainEvents.id }).from(domainEvents).where(eq(domainEvents.id, after!.id))).toHaveLength(1);
+      expect(warn).toHaveBeenCalledTimes(2);
     } finally {
       warn.mockRestore();
+      await t.adminDb.execute(sql.raw('drop trigger test_reject_delivery on notification_deliveries; drop function test_reject_delivery();'));
+      await t.adminDb.update(notificationRules).set({ enabled: false }).where(eq(notificationRules.id, rule.id));
     }
   });
 });
