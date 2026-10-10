@@ -65,7 +65,15 @@ export type DocumentDetail = DocumentListItem & {
   node: ModuleNodeRef | null;
   createdAt: Date;
 };
-export type RevisionListItem = { number: number; summary: string | null; author: MemberRef | null; createdAt: Date; updatedAt: Date };
+export type RevisionListItem = {
+  number: number;
+  summary: string | null;
+  author: MemberRef | null;
+  /** 合入产生的修订：来源变更 PRD。 */
+  mergedFrom: { id: string; displayKey: string; title: string } | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
 export type SaveResult = { version: number; revisionNumber: number; merged: boolean };
 export type DocumentRow = typeof documents.$inferSelect;
 type DocRow = DocumentRow;
@@ -427,10 +435,15 @@ export async function listRevisions(db: Db, actor: Actor, id: string): Promise<R
     await requireProductRole(tx, actor, doc.productId, 'viewer');
     const rows = await tx.select().from(documentRevisions).where(eq(documentRevisions.documentId, id)).orderBy(desc(documentRevisions.version));
     const names = await memberNames(tx, rows.map((r) => r.authorMemberId));
+    const sourceIds = [...new Set(rows.map((r) => r.mergedFromDocumentId).filter((x): x is string => !!x))];
+    const sources = sourceIds.length > 0 ? await tx.select({ id: documents.id, number: documents.number, title: documents.title }).from(documents).where(inArray(documents.id, sourceIds)) : [];
+    const productKey = sources.length > 0 ? await productKeyOf(tx, doc.productId) : '';
+    const sourceOf = new Map(sources.map((s) => [s.id, { id: s.id, displayKey: documentDisplayKey(productKey, s.number), title: s.title }]));
     return rows.map((r) => ({
       number: r.version,
       summary: r.summary,
       author: r.authorMemberId ? { id: r.authorMemberId, displayName: names.get(r.authorMemberId) ?? '已删除的成员' } : null,
+      mergedFrom: r.mergedFromDocumentId ? (sourceOf.get(r.mergedFromDocumentId) ?? null) : null,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     }));

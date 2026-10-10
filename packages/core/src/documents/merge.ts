@@ -1,14 +1,15 @@
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { requireProductRole } from '../access/permissions';
 import type { Db } from '../db/client';
-import { documentAffectedNodes, structureNodes } from '../db/schema';
+import { documentAffectedNodes, documentRevisions, documents, structureNodes } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
-import { productKeyOf } from '../requirements/requirements';
+import { memberNames } from '../requirements/context';
+import { type MemberRef, productKeyOf } from '../requirements/requirements';
 import { type AffectedNodeView, affectedNodesInTx, assertChangeDocument, loadTree } from './affected';
-import type { DocumentStatus } from './constants';
+import type { AffectedChangeType, DocumentStatus } from './constants';
 import { assertWritable, commitSystemRevisionTx, type DocumentRow, documentMarkdownTx, loadDocument, setDocumentStatusTx } from './documents';
 import { documentDisplayKey } from './markdown';
 import { ensureModuleDocumentTx, findModuleDocument } from './module-docs';
@@ -209,5 +210,41 @@ export async function reopenMerge(db: Db, actor: Actor, documentId: string, node
     if (doc.status === 'merged') await setDocumentStatusTx(tx, actor, doc, 'launched');
     const p = await progressOf(tx, doc.id);
     return { status: 'launched', ...p, moduleDocument: null };
+  });
+}
+
+export type MergeRecord = {
+  revisionNumber: number;
+  mergedAt: Date;
+  by: MemberRef | null;
+  changeType: AffectedChangeType;
+  feature: { id: string; name: string };
+  changeDocument: { id: string; displayKey: string; title: string };
+};
+
+/** 模块文档的合入记录：来自哪些变更 PRD 的哪些功能点，按修订号倒序。变更 PRD 返回空数组。 */
+export async function listMergeRecords(db: Db, actor: Actor, documentId: string): Promise<MergeRecord[]> {
+  return withOrg(db, actor.orgId, async (tx) => {
+    const doc = await loadDocument(tx, documentId);
+    await requireProductRole(tx, actor, doc.productId, 'viewer');
+    if (doc.kind !== 'module') return [];
+    const rows = await tx
+      .select({ a: documentAffectedNodes, version: documentRevisions.version, revisedAt: documentRevisions.createdAt, prdNumber: documents.number, prdTitle: documents.title, nodeName: structureNodes.name })
+      .from(documentAffectedNodes)
+      .innerJoin(documentRevisions, eq(documentRevisions.id, documentAffectedNodes.mergedRevisionId))
+      .innerJoin(documents, eq(documents.id, documentAffectedNodes.documentId))
+      .innerJoin(structureNodes, eq(structureNodes.id, documentAffectedNodes.nodeId))
+      .where(eq(documentRevisions.documentId, doc.id))
+      .orderBy(desc(documentRevisions.version));
+    const key = await productKeyOf(tx, doc.productId);
+    const names = await memberNames(tx, rows.map((r) => r.a.mergedBy));
+    return rows.map((r) => ({
+      revisionNumber: r.version,
+      mergedAt: r.a.mergedAt ?? r.revisedAt,
+      by: r.a.mergedBy ? { id: r.a.mergedBy, displayName: names.get(r.a.mergedBy) ?? '已删除的成员' } : null,
+      changeType: r.a.changeType,
+      feature: { id: r.a.nodeId, name: r.nodeName },
+      changeDocument: { id: r.a.documentId, displayKey: documentDisplayKey(key, r.prdNumber), title: r.prdTitle },
+    }));
   });
 }
