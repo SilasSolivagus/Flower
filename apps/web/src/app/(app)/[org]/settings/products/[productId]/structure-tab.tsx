@@ -89,9 +89,10 @@ export function StructureTab({ org, productId }: { org: string; productId: strin
           const siblings = siblingIds(n.parentId);
           const i = siblings.indexOf(n.id);
           const deprecated = n.status === 'deprecated';
+          const docKey = docKeyOf.get(n.id);
           return (
             <li key={n.id}>
-              <div className={cn('flex h-10 items-center gap-2 border-b pr-4', deprecated && 'text-muted-foreground')} style={indent(n.depth)}>
+              <div className={cn('flex min-h-10 flex-wrap items-center gap-2 border-b py-1 pr-4', deprecated && 'text-muted-foreground')} style={indent(n.depth)}>
                 <span className="w-14 shrink-0 text-xs text-muted-foreground">{levelLabel(names, n.depth)}</span>
                 {renaming?.id === n.id ? (
                   <form
@@ -120,11 +121,11 @@ export function StructureTab({ org, productId }: { org: string; productId: strin
                     </span>
                     {n.depth === 2 && moduleDocs.data && (
                       <Link
-                        href={docKeyOf.get(n.id) ? documentHref(org, docKeyOf.get(n.id)!) : moduleDocsHref(org, moduleDocs.data.productKey, n.id)}
+                        href={docKey ? documentHref(org, docKey) : moduleDocsHref(org, moduleDocs.data.productKey, n.id)}
                         aria-label={`${n.name} 的模块文档`}
-                        className="shrink-0 font-mono text-[13px] text-muted-foreground hover:text-foreground hover:underline"
+                        className="shrink-0 truncate font-mono text-[13px] text-muted-foreground hover:text-foreground hover:underline"
                       >
-                        {docKeyOf.get(n.id) ?? '模块文档'}
+                        {docKey ?? '模块文档'}
                       </Link>
                     )}
                     <Button

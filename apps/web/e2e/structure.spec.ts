@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { login, OWNER, setupInstance } from './helpers';
+import { createNode, createProduct, expectNoPageOverflow, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -47,4 +47,24 @@ test('产品设置：维护结构树，停用的节点不出现在需求详情�
   await page.getByRole('combobox', { name: '结构节点' }).click();
   await expect(page.getByRole('option', { name: '会员与支付' })).toBeVisible();
   await expect(page.getByRole('option', { name: '自动续费' })).toHaveCount(0);
+});
+
+test('结构树：模块行的模块文档链接在窄屏下不撑宽页面', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const domain = await createNode(request, productId, null, '存储');
+  const longModule = '一个很长的模块名称，用来检查窄屏下模块文档链接不会把结构树行撑宽';
+  const withDoc = await createNode(request, productId, domain, longModule);
+  await createNode(request, productId, domain, '下载');
+  await ok(request.post(`/api/v1/orgs/acme/nodes/${withDoc}/module-document`));
+
+  await login(page, OWNER.email, OWNER.password);
+  for (const width of [1440, 760]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(`/acme/settings/products/${productId}`);
+    await page.getByRole('tab', { name: '结构树' }).click();
+    const tree = page.getByRole('region', { name: '结构树' });
+    await expect(tree.getByRole('link', { name: `${longModule} 的模块文档` })).toBeInViewport({ ratio: 1 });
+    await expect(tree.getByRole('link', { name: '下载 的模块文档' })).toBeInViewport({ ratio: 1 });
+    await expectNoPageOverflow(page);
+  }
 });
