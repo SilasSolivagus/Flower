@@ -185,3 +185,15 @@ export async function createNode(request: APIRequestContext, productId: string, 
 export async function launchDocument(request: APIRequestContext, documentId: string): Promise<void> {
   for (const to of ['review', 'approved', 'launched']) await ok(request.post(`/api/v1/orgs/acme/documents/${documentId}/transitions`, { data: { to } }));
 }
+
+/** 驱动一轮后台发送（端到端服务端设置了 FLOWER_NOTIFY_WORKER=off、FLOWER_NOTIFY_TICK_API=1）；now 用来模拟时间。 */
+export async function tick(request: APIRequestContext, now?: Date): Promise<{ orgs: number; schedulesRun: number; sent: number; failed: number; dead: number; rateLimited: number }> {
+  return (await json<{ summary: { orgs: number; schedulesRun: number; sent: number; failed: number; dead: number; rateLimited: number } }>(
+    request.post('/api/v1/instance/notifications/tick', { data: now ? { now: now.toISOString() } : {} }),
+  )).summary;
+}
+
+/** 登记企微通道（地址为本机假接收端），返回通道 id。 */
+export async function createWecomChannel(request: APIRequestContext, name: string, url: string, extra: Record<string, unknown> = {}): Promise<string> {
+  return (await json<{ channel: { id: string } }>(request.post('/api/v1/orgs/acme/notification-channels', { data: { kind: 'wecom_robot', name, config: { url }, ...extra } }))).channel.id;
+}

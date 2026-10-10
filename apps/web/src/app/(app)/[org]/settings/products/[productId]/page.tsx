@@ -14,6 +14,7 @@ import { isOrgAdminRole } from '@/features/shell/nav';
 import { api } from '@/lib/api';
 import { qk, useApiMutation, useOrg, useProduct } from '@/lib/queries';
 import { FieldsTab } from './fields-tab';
+import { NotificationsTab } from './notifications-tab';
 import { RolesTab } from './roles-tab';
 import { StructureTab } from './structure-tab';
 import { WorkflowTab } from './workflow-tab';
@@ -64,6 +65,7 @@ export default function ProductDetailPage() {
           <TabsTrigger value="fields">字段与层级</TabsTrigger>
           <TabsTrigger value="structure">结构树</TabsTrigger>
           <TabsTrigger value="templates">文档模板</TabsTrigger>
+          <TabsTrigger value="notifications">推送</TabsTrigger>
         </TabsList>
         <TabsContent value="overview">
           <section className="flex max-w-lg flex-col gap-4 rounded-lg border bg-card p-4">
@@ -98,6 +100,9 @@ export default function ProductDetailPage() {
         </TabsContent>
         <TabsContent value="templates">
           <TemplateEditor org={org} productId={productId} />
+        </TabsContent>
+        <TabsContent value="notifications">
+          <NotificationsTab org={org} productId={productId} />
         </TabsContent>
       </Tabs>
     </>
