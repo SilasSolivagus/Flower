@@ -84,6 +84,12 @@ export function assertChangeDocument(doc: DocumentRow): void {
   if (doc.kind !== 'change') throw new AppError('invalid', '模块文档没有影响声明');
 }
 
+function assertNotDeprecated(tree: StructureTree, nodeId: string): void {
+  for (let cur = tree.byId.get(nodeId); cur; cur = cur.parentId ? tree.byId.get(cur.parentId) : undefined) {
+    if (cur.status === 'deprecated') throw new AppError('invalid', '该功能点或其上级已停用，不能声明');
+  }
+}
+
 function assertChangeType(v: string): void {
   if (!(AFFECTED_CHANGE_TYPES as readonly string[]).includes(v)) throw new AppError('invalid', '变更类型无效');
 }
@@ -165,6 +171,8 @@ export async function addAffectedNode(
     await assertDeclarationsEditable(tx, doc);
     const [node] = await tx.select().from(structureNodes).where(eq(structureNodes.id, input.nodeId));
     if (!node || node.productId !== doc.productId || node.depth !== 3) throw new AppError('invalid', '只能声明本产品结构树第三层的功能点');
+    const tree = await loadTree(tx, doc.productId);
+    assertNotDeprecated(tree, node.id);
     const [dup] = await tx
       .select({ id: documentAffectedNodes.id })
       .from(documentAffectedNodes)
@@ -172,7 +180,6 @@ export async function addAffectedNode(
     if (dup) throw new AppError('conflict', '该功能点已声明');
     const sourceSections = cleanSources(doc, await documentMarkdownTx(tx, doc), input.sourceSections);
     await tx.insert(documentAffectedNodes).values({ orgId: actor.orgId, documentId: doc.id, nodeId: node.id, changeType: input.changeType, sourceSections });
-    const tree = await loadTree(tx, doc.productId);
     await recordEvent(tx, {
       orgId: actor.orgId,
       productId: doc.productId,
@@ -208,6 +215,8 @@ export async function updateAffectedNode(
     const role = await requireProductRole(tx, actor, doc.productId, 'editor');
     await assertDeclarationsEditable(tx, doc);
     const row = await loadDeclaration(tx, doc.id, nodeId);
+    const tree = await loadTree(tx, doc.productId);
+    assertNotDeprecated(tree, nodeId);
     const next = {
       changeType: input.changeType ?? row.changeType,
       sourceSections: input.sourceSections === undefined ? row.sourceSections : cleanSources(doc, await documentMarkdownTx(tx, doc), input.sourceSections, row.sourceSections),
@@ -218,7 +227,6 @@ export async function updateAffectedNode(
     ];
     if (changes.length > 0) {
       await tx.update(documentAffectedNodes).set(next).where(eq(documentAffectedNodes.id, row.id));
-      const tree = await loadTree(tx, doc.productId);
       await recordEvent(tx, {
         orgId: actor.orgId,
         productId: doc.productId,

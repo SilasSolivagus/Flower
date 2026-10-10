@@ -6,7 +6,7 @@ import { createDocument, type DocumentDetail, saveDocumentContent, transitionDoc
 import { createModuleDocument } from '../src/documents/module-docs';
 import type { Actor } from '../src/domain-types';
 import type { StructureNodeView } from '../src/requirements/lookups';
-import { createStructureNode } from '../src/structure/nodes';
+import { createStructureNode, updateStructureNode } from '../src/structure/nodes';
 import { createProduct, setProductRole } from '../src/tenancy/products';
 import { createTestDb } from './db';
 import { asMember, readOnlyToken, seedInstance } from './factories';
@@ -91,6 +91,20 @@ describe('影响声明', () => {
     expect(after.items[0]!.sourceSections).toEqual([{ key: '背景', stale: true }]);
     const kept = await updateAffectedNode(t.db, owner, prd.id, chunk.id, { changeType: 'added', sourceSections: ['背景', '现状分析'] });
     expect(kept.items[0]!.sourceSections).toEqual([{ key: '背景', stale: true }, { key: '现状分析', stale: false }]);
+  });
+
+  it('已停用的功能点（或其上级已停用）不能声明，已声明的也不能再修改', async () => {
+    const draft = await createDocument(t.db, owner, pan, { title: '停用校验' });
+    const area = await createStructureNode(t.db, owner, pan, { name: '分享域' });
+    const mod = await createStructureNode(t.db, owner, pan, { parentId: area.id, name: '外链' });
+    const old = await createStructureNode(t.db, owner, pan, { parentId: mod.id, name: '旧外链' });
+    const live = await createStructureNode(t.db, owner, pan, { parentId: mod.id, name: '新外链' });
+    await addAffectedNode(t.db, owner, draft.id, { nodeId: live.id, changeType: 'modified' });
+    await updateStructureNode(t.db, owner, old.id, { status: 'deprecated' });
+    await expect(addAffectedNode(t.db, owner, draft.id, { nodeId: old.id, changeType: 'removed' })).rejects.toMatchObject({ code: 'invalid', message: '该功能点或其上级已停用，不能声明' });
+    await updateStructureNode(t.db, owner, mod.id, { status: 'deprecated' });
+    await expect(updateAffectedNode(t.db, owner, draft.id, live.id, { changeType: 'removed' })).rejects.toMatchObject({ code: 'invalid', message: '该功能点或其上级已停用，不能声明' });
+    expect((await removeAffectedNode(t.db, owner, draft.id, live.id)).items).toEqual([]);
   });
 
   it('权限与锁定：只读成员与只读 Token 不能改；已废弃不能改；有一条已处理后全部锁定', async () => {
