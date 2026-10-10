@@ -249,7 +249,6 @@ describe('导入计划：需求（修复回归）', () => {
     const p = buildImportPlan(data, reviewedMapping(), OPTS);
     expect(p.report.deferred).toEqual(
       expect.arrayContaining([
-        { what: 'push 任务对象（task_targets）', count: 3, phase: 'P3 通知' },
         { what: '123plane 系统设置（旧系统配置，按 P3 通知重新配置）', count: 5, phase: 'P3 通知' },
         { what: 'push 系统设置（旧系统配置，按 P3 通知重新配置）', count: 4, phase: 'P3 通知' },
       ]),

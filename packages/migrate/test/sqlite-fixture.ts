@@ -34,10 +34,10 @@ create table prd_reviews (requirement_id integer, e1_state text, e1_by text, e1_
 create table design_signoffs (id integer, requirement_id integer, role text, state text, by text, opinion text, at text);
 create table change_log (id integer, entity_type text, entity_id text, field text, old_value text, new_value text, edited_by text, edited_at text);
 create table prd_auto_reviews (id integer, requirement_id integer, doc_url text, round integer, issue_count integer, blocking_count integer, issues text, reviewed_by text, reviewed_at text);
-create table groups (id integer);
-create table tasks (id integer);
-create table task_targets (id integer);
-create table push_logs (id integer);
+create table groups (id integer primary key, name text, webhook_url text, enabled integer, created_at text);
+create table tasks (id integer primary key, name text, enabled integer, trigger_type text, cron_expr text, timezone text, source_type text, source_config text, format text, priority integer, next_run text, last_run text, last_success text, alert_state text, consecutive_failures integer, fail_threshold integer, cooldown_sec integer, last_alert_at text, created_at text);
+create table task_targets (task_id integer, group_id integer);
+create table push_logs (id integer primary key, task_id integer, group_id integer, content text, status text, error text, sent_at text);
 create table settings (key text, value text);
 create table review_objections (id integer);
 `;
@@ -53,7 +53,7 @@ export function makeSqliteFixtures(): { planePath: string; pushPath: string } {
     insert into requirements (id,title,status,priority,platform,requester,owner,created_at,prd_status,feasibility_status) values ('X001','批量下载','开发中','P1','PC客户端,Web端','客户甲','张三','2026-03-01T08:00:00+00:00','approved','approved');
     insert into iterations (id,status,kickoff_date,release_date) values ('V1','已完成','2026-03-02','2026-03-16');
     insert into comments values ('c1','X001','zhangsan@example.com','张三','请确认范围','2026-03-03T00:00:00Z');
-    insert into settings values ('smtp_pass','must-not-be-read');
+    insert into settings values ('ai_daily_prompt','must-not-be-read'), ('wecom_digest_schedule','[]'), ('smtp_pass','fixture-pass');
   `);
   plane.close();
   const push = new DatabaseSync(pushPath);
@@ -61,7 +61,10 @@ export function makeSqliteFixtures(): { planePath: string; pushPath: string } {
   push.exec(`
     insert into requirements (id,title,status,platforms,plane_id,merged_into,created_at) values (1,'批量下载','已进版本','["pc"]','X001',null,'2026-03-02 00:00:00');
     insert into versions values ('it0316',null,'2026-03-02','2026-03-16','已发版','2026-03-01 00:00:00');
-    insert into push_logs values (1),(2);
+    insert into groups values (3, '示例群', 'https://qyapi.example.com/cgi-bin/webhook/send?key=fixture-0003', 1, '2026-08-01 00:00:00');
+    insert into tasks (id, name, enabled, trigger_type, cron_expr, timezone, source_type, source_config, format, consecutive_failures, fail_threshold) values (4, '示例日报', 1, 'cron', '0 19 * * 1-5', 'Asia/Shanghai', 'overview', '{}', 'template_card', 0, 1);
+    insert into task_targets values (4, 3);
+    insert into push_logs (id, task_id, group_id, content, status, sent_at) values (1, 4, 3, '示例', 'ok', '2026-09-28 11:00:01'), (2, 4, 3, '示例', 'ok', '2026-09-28 11:00:02');
   `);
   push.close();
   return { planePath, pushPath };

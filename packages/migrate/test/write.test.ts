@@ -25,9 +25,11 @@ import {
   getRequirementByKey,
   issueToken,
   listDocumentComments,
+  listChannels,
   listFields,
   listProducts,
   listRequirements,
+  listSchedules,
   messageTemplates,
   notificationChannels,
   notificationDeliveries,
@@ -47,7 +49,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildImportPlan } from '../src/plan';
 import type { ImportOptions } from '../src/plan-types';
 import { fileSummary, writeImport } from '../src/write';
-import { INLINE_PNG, LEGACY_FILE, makeLegacyData, reviewedMapping, withPrdPages } from './fixtures';
+import { INLINE_PNG, LEGACY_FILE, makeLegacyData, reviewedMapping, withPrdPages, withPushConfig } from './fixtures';
 
 let t: Awaited<ReturnType<typeof createTestDb>>;
 let opts: ImportOptions;
@@ -232,6 +234,24 @@ describe('写入数据库', () => {
       const rows = await t.adminDb.select().from(attachments).where(eq(attachments.orgId, actor.orgId));
       expect(rows.map((r) => r.filename)).toEqual([expect.stringMatching(/^inline-/)]);
     }
+  });
+
+  it('推送配置：通道停用、配置能用同一个 FLOWER_SECRET_KEY 解开；定时推送没有排期；迁移记录写入', async () => {
+    const key = 'migrate-test-secret-migrate-test-secret-01';
+    await writeImport(t.adminDb, buildImportPlan(withPushConfig(), reviewedMapping(), { ...opts, secretKey: key }), { replace: true });
+    const actor = (await resolveActor(t.db, opts.owner!.accountId, 'pan123'))!;
+    const channels = await listChannels(t.db, actor, { secretKey: key });
+    expect(channels.map((c) => [c.name, c.enabled])).toEqual(
+      expect.arrayContaining([
+        ['产品群', false],
+        ['123plane 邮件', false],
+      ]),
+    );
+    expect(channels.find((c) => c.name === '123plane 邮件')!.settings).toMatchObject({ host: 'smtp.example.com', to: ['pm@example.com', 'dev@example.com'] });
+    expect(JSON.stringify(channels)).not.toContain('demo-smtp-pass');
+    const schedules = await listSchedules(t.db, actor);
+    expect(schedules.every((s) => s.nextRunAt === null)).toBe(true);
+    expect(await t.adminDb.select().from(notificationDeliveries)).toHaveLength(2);
   });
 });
 

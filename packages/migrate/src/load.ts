@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite';
 import postgres from 'postgres';
-import type { PlaneData, PrdData, PushData } from './legacy-types';
+import { type PlaneData, type PlaneNotifyKey, PLANE_NOTIFY_KEYS, type PrdData, type PushData } from './legacy-types';
 
 const all = <T>(db: DatabaseSync, sql: string): T[] => db.prepare(sql).all() as T[];
 const count = (db: DatabaseSync, sql: string): number => Number((db.prepare(sql).get() as { n: number }).n);
@@ -9,7 +9,7 @@ function open(path: string): DatabaseSync {
   return new DatabaseSync(path, { readOnly: true });
 }
 
-/** 只读取迁移需要的列；users.password、avatar_url 和 settings 表（含 SMTP 密码等）一律不读。 */
+/** 只读取迁移需要的列；users.password、avatar_url 不读；settings 表只读推送需要的 8 个键（PLANE_NOTIFY_KEYS，含 SMTP 密码，迁移时加密写入）。 */
 export function loadPlane(path: string): PlaneData {
   const db = open(path);
   try {
@@ -35,6 +35,9 @@ export function loadPlane(path: string): PlaneData {
       blockers: all(db, 'select id, requirement_id, description, status, created_at, created_by, resolved_at, resolved_by from blockers order by id'),
       requirementUpdates: all(db, 'select id, requirement_id, content, created_by, created_at from requirement_updates order by created_at, id'),
       iterationLogs: all(db, 'select id, iteration_id, type, content, requirement_id, created_by, created_at from iteration_logs order by created_at, id'),
+      notifySettings: Object.fromEntries(
+        all<{ key: PlaneNotifyKey; value: string }>(db, `select key, value from settings where key in (${PLANE_NOTIFY_KEYS.map((k) => `'${k}'`).join(', ')})`).map((r) => [r.key, r.value]),
+      ),
       counts: {
         briefs: count(db, 'select count(*) as n from requirement_briefs'),
         settings: count(db, 'select count(*) as n from settings'),
@@ -70,6 +73,14 @@ export function loadPush(path: string): PushData {
       designSignoffs: all(db, 'select id, requirement_id, role, state, by, opinion, at from design_signoffs order by id'),
       changeLog: all(db, 'select id, entity_type, entity_id, field, old_value, new_value, edited_by, edited_at from change_log order by id'),
       autoReviews: all(db, 'select id, requirement_id, round, issue_count, blocking_count, issues, reviewed_by, reviewed_at from prd_auto_reviews order by requirement_id, round, id'),
+      groups: all(db, 'select id, name, webhook_url, enabled, created_at from groups order by id'),
+      tasks: all(
+        db,
+        `select id, name, enabled, trigger_type, cron_expr, timezone, source_type, source_config, format, next_run, last_run, last_success,
+          alert_state, consecutive_failures, fail_threshold from tasks order by id`,
+      ),
+      taskTargets: all(db, 'select task_id, group_id from task_targets order by task_id, group_id'),
+      pushLogs: all(db, 'select id, task_id, group_id, content, status, error, sent_at from push_logs order by id'),
       counts: {
         groups: count(db, 'select count(*) as n from groups'),
         tasks: count(db, 'select count(*) as n from tasks'),

@@ -38,6 +38,9 @@ const TABLES: Record<keyof ImportRows, PgTable> = {
   commentReads: core.commentReads,
   entityAliases: core.entityAliases,
   domainEvents: core.domainEvents,
+  notificationChannels: core.notificationChannels,
+  notificationSchedules: core.notificationSchedules,
+  notificationDeliveries: core.notificationDeliveries,
 };
 const CHUNK = 500;
 

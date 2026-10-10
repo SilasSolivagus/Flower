@@ -53,6 +53,7 @@ export function makeLegacyData(): LegacyData {
       blockers: [{ id: 'b1', requirement_id: 'X001', description: '等待支付接口', status: 'active', created_at: '2026-03-05T00:00:00Z', created_by: '张三', resolved_at: null, resolved_by: null }],
       requirementUpdates: [{ id: 'up1', requirement_id: 'X001', content: '联调中', created_by: '张三', created_at: '2026-03-06T00:00:00Z' }],
       iterationLogs: [{ id: 'l1', iteration_id: 'V2', type: 'risk', content: '人手紧张', requirement_id: null, created_by: '张三', created_at: '2026-03-18T00:00:00Z' }],
+      notifySettings: {},
       counts: { briefs: 1, settings: 5, notificationQueue: 2, syncInbox: 0, syncOutbox: 0, rolePermissions: 3, userPermissionOverrides: 1, prdLinks: 1 },
     },
     push: {
@@ -86,6 +87,10 @@ export function makeLegacyData(): LegacyData {
         { id: 1, requirement_id: 1, round: 1, issue_count: 5, blocking_count: 2, issues: '[{"level":"blocking","text":"缺少异常流程"}]', reviewed_by: '李四', reviewed_at: '2026-03-03 00:00:00' },
         { id: 2, requirement_id: 1, round: 2, issue_count: 1, blocking_count: 0, issues: '[]', reviewed_by: '李四', reviewed_at: '2026-03-04 00:00:00' },
       ],
+      groups: [],
+      tasks: [],
+      taskTargets: [],
+      pushLogs: [],
       counts: { groups: 2, tasks: 3, taskTargets: 3, pushLogs: 7, settings: 4, reviewObjections: 0, prdUrls: 1 },
     },
     prd: {
@@ -169,5 +174,55 @@ export function withPrdPages(data: LegacyData = makeLegacyData()): LegacyData {
     { id: 'c2', page_id: 'pg1', parent_comment_id: 'c1', body_markdown: '已确认', resolved_at: '2026-03-03T00:00:00.000Z', resolved_by: 'pu1', author_id: 'pu1', created_at: '2026-03-03T00:00:00.000Z' },
   ];
   data.prd.counts = { pages: 3, pageVersions: 4, attachments: 2, comments: 3 };
+  return data;
+}
+
+/** 推送配置（全部为虚构值）：push 两个群、四个推送计划（一个来源不支持）、三条日志（一条找不到计划）；123plane 两个企微地址、空的摘要时间表、SMTP。 */
+export function withPushConfig(data: LegacyData = makeLegacyData()): LegacyData {
+  const task = (t: Partial<LegacyData['push']['tasks'][number]> & { id: number; name: string; cron_expr: string; source_type: string }) => ({
+    enabled: 1,
+    trigger_type: 'cron',
+    timezone: 'Asia/Shanghai',
+    source_config: '{}',
+    format: 'markdown',
+    next_run: null,
+    last_run: null,
+    last_success: null,
+    alert_state: null,
+    consecutive_failures: 0,
+    fail_threshold: 1,
+    ...t,
+  });
+  data.push.groups = [
+    { id: 3, name: '产品群', webhook_url: 'https://qyapi.example.com/cgi-bin/webhook/send?key=group-0003', enabled: 1, created_at: '2026-08-01 00:00:00' },
+    { id: 4, name: '研发群', webhook_url: 'https://qyapi.example.com/cgi-bin/webhook/send?key=group-0004', enabled: 1, created_at: '2026-08-01 00:00:00' },
+  ];
+  data.push.tasks = [
+    task({ id: 4, name: '晚间日报', cron_expr: '0 19 * * 1-5', source_type: 'overview', format: 'template_card', last_run: '2026-09-28T11:00:01.000Z', last_success: '2026-09-28T11:00:01.000Z' }),
+    task({ id: 5, name: '早间日报', cron_expr: '0 10 * * 1-5', source_type: 'overview', format: 'template_card', enabled: 0 }),
+    task({ id: 6, name: '每日新需求', cron_expr: '30 9 * * *', source_type: 'newreqs' }),
+    task({ id: 7, name: '外部数据', cron_expr: '0 8 * * *', source_type: 'http' }),
+  ];
+  data.push.taskTargets = [
+    { task_id: 4, group_id: 3 },
+    { task_id: 4, group_id: 4 },
+    { task_id: 6, group_id: 4 },
+  ];
+  data.push.pushLogs = [
+    { id: 300, task_id: 4, group_id: 3, content: '{"title":"示例日报 · 2026-09-28","desc":"0930发版 · 整体 50%","buttons":[]}', status: 'ok', error: null, sent_at: '2026-09-28 11:00:01' },
+    { id: 301, task_id: 6, group_id: 4, content: '# 📋 9/28 新增需求', status: 'ok', error: null, sent_at: '2026-09-29 01:30:02' },
+    { id: 302, task_id: 99, group_id: 4, content: '找不到计划的日志', status: 'ok', error: null, sent_at: '2026-09-29 01:30:03' },
+  ];
+  data.push.counts = { ...data.push.counts, groups: 2, tasks: 4, taskTargets: 3, pushLogs: 3 };
+  data.plane.notifySettings = {
+    wecom_requirement_webhook_url: 'https://qyapi.example.com/cgi-bin/webhook/send?key=plane-req-01',
+    wecom_daily_webhook_url: 'https://qyapi.example.com/cgi-bin/webhook/send?key=plane-daily-1',
+    wecom_digest_schedule: '[]',
+    smtp_host: 'smtp.example.com',
+    smtp_port: '465',
+    smtp_user: 'robot@example.com',
+    smtp_pass: 'demo-smtp-pass',
+    email_recipients: 'pm@example.com, dev@example.com',
+  };
   return data;
 }
