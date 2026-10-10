@@ -15,6 +15,7 @@ import { registerDocumentRoutes } from './routes/documents';
 import { registerIterationRoutes } from './routes/iterations';
 import { registerLinkRoutes } from './routes/links';
 import { registerModuleDocRoutes } from './routes/module-docs';
+import { registerNotificationRoutes } from './routes/notifications';
 import { registerReleaseRoutes } from './routes/releases';
 import { registerRequirementRoutes } from './routes/requirements';
 import { registerReviewRoutes } from './routes/reviews';
@@ -62,5 +63,6 @@ export function createApi(deps: ApiDeps): App {
   registerTemplateRoutes(app, deps);
   registerLinkRoutes(app, deps);
   registerModuleDocRoutes(app, deps);
+  registerNotificationRoutes(app, deps);
   return app;
 }

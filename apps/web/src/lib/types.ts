@@ -5,8 +5,11 @@ import type {
   AttachmentView,
   BacklinkGroup as CoreBacklinkGroup,
   BacklinkTargetType as CoreBacklinkTargetType,
+  ChannelOption as CoreChannelOption,
+  ChannelView,
   CheckState as CoreCheckState,
   CommentView,
+  DeliveryView,
   DocumentCommentView,
   DocumentDetail as CoreDocumentDetail,
   DocumentListItem as CoreDocumentListItem,
@@ -34,6 +37,7 @@ import type {
   MergeRecord as CoreMergeRecord,
   MergeResult as CoreMergeResult,
   MergeStatus as CoreMergeStatus,
+  MessageTemplateView,
   ModuleDocumentTree as CoreModuleDocumentTree,
   MyOrg as CoreMyOrg,
   OrgRole as CoreOrgRole,
@@ -50,6 +54,9 @@ import type {
   ReviewFilterState as CoreReviewFilterState,
   ReviewQueue as CoreReviewQueue,
   ReviewState as CoreReviewState,
+  RuleView,
+  RunResult as CoreRunResult,
+  ScheduleView,
   StructureNodeView,
   TaskDetail as CoreTaskDetail,
   TaskView,
@@ -139,3 +146,11 @@ export type MergePlan = Jsonify<CoreMergePlan>;
 export type MergeItem = MergePlan['groups'][number]['items'][number];
 export type MergeResult = Jsonify<CoreMergeResult>;
 export type MergeRecord = Jsonify<CoreMergeRecord>;
+
+export type NotificationChannel = Jsonify<ChannelView>;
+export type ChannelOption = CoreChannelOption;
+export type MessageTemplate = Jsonify<MessageTemplateView>;
+export type NotificationRule = Jsonify<RuleView>;
+export type NotificationSchedule = Jsonify<ScheduleView>;
+export type NotificationDelivery = Jsonify<DeliveryView>;
+export type RunResult = CoreRunResult;

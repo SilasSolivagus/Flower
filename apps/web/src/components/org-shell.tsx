@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  Bell,
   Blocks,
   Bot,
   Box,
@@ -41,6 +42,7 @@ const ICONS: Record<NavIcon, typeof Home> = {
   sliders: SlidersHorizontal,
   bot: Bot,
   building: Building2,
+  bell: Bell,
 };
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
