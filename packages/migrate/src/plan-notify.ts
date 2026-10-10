@@ -1,4 +1,4 @@
-import { AppError, assertCron, type ChannelConfig, channelConfigHint, type ChannelKind, DEFAULT_RATE_LIMIT, encryptConfig, parseChannelConfig } from '@flower/core';
+import { assertCron, type ChannelConfig, channelConfigHint, type ChannelKind, DEFAULT_RATE_LIMIT, encryptConfig, isPrivateTargetError, parseChannelConfig } from '@flower/core';
 import { parseLegacyTime } from './normalize';
 import type { PlanContext } from './plan-types';
 
@@ -8,7 +8,13 @@ const PLANE_DEFAULT_DIGEST = ['09:00', '12:00', '18:00'];
 /** 时间表为空（已停用）时给定时推送的占位 cron；推送本身是停用的。 */
 const DISABLED_DIGEST_CRON = '0 18 * * *';
 
-/** 123plane 的摘要时间表：没有保存 → 默认时间；空数组 → 停用；无法解析 → 默认时间（与 123plane 相同）。 */
+/** 时间表里的一项是否为有效的 H:MM / HH:MM 时间。 */
+function isDigestTime(t: string): boolean {
+  const m = t.match(/^(\d{1,2}):(\d{2})$/);
+  return !!m && Number(m[1]) <= 23 && Number(m[2]) <= 59;
+}
+
+/** 123plane 的摘要时间表：没有保存 → 默认时间；空数组 → 停用；无法解析 → 默认时间（与 123plane 相同）。返回其中的全部字符串，无效的时间由调用方报告。 */
 export function planeDigestTimes(raw: string | undefined): string[] {
   if (raw === undefined) return PLANE_DEFAULT_DIGEST;
   let parsed: unknown;
@@ -18,15 +24,14 @@ export function planeDigestTimes(raw: string | undefined): string[] {
     return PLANE_DEFAULT_DIGEST;
   }
   if (!Array.isArray(parsed)) return PLANE_DEFAULT_DIGEST;
-  return parsed.filter((x): x is string => typeof x === 'string' && /^\d{2}:\d{2}$/.test(x));
+  return parsed.filter((x): x is string => typeof x === 'string');
 }
 
 /** HH:MM 列表 → cron：同一分钟的合成一条（小时用逗号连接）。 */
 export function digestCrons(times: string[]): string[] {
   const byMinute = new Map<number, number[]>();
-  for (const t of times) {
+  for (const t of times.filter(isDigestTime)) {
     const [h, m] = t.split(':').map(Number) as [number, number];
-    if (h > 23 || m > 59) continue;
     byMinute.set(m, [...(byMinute.get(m) ?? []), h]);
   }
   return [...byMinute.entries()]
@@ -54,9 +59,8 @@ export function buildNotifications(ctx: PlanContext): void {
     try {
       config = parseChannelConfig(kind, raw);
     } catch (e) {
-      // 原因里不写网址、主机与密码；地址安全检查的错误没有 details，格式校验的错误有
-      const unsafe = e instanceof AppError && e.details === undefined;
-      out.skipped.push({ what: `${source} 通道「${name}」`, reason: unsafe ? '地址指向内网或本机，未导入' : '配置不完整或网址无效' });
+      // 原因里不写网址、主机与密码
+      out.skipped.push({ what: `${source} 通道「${name}」`, reason: isPrivateTargetError(e) ? '地址指向内网或本机，未导入' : '配置不完整或网址无效' });
       return null;
     }
     if (!ctx.opts.secretKey) {
@@ -162,7 +166,9 @@ export function buildNotifications(ctx: PlanContext): void {
   const dailyUrl = s.wecom_daily_webhook_url?.trim();
   if (dailyUrl) addChannel('plane:wecom_daily', '123plane', 'wecom_robot', '123plane 日报', '123plane', { url: dailyUrl }, ctx.asOfTime);
   if (s.wecom_digest_schedule !== undefined || reqUrl) {
-    const times = planeDigestTimes(s.wecom_digest_schedule);
+    const all = planeDigestTimes(s.wecom_digest_schedule);
+    const times = all.filter(isDigestTime);
+    if (times.length < all.length) out.skipped.push({ what: `123plane 变更摘要时间 ${all.length - times.length} 个`, reason: '不是有效的时间（时:分），未导入' });
     const crons = times.length ? digestCrons(times) : [DISABLED_DIGEST_CRON];
     if (!requirementChannel) {
       out.skipped.push({ what: '123plane 变更摘要时间表', reason: reqUrl ? '需求通知通道没有导入，无法确定发到哪里' : '没有需求通知地址，无法确定发到哪里' });

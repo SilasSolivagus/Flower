@@ -181,13 +181,20 @@ function isUnsafeIpv6(bracketed: string): boolean | undefined {
  * hostname 既接受 URL 的 `hostname`（IPv6 带中括号，如 `[::1]`），也接受裸主机名（如 SMTP 的 `host`，
  * IPv6 字面量不带中括号，如 `::1`）——按是否已带中括号自行判断。
  */
+/** 目标指向本机或内网时 AppError 的 details：调用方据此区分「地址不安全」与「格式不对」（迁移工具据此写跳过原因）。 */
+export const PRIVATE_TARGET_DETAILS = { reason: 'private_target' } as const;
+
+export function isPrivateTargetError(e: unknown): boolean {
+  return e instanceof AppError && (e.details as { reason?: unknown } | undefined)?.reason === PRIVATE_TARGET_DETAILS.reason;
+}
+
 export function assertSafeOutboundHost(hostname: string, message = '网址不能指向本机或内网地址'): void {
   if (process.env.FLOWER_NOTIFY_ALLOW_PRIVATE === '1') return;
   // 域名末尾的 `.`（如 `localhost.`）解析器会当作没有这个点，去掉后再比较
   const h = hostname.toLowerCase().replace(/\.$/, '');
   const bracketed = h.startsWith('[') || !h.includes(':') ? h : `[${h}]`;
   if (h === 'localhost' || h.endsWith('.local') || isUnsafeIpv4(h) || isUnsafeIpv6(bracketed)) {
-    throw new AppError('invalid', message);
+    throw new AppError('invalid', message, PRIVATE_TARGET_DETAILS);
   }
 }
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { legacyUuid } from '../src/ids';
 import { buildImportPlan } from '../src/plan';
 import type { ImportOptions } from '../src/plan-types';
-import { makeLegacyData, messyLegacyData, planeReq, reviewedMapping } from './fixtures';
+import { makeLegacyData, messyLegacyData, planeReq, reviewedMapping, withPushConfig } from './fixtures';
 
 const OPTS: ImportOptions = { orgSlug: 'pan123', orgName: '123云盘', productKey: 'PAN', productName: '123云盘', asOf: '2026-09-29', owner: null };
 
@@ -247,13 +247,19 @@ describe('导入计划：需求（修复回归）', () => {
     data.push.counts.taskTargets = 3;
     data.push.counts.reviewObjections = 2;
     const p = buildImportPlan(data, reviewedMapping(), OPTS);
-    expect(p.report.deferred).toEqual(
+    expect(p.report.deferred.map((d) => d.what)).toEqual(['123plane 需求简报（HTML）']);
+    expect(p.report.skipped).toEqual(
       expect.arrayContaining([
-        { what: '123plane 系统设置（旧系统配置，按 P3 通知重新配置）', count: 5, phase: 'P3 通知' },
-        { what: 'push 系统设置（旧系统配置，按 P3 通知重新配置）', count: 4, phase: 'P3 通知' },
+        { what: 'push 评审异议（review_objections）', count: 2, reason: '无数据/不迁移' },
+        { what: '123plane 系统设置中推送以外的键', count: 5, reason: '旧系统配置，按决定不迁移（推送相关的 8 个键已迁移）' },
+        { what: 'push 系统设置（含 PRD 通知 webhook prd_notify_webhook）', count: 4, reason: '旧系统配置，按决定不迁移' },
       ]),
     );
-    expect(p.report.skipped).toEqual(expect.arrayContaining([{ what: 'push 评审异议（review_objections）', count: 2, reason: '无数据/不迁移' }]));
+    const withNotify = withPushConfig(makeLegacyData());
+    withNotify.plane.counts.settings = 10;
+    expect(buildImportPlan(withNotify, reviewedMapping(), OPTS).report.skipped).toEqual(
+      expect.arrayContaining([expect.objectContaining({ what: '123plane 系统设置中推送以外的键', count: 2 })]),
+    );
   });
 
   it('123plane 历史状态「已暂停」按别名映射为 shelved，不产生问题', () => {

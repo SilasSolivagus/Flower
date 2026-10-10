@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { assertSafeOutboundHost, assertSafeOutboundUrl, channelConfigHint, channelPublicSettings, mergeChannelConfig, parseChannelConfig } from '../src/notifications/channel-config';
+import {
+  assertSafeOutboundHost,
+  assertSafeOutboundUrl,
+  channelConfigHint,
+  channelPublicSettings,
+  isPrivateTargetError,
+  mergeChannelConfig,
+  parseChannelConfig,
+} from '../src/notifications/channel-config';
 import { decryptConfig, encryptConfig } from '../src/notifications/secrets';
 
 const KEY = 'unit-test-secret-unit-test-secret-unit-test-secret';
@@ -171,5 +179,21 @@ describe('parseChannelConfig 接入网址/主机安全检查', () => {
     expect(() => parseChannelConfig('wecom_robot', { url: 'http://127.0.0.1/send?key=x' })).toThrow('网址不能指向本机或内网地址');
     expect(() => parseChannelConfig('webhook', { url: 'http://localhost/in' })).toThrow('网址不能指向本机或内网地址');
     expect(() => parseChannelConfig('email', { ...EMAIL, host: '127.0.0.1' })).toThrow('SMTP 服务器不能是本机或内网地址');
+  });
+  it('只有指向本机或内网的错误带 private_target 标记；格式错误、非 http(s) 网址不带', () => {
+    const caught = (fn: () => unknown): unknown => {
+      try {
+        fn();
+      } catch (e) {
+        return e;
+      }
+      throw new Error('应当抛错');
+    };
+    expect(isPrivateTargetError(caught(() => parseChannelConfig('wecom_robot', { url: 'http://10.0.0.8/send?key=x' })))).toBe(true);
+    expect(isPrivateTargetError(caught(() => parseChannelConfig('email', { ...EMAIL, host: '192.168.1.2' })))).toBe(true);
+    expect(isPrivateTargetError(caught(() => parseChannelConfig('wecom_robot', { url: 'not-a-url' })))).toBe(false);
+    expect(isPrivateTargetError(caught(() => parseChannelConfig('webhook', { url: 'ftp://example.com/x' })))).toBe(false);
+    expect(isPrivateTargetError(caught(() => assertSafeOutboundUrl('ftp://example.com/x')))).toBe(false);
+    expect(isPrivateTargetError(caught(() => assertSafeOutboundUrl('not-a-url')))).toBe(false);
   });
 });

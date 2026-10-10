@@ -120,4 +120,35 @@ describe('推送配置迁移：内网或本机地址', () => {
     const json = JSON.stringify(plan.report) + renderReport(plan.report);
     for (const s of ['intranet-0003', '10.1.2.3', 'local-req-01', 'localhost', '192.168.10.20', 'demo-smtp-pass']) expect(json).not.toContain(s);
   });
+
+  it('网址格式不对的通道记为「配置不完整或网址无效」，不算内网地址', () => {
+    const data = withPushConfig();
+    data.push.groups[1]!.webhook_url = 'not-a-url-0004';
+    data.plane.notifySettings.wecom_daily_webhook_url = 'ftp://example.com/daily-0001';
+    const plan = buildImportPlan(data, reviewedMapping(), OPTS);
+    expect(plan.rows.notificationChannels.map((c) => c.name)).toEqual(['产品群', '123plane 需求通知', '123plane 邮件']);
+    expect(plan.report.notifications.skipped).toEqual(
+      expect.arrayContaining([
+        { what: 'push 通道「研发群」', reason: '配置不完整或网址无效' },
+        { what: '123plane 通道「123plane 日报」', reason: '配置不完整或网址无效' },
+      ]),
+    );
+    expect(plan.report.notifications.skipped.map((s) => s.reason)).not.toContain('地址指向内网或本机，未导入');
+    expect(JSON.stringify(plan.report)).not.toContain('0004');
+  });
+});
+
+describe('123plane 摘要时间表里的无效时间', () => {
+  it('超出范围或格式不对的时间记入跳过项；一位数小时照常导入；全部无效时摘要停用', () => {
+    const data = withPushConfig();
+    data.plane.notifySettings.wecom_digest_schedule = '["9:00", "25:00", "abc"]';
+    const plan = buildImportPlan(data, reviewedMapping(), OPTS);
+    const digest = plan.rows.notificationSchedules.filter((s) => s.source === 'digest');
+    expect(digest.map((s) => [s.cron, s.enabled])).toEqual([['0 9 * * *', true]]);
+    expect(plan.report.notifications.skipped).toContainEqual({ what: '123plane 变更摘要时间 2 个', reason: '不是有效的时间（时:分），未导入' });
+
+    data.plane.notifySettings.wecom_digest_schedule = '["24:00"]';
+    const off = buildImportPlan(data, reviewedMapping(), OPTS).rows.notificationSchedules.filter((s) => s.source === 'digest');
+    expect(off.map((s) => [s.cron, s.enabled])).toEqual([['0 18 * * *', false]]);
+  });
 });

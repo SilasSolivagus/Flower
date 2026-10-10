@@ -65,8 +65,6 @@ export function buildImportPlan(data: LegacyData, mapping: Mapping, opts: Import
   report.targetCounts = Object.fromEntries(INSERT_ORDER.map((k) => [k, rows[k].length]));
   report.deferred.push(
     { what: '123plane 需求简报（HTML）', count: plane.counts.briefs, phase: 'P2 文档附件' },
-    { what: '123plane 系统设置（旧系统配置，按 P3 通知重新配置）', count: plane.counts.settings, phase: 'P3 通知' },
-    { what: 'push 系统设置（旧系统配置，按 P3 通知重新配置）', count: push.counts.settings, phase: 'P3 通知' },
   );
   report.skipped.push(
     {
@@ -79,6 +77,12 @@ export function buildImportPlan(data: LegacyData, mapping: Mapping, opts: Import
     { what: '123plane 通知队列与同步收发件箱', count: plane.counts.notificationQueue + plane.counts.syncInbox + plane.counts.syncOutbox, reason: 'spec §7.2：不迁移' },
     { what: 'push 中已标记合并的需求', count: report.matching.pushMergedSkipped, reason: 'push 内已合并进其他需求' },
     { what: 'push 评审异议（review_objections）', count: push.counts.reviewObjections, reason: '无数据/不迁移' },
+    {
+      what: '123plane 系统设置中推送以外的键',
+      count: plane.counts.settings - Object.keys(plane.notifySettings).length,
+      reason: '旧系统配置，按决定不迁移（推送相关的 8 个键已迁移）',
+    },
+    { what: 'push 系统设置（含 PRD 通知 webhook prd_notify_webhook）', count: push.counts.settings, reason: '旧系统配置，按决定不迁移' },
   );
   report.skipped = report.skipped.filter((s) => s.count > 0);
   report.deferred = report.deferred.filter((d) => d.count > 0);
