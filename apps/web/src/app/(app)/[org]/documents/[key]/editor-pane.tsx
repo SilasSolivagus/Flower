@@ -60,7 +60,8 @@ export function EditorPane({
   onAnchorClick?: (commentId: string) => void;
   ref?: Ref<EditorPaneHandle>;
 }) {
-  const editable = doc.myRole !== 'viewer';
+  // 已归档的模块文档只读（服务端同样拒绝保存）
+  const editable = doc.myRole !== 'viewer' && doc.status !== 'archived';
   const handle = useRef<PrdEditorHandle>(null);
   const version = useRef(doc.version);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);

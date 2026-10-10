@@ -76,7 +76,7 @@ describe('链接卡', () => {
     expect(cards['PAN-PRD-1#方案']).toMatchObject({ state: 'section_missing', displayKey: 'PAN-PRD-1#方案', href: 'documents/PAN-PRD-1' });
     expect(cards['PAN-T-1']).toMatchObject({ state: 'ok', displayKey: 'PAN-T-1', title: '登录联调', status: { label: '待开始' }, href: 'tasks/PAN-T-1' });
     expect(cards['PAN/迭代:迭代0316']).toMatchObject({ state: 'ok', displayKey: '迭代:迭代0316', status: { label: '规划中' }, href: `iterations/${sprint.id}` });
-    expect(cards['PAN/会员/登录']).toMatchObject({ state: 'ok', displayKey: '会员/登录', href: `requirements?product=PAN&node=${node.id}` });
+    expect(cards['PAN/会员/登录']).toMatchObject({ state: 'ok', displayKey: '会员/登录', href: `documents?product=PAN&view=modules&node=${node.id}` });
     expect(cards['DOC-1']).toMatchObject({ state: 'ok', title: '文档保密需求' });
     expect(cards['PAN-99']).toEqual({ text: 'PAN-99', targetType: 'requirement', state: 'missing', displayKey: 'PAN-99', title: null, status: null, href: null });
 

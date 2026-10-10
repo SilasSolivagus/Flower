@@ -1,13 +1,15 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { FormError } from '@/components/form-error';
 import { LoadError } from '@/components/load-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { documentHref, moduleDocsHref } from '@/features/documents/model';
 import { flattenTree, levelLabel, moveSibling } from '@/features/structure/model';
 import { api } from '@/lib/api';
-import { qk, requirementKeys, useApiMutation, useLevelNames, useNodes } from '@/lib/queries';
+import { documentKeys, qk, requirementKeys, useApiMutation, useLevelNames, useModuleDocuments, useNodes } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
 const indent = (depth: number) => ({ paddingLeft: `${(depth - 1) * 24 + 16}px` });
@@ -15,9 +17,11 @@ const indent = (depth: number) => ({ paddingLeft: `${(depth - 1) * 24 + 16}px` }
 export function StructureTab({ org, productId }: { org: string; productId: string }) {
   const nodes = useNodes(org, productId);
   const levels = useLevelNames(org, productId);
+  const moduleDocs = useModuleDocuments(org, productId);
+  const docKeyOf = new Map(moduleDocs.data?.groups.flatMap((g) => g.modules.map((m) => [m.node.id, m.document?.displayKey ?? null] as const)) ?? []);
   const [adding, setAdding] = useState<{ parentId: string | null; name: string } | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
-  const invalidate = [qk.nodes(org, productId), requirementKeys(org)];
+  const invalidate = [qk.nodes(org, productId), requirementKeys(org), documentKeys(org)];
   const create = useApiMutation((v: { parentId: string | null; name: string }) => api(`/orgs/${org}/products/${productId}/nodes`, { method: 'POST', body: v }), {
     invalidate,
     success: '已新增节点',
@@ -85,9 +89,10 @@ export function StructureTab({ org, productId }: { org: string; productId: strin
           const siblings = siblingIds(n.parentId);
           const i = siblings.indexOf(n.id);
           const deprecated = n.status === 'deprecated';
+          const docKey = docKeyOf.get(n.id);
           return (
             <li key={n.id}>
-              <div className={cn('flex h-10 items-center gap-2 border-b pr-4', deprecated && 'text-muted-foreground')} style={indent(n.depth)}>
+              <div className={cn('flex min-h-10 flex-wrap items-center gap-2 border-b py-1 pr-4', deprecated && 'text-muted-foreground')} style={indent(n.depth)}>
                 <span className="w-14 shrink-0 text-xs text-muted-foreground">{levelLabel(names, n.depth)}</span>
                 {renaming?.id === n.id ? (
                   <form
@@ -114,6 +119,15 @@ export function StructureTab({ org, productId }: { org: string; productId: strin
                       {n.name}
                       {deprecated && '（已停用）'}
                     </span>
+                    {n.depth === 2 && moduleDocs.data && (
+                      <Link
+                        href={docKey ? documentHref(org, docKey) : moduleDocsHref(org, moduleDocs.data.productKey, n.id)}
+                        aria-label={`${n.name} 的模块文档`}
+                        className="shrink-0 truncate font-mono text-[13px] text-muted-foreground hover:text-foreground hover:underline"
+                      >
+                        {docKey ?? '模块文档'}
+                      </Link>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"

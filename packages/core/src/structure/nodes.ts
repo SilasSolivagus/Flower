@@ -1,9 +1,10 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { requireProductRole } from '../access/permissions';
 import type { Db } from '../db/client';
-import { structureNodes } from '../db/schema';
+import { documents, structureNodes } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
+import { syncFeatureRenameTx } from '../documents/module-docs';
 import { AppError, isUniqueViolation } from '../errors';
 import { recordEvent } from '../events';
 import { relinkNodes } from '../links/links';
@@ -43,8 +44,9 @@ function duplicateName(e: unknown): never {
 const siblingsOf = (productId: string, parentId: string | null) =>
   and(eq(structureNodes.productId, productId), parentId === null ? isNull(structureNodes.parentId) : eq(structureNodes.parentId, parentId));
 
-async function loadNode(tx: Tx, id: string): Promise<NodeRow> {
-  const [n] = await tx.select().from(structureNodes).where(eq(structureNodes.id, id));
+async function loadNode(tx: Tx, id: string, opts: { lock?: boolean } = {}): Promise<NodeRow> {
+  const q = tx.select().from(structureNodes).where(eq(structureNodes.id, id));
+  const [n] = opts.lock ? await q.for('update') : await q;
   if (!n) throw new AppError('not_found', '节点不存在');
   return n;
 }
@@ -69,43 +71,53 @@ function subtreeIds(all: Array<{ id: string; parentId: string | null }>, rootId:
   return out;
 }
 
-export async function createStructureNode(
-  db: Db,
+/** 新建节点：名称与说明校验、上级检查、层级上限、同名检查、事件、接上悬空链接。调用方已检查权限。 */
+export async function insertStructureNodeTx(
+  tx: Tx,
   actor: Actor,
   productId: string,
   input: { parentId?: string | null; name: string; description?: string | null },
 ): Promise<StructureNodeView> {
   const name = assertName(input.name);
   const description = assertDescription(input.description);
+  const parentId = input.parentId ?? null;
+  let depth = 1;
+  if (parentId) {
+    const parent = await loadNode(tx, parentId);
+    if (parent.productId !== productId) throw new AppError('invalid', '上级节点不属于该产品');
+    if (parent.status === 'deprecated') throw new AppError('invalid', '不能在已停用的节点下新增');
+    depth = parent.depth + 1;
+    if (depth > MAX_STRUCTURE_DEPTH) throw new AppError('invalid', `结构树最多 ${MAX_STRUCTURE_DEPTH} 层`);
+  }
+  const sort = await nextSort(tx, productId, parentId);
+  let row: NodeRow;
+  try {
+    [row] = (await tx.insert(structureNodes).values({ orgId: actor.orgId, productId, parentId, depth, name, description, sort }).returning()) as [NodeRow];
+  } catch (e) {
+    duplicateName(e);
+  }
+  await recordEvent(tx, {
+    orgId: actor.orgId,
+    productId,
+    type: 'structure_node.created',
+    subjectType: 'structure_node',
+    subjectId: row.id,
+    actor,
+    payload: { name, parentId, depth },
+  });
+  await relinkNodes(tx, productId, [row.id]);
+  return view(row);
+}
+
+export async function createStructureNode(
+  db: Db,
+  actor: Actor,
+  productId: string,
+  input: { parentId?: string | null; name: string; description?: string | null },
+): Promise<StructureNodeView> {
   return withOrg(db, actor.orgId, async (tx) => {
     await requireProductRole(tx, actor, productId, 'admin');
-    const parentId = input.parentId ?? null;
-    let depth = 1;
-    if (parentId) {
-      const parent = await loadNode(tx, parentId);
-      if (parent.productId !== productId) throw new AppError('invalid', '上级节点不属于该产品');
-      if (parent.status === 'deprecated') throw new AppError('invalid', '不能在已停用的节点下新增');
-      depth = parent.depth + 1;
-      if (depth > MAX_STRUCTURE_DEPTH) throw new AppError('invalid', `结构树最多 ${MAX_STRUCTURE_DEPTH} 层`);
-    }
-    const sort = await nextSort(tx, productId, parentId);
-    let row: NodeRow;
-    try {
-      [row] = (await tx.insert(structureNodes).values({ orgId: actor.orgId, productId, parentId, depth, name, description, sort }).returning()) as [NodeRow];
-    } catch (e) {
-      duplicateName(e);
-    }
-    await recordEvent(tx, {
-      orgId: actor.orgId,
-      productId,
-      type: 'structure_node.created',
-      subjectType: 'structure_node',
-      subjectId: row.id,
-      actor,
-      payload: { name, parentId, depth },
-    });
-    await relinkNodes(tx, productId, [row.id]);
-    return view(row);
+    return insertStructureNodeTx(tx, actor, productId, input);
   });
 }
 
@@ -117,7 +129,7 @@ export async function updateStructureNode(
 ): Promise<StructureNodeView> {
   if (input.status !== undefined && input.status !== 'active' && input.status !== 'deprecated') throw new AppError('invalid', '节点状态无效');
   return withOrg(db, actor.orgId, async (tx) => {
-    const cur = await loadNode(tx, nodeId);
+    const cur = await loadNode(tx, nodeId, { lock: true });
     await requireProductRole(tx, actor, cur.productId, 'admin');
     const next = {
       name: input.name === undefined ? cur.name : assertName(input.name),
@@ -137,6 +149,8 @@ export async function updateStructureNode(
       await recordEvent(tx, { orgId: actor.orgId, productId: cur.productId, type: 'structure_node.updated', subjectType: 'structure_node', subjectId: nodeId, actor, payload: { changes } });
     }
     if (next.name !== cur.name) {
+      // 先同步模块文档再接悬空链接：锁顺序为「功能点行 → 模块文档行 → entity_links」，与合入、保存一致，避免死锁。
+      if (cur.depth === 3) await syncFeatureRenameTx(tx, actor, { id: nodeId, parentId: cur.parentId, oldName: cur.name, newName: next.name });
       const all = await tx.select({ id: structureNodes.id, parentId: structureNodes.parentId }).from(structureNodes).where(eq(structureNodes.productId, cur.productId));
       await relinkNodes(tx, cur.productId, subtreeIds(all, nodeId));
     }
@@ -146,7 +160,7 @@ export async function updateStructureNode(
 
 export async function moveStructureNode(db: Db, actor: Actor, nodeId: string, input: { parentId: string | null }): Promise<StructureNodeView> {
   return withOrg(db, actor.orgId, async (tx) => {
-    const node = await loadNode(tx, nodeId);
+    const node = await loadNode(tx, nodeId, { lock: true });
     await requireProductRole(tx, actor, node.productId, 'admin');
     if (input.parentId === node.parentId) return view(node);
     const all = await tx
@@ -165,6 +179,17 @@ export async function moveStructureNode(db: Db, actor: Actor, nodeId: string, in
     const delta = depth - node.depth;
     const deepest = Math.max(...all.filter((n) => subtree.has(n.id)).map((n) => n.depth)) + delta;
     if (deepest > MAX_STRUCTURE_DEPTH) throw new AppError('invalid', '移动后层级超过 3 层');
+    if (delta !== 0) {
+      // 锁住整个子树（按 id 排序），与新建模块文档时锁模块节点互斥；子树里任何一个模块已有模块文档都不能改变层级。
+      const ids = [...subtree];
+      await tx.select({ id: structureNodes.id }).from(structureNodes).where(inArray(structureNodes.id, ids)).orderBy(asc(structureNodes.id)).for('update');
+      const [moduleDoc] = await tx
+        .select({ id: documents.id })
+        .from(documents)
+        .where(and(inArray(documents.nodeId, ids), isNull(documents.deletedAt)))
+        .limit(1);
+      if (moduleDoc) throw new AppError('invalid', '该节点或其下级的模块已有模块文档，不能改变层级');
+    }
     const sort = await nextSort(tx, node.productId, input.parentId);
     let row: NodeRow;
     try {

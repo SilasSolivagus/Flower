@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { ConfirmAction } from '@/components/confirm-action';
 import { QueryError } from '@/components/load-error';
@@ -7,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { SECTION_CHANGE_LABEL } from '@/features/documents/model';
+import { documentHref, SECTION_CHANGE_LABEL } from '@/features/documents/model';
 import { formatDateTime } from '@/features/requirements/format';
 import { api } from '@/lib/api';
 import { documentKeys, useApiMutation, useDocumentDiff, useDocumentRevisions } from '@/lib/queries';
@@ -83,7 +84,8 @@ function DiffDialog({ org, docId, revisions, initial, onClose }: { org: string; 
 
 /** 修订记录：版本列表（作者、时间、摘要），与上一版对比（对话框里可任选两版），恢复到旧版本（新建一版）。 */
 export function Revisions({ org, doc, onRestored, saveEditor }: { org: string; doc: DocumentDetail; onRestored: () => void; saveEditor: () => Promise<number | null> }) {
-  const canEdit = doc.myRole !== 'viewer';
+  // 已归档的模块文档只读，不能恢复版本
+  const canEdit = doc.myRole !== 'viewer' && doc.status !== 'archived';
   const list = useDocumentRevisions(org, doc.id);
   const [diff, setDiff] = useState<{ from: number; to: number } | null>(null);
   const restore = useApiMutation(
@@ -118,6 +120,11 @@ export function Revisions({ org, doc, onRestored, saveEditor }: { org: string; d
                 <span className="font-mono text-xs text-muted-foreground">{formatDateTime(r.updatedAt)}</span>
               </div>
               {r.summary && <p className="text-xs text-muted-foreground">{r.summary}</p>}
+              {r.mergedFrom && (
+                <Link href={documentHref(org, r.mergedFrom.displayKey)} className="text-xs text-muted-foreground hover:underline" aria-label={`来源 ${r.mergedFrom.displayKey} ${r.mergedFrom.title}`}>
+                  来源 <span className="font-mono">{r.mergedFrom.displayKey}</span>
+                </Link>
+              )}
               <div className="flex gap-1">
                 {r.number > 1 && (
                   <Button size="sm" variant="ghost" className="h-6 px-2 text-[12px]" aria-label={`对比第 ${r.number} 版与上一版`} onClick={() => setDiff({ from: r.number - 1, to: r.number })}>

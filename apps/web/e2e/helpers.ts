@@ -175,3 +175,13 @@ export async function applyPrdWorkflow(request: APIRequestContext, productId: st
   );
   await ok(request.put(`/api/v1/orgs/acme/products/${productId}/workflow`, { data: { versionId: wf.version.id } }));
 }
+
+/** 新建结构树节点（以所有者身份，产品管理员权限），返回节点 id。 */
+export async function createNode(request: APIRequestContext, productId: string, parentId: string | null, name: string): Promise<string> {
+  return (await json<{ node: { id: string } }>(request.post(`/api/v1/orgs/acme/products/${productId}/nodes`, { data: { parentId, name } }))).node.id;
+}
+
+/** 把 PRD 从草稿依次改为评审中、已通过、已上线。 */
+export async function launchDocument(request: APIRequestContext, documentId: string): Promise<void> {
+  for (const to of ['review', 'approved', 'launched']) await ok(request.post(`/api/v1/orgs/acme/documents/${documentId}/transitions`, { data: { to } }));
+}

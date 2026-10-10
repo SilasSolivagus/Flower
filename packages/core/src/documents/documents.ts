@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, ilike, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 import { productRoleOf, requireProductRole } from '../access/permissions';
 import type { Db } from '../db/client';
-import { documentRevisions, documents, documentTemplates, products, requirements } from '../db/schema';
+import { documentRevisions, documents, documentTemplates, products, requirements, structureNodes } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
@@ -14,7 +14,7 @@ import { orgToday } from '../tasks/tasks';
 import { reanchorDocumentComments } from './comments';
 import { documentCheckItemViews } from './checks';
 import { linkRequirementsTx, syncPrdCheck } from './coverage';
-import type { DocumentStatus, ExternalProvider, RevisionSnapshot } from './constants';
+import type { DocumentKind, DocumentStatus, ExternalProvider, RevisionSnapshot } from './constants';
 import {
   canTransition,
   diffRevisionSnapshots,
@@ -38,6 +38,7 @@ export type DocumentListItem = {
   productId: string;
   number: number;
   displayKey: string;
+  kind: DocumentKind;
   title: string;
   source: 'native' | 'external';
   status: DocumentStatus;
@@ -48,6 +49,8 @@ export type DocumentListItem = {
   updatedAt: Date;
 };
 export type DocumentFilter = { statuses?: DocumentStatus[]; ownerIds?: string[]; source?: 'native' | 'external'; q?: string };
+/** 模块文档所属的模块节点与业务域。 */
+export type ModuleNodeRef = { id: string; name: string; status: 'active' | 'deprecated'; domain: { id: string; name: string } | null };
 export type DocumentDetail = DocumentListItem & {
   productKey: string;
   version: number;
@@ -58,11 +61,22 @@ export type DocumentDetail = DocumentListItem & {
   transitions: DocumentStatus[];
   requirements: Array<{ id: string; displayKey: string; title: string; stateKey: string }>;
   checkItems: CheckItemView[];
+  /** 模块文档对应的模块；变更 PRD 为空。 */
+  node: ModuleNodeRef | null;
   createdAt: Date;
 };
-export type RevisionListItem = { number: number; summary: string | null; author: MemberRef | null; createdAt: Date; updatedAt: Date };
+export type RevisionListItem = {
+  number: number;
+  summary: string | null;
+  author: MemberRef | null;
+  /** 合入产生的修订：来源变更 PRD。 */
+  mergedFrom: { id: string; displayKey: string; title: string } | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
 export type SaveResult = { version: number; revisionNumber: number; merged: boolean };
-type DocRow = typeof documents.$inferSelect;
+export type DocumentRow = typeof documents.$inferSelect;
+type DocRow = DocumentRow;
 
 function assertMarkdown(markdown: string): string {
   if (markdown.length > MAX_MARKDOWN_CHARS) throw new AppError('invalid', `正文不超过 ${MAX_MARKDOWN_CHARS} 个字符`);
@@ -76,6 +90,11 @@ const UNMIGRATED_IMAGE = '[图片未迁移]';
 
 function assertBaseVersion(doc: DocRow, baseVersion: number): void {
   if (doc.version !== baseVersion) throw new AppError('conflict', '文档已被其他人修改，请重新加载后再编辑', { version: doc.version });
+}
+
+/** 已归档的模块文档只读：正文、标题、负责人、恢复与合入都不能改；评论照常。 */
+export function assertWritable(doc: DocRow): void {
+  if (doc.kind === 'module' && doc.status === 'archived') throw new AppError('invalid', '模块文档已归档，恢复为使用中后才能修改');
 }
 
 export async function loadDocument(tx: Tx, id: string, opts: { lock?: boolean } = {}): Promise<DocRow> {
@@ -110,6 +129,7 @@ async function hydrate(tx: Tx, rows: DocRow[]): Promise<DocumentListItem[]> {
     productId: r.productId,
     number: r.number,
     displayKey: documentDisplayKey(keyOf.get(r.productId)!, r.number),
+    kind: r.kind,
     title: r.title,
     source: r.source,
     status: r.status,
@@ -119,6 +139,14 @@ async function hydrate(tx: Tx, rows: DocRow[]): Promise<DocumentListItem[]> {
     requirementCount: countOf.get(r.id) ?? 0,
     updatedAt: r.updatedAt,
   }));
+}
+
+async function moduleNodeOf(tx: Tx, nodeId: string | null): Promise<ModuleNodeRef | null> {
+  if (!nodeId) return null;
+  const [n] = await tx.select().from(structureNodes).where(eq(structureNodes.id, nodeId));
+  if (!n) return null;
+  const [p] = n.parentId ? await tx.select({ id: structureNodes.id, name: structureNodes.name }).from(structureNodes).where(eq(structureNodes.id, n.parentId)) : [];
+  return { id: n.id, name: n.name, status: n.status, domain: p ? { id: p.id, name: p.name } : null };
 }
 
 async function detailOf(tx: Tx, actor: Actor, doc: DocRow): Promise<DocumentDetail> {
@@ -142,7 +170,8 @@ async function detailOf(tx: Tx, actor: Actor, doc: DocRow): Promise<DocumentDeta
     myRole: role,
     transitions: role === 'viewer' ? [] : DOCUMENT_TRANSITIONS[doc.status],
     requirements: reqs.map((r) => ({ id: r.id, displayKey: requirementDisplayKey(productKey, r.number), title: r.title, stateKey: r.stateKey })),
-    checkItems: await documentCheckItemViews(tx, actor, role, doc),
+    checkItems: doc.kind === 'module' ? [] : await documentCheckItemViews(tx, actor, role, doc),
+    node: await moduleNodeOf(tx, doc.nodeId),
     createdAt: doc.createdAt,
   };
 }
@@ -153,14 +182,14 @@ export async function documentDetailInTx(tx: Tx, actor: Actor, id: string): Prom
 
 /**
  * 写一条修订：同一作者、距该作者上次保存不到 5 分钟、且上一条没有摘要（不是恢复或转换产生的）时覆盖上一条，
- * 否则新建。调用方已锁住文档行。
+ * 否则新建。调用方已锁住文档行。mergedFrom 为合入来源的变更 PRD。
  */
-async function writeRevision(
+export async function writeRevision(
   tx: Tx,
   actor: Actor,
   doc: DocRow,
   snapshot: RevisionSnapshot,
-  opts: { summary: string | null; allowMerge: boolean },
+  opts: { summary: string | null; allowMerge: boolean; mergedFrom?: string | null },
 ): Promise<{ id: string; number: number; merged: boolean }> {
   const [latest] = await tx.select().from(documentRevisions).where(eq(documentRevisions.documentId, doc.id)).orderBy(desc(documentRevisions.version)).limit(1);
   const now = new Date();
@@ -176,9 +205,46 @@ async function writeRevision(
   }
   const [rev] = await tx
     .insert(documentRevisions)
-    .values({ orgId: actor.orgId, documentId: doc.id, version: (latest?.version ?? 0) + 1, snapshot, summary: opts.summary, authorMemberId: actor.memberId, createdAt: now, updatedAt: now })
+    .values({
+      orgId: actor.orgId,
+      documentId: doc.id,
+      version: (latest?.version ?? 0) + 1,
+      snapshot,
+      summary: opts.summary,
+      authorMemberId: actor.memberId,
+      mergedFromDocumentId: opts.mergedFrom ?? null,
+      createdAt: now,
+      updatedAt: now,
+    })
     .returning();
   return { id: rev!.id, number: rev!.version, merged: false };
+}
+
+/** 文档当前正文（外部 PRD 为空字符串）。 */
+export async function documentMarkdownTx(tx: Tx, doc: DocRow): Promise<string> {
+  if (!doc.currentRevisionId) return '';
+  const [rev] = await tx.select({ snapshot: documentRevisions.snapshot }).from(documentRevisions).where(eq(documentRevisions.id, doc.currentRevisionId));
+  return rev?.snapshot.markdown ?? '';
+}
+
+/**
+ * 系统写入的一版（合入、功能点改名）：不与自动保存合并，版本号加一，重新定位划词评论、重建 [[ ]] 链接。
+ * 不检查归档（调用方决定），事件由调用方记录。调用方已锁住文档行。
+ */
+export async function commitSystemRevisionTx(
+  tx: Tx,
+  actor: Actor,
+  doc: DocRow,
+  markdown: string,
+  opts: { summary: string; mergedFrom: string | null },
+): Promise<{ id: string; number: number; version: number }> {
+  const md = assertMarkdown(markdown);
+  const rev = await writeRevision(tx, actor, doc, { title: doc.title, markdown: md }, { summary: opts.summary, allowMerge: false, mergedFrom: opts.mergedFrom });
+  const version = doc.version + 1;
+  await tx.update(documents).set({ version, currentRevisionId: rev.id, updatedAt: new Date() }).where(eq(documents.id, doc.id));
+  await reanchorDocumentComments(tx, doc.id, md);
+  await syncSourceLinks(tx, actor.orgId, { type: 'document', id: doc.id, productKey: await productKeyOf(tx, doc.productId) }, md, { markdown: true });
+  return { id: rev.id, number: rev.number, version };
 }
 
 export async function createDocument(
@@ -299,6 +365,7 @@ export async function updateDocument(
   return withOrg(db, actor.orgId, async (tx) => {
     const cur = await loadDocument(tx, id, { lock: true });
     await requireProductRole(tx, actor, cur.productId, 'editor');
+    assertWritable(cur);
     const next = {
       title: input.title === undefined ? cur.title : assertTitle(input.title),
       ownerMemberId: input.ownerMemberId === undefined ? cur.ownerMemberId : input.ownerMemberId,
@@ -340,6 +407,7 @@ export async function saveDocumentContent(db: Db, actor: Actor, id: string, inpu
   return withOrg(db, actor.orgId, async (tx) => {
     const doc = await loadDocument(tx, id, { lock: true });
     await requireProductRole(tx, actor, doc.productId, 'editor');
+    assertWritable(doc);
     if (doc.source !== 'native') throw new AppError('invalid', '外部 PRD 没有正文，请先转为 Flower 文档');
     assertBaseVersion(doc, input.baseVersion);
     const title = input.title === undefined ? doc.title : assertTitle(input.title);
@@ -367,10 +435,15 @@ export async function listRevisions(db: Db, actor: Actor, id: string): Promise<R
     await requireProductRole(tx, actor, doc.productId, 'viewer');
     const rows = await tx.select().from(documentRevisions).where(eq(documentRevisions.documentId, id)).orderBy(desc(documentRevisions.version));
     const names = await memberNames(tx, rows.map((r) => r.authorMemberId));
+    const sourceIds = [...new Set(rows.map((r) => r.mergedFromDocumentId).filter((x): x is string => !!x))];
+    const sources = sourceIds.length > 0 ? await tx.select({ id: documents.id, number: documents.number, title: documents.title }).from(documents).where(inArray(documents.id, sourceIds)) : [];
+    const productKey = sources.length > 0 ? await productKeyOf(tx, doc.productId) : '';
+    const sourceOf = new Map(sources.map((s) => [s.id, { id: s.id, displayKey: documentDisplayKey(productKey, s.number), title: s.title }]));
     return rows.map((r) => ({
       number: r.version,
       summary: r.summary,
       author: r.authorMemberId ? { id: r.authorMemberId, displayName: names.get(r.authorMemberId) ?? '已删除的成员' } : null,
+      mergedFrom: r.mergedFromDocumentId ? (sourceOf.get(r.mergedFromDocumentId) ?? null) : null,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
     }));
@@ -405,6 +478,7 @@ export async function restoreRevision(db: Db, actor: Actor, id: string, input: {
   return withOrg(db, actor.orgId, async (tx) => {
     const doc = await loadDocument(tx, id, { lock: true });
     await requireProductRole(tx, actor, doc.productId, 'editor');
+    assertWritable(doc);
     if (doc.source !== 'native') throw new AppError('invalid', '外部 PRD 没有修订');
     assertBaseVersion(doc, input.baseVersion);
     const target = await revisionSnapshot(tx, id, input.number);
@@ -440,25 +514,33 @@ export async function transitionDocument(db: Db, actor: Actor, id: string, input
       const missing = tpl ? missingRequiredSections(rev?.snapshot.markdown ?? '', tpl) : [];
       if (missing.length > 0) throw new AppError('invalid', `以下必填小节未填写：${missing.join('、')}`, { missing });
     }
-    await tx.update(documents).set({ status: input.to, updatedAt: new Date() }).where(eq(documents.id, id));
-    await recordEvent(tx, {
-      orgId: actor.orgId,
-      productId: doc.productId,
-      type: 'document.status_changed',
-      subjectType: 'document',
-      subjectId: id,
-      actor,
-      payload: { changes: [{ field: 'status', old: doc.status, new: input.to }] },
-    });
-    const covered = await tx
-      .select({ id: requirements.id })
-      .from(requirements)
-      .where(and(eq(requirements.changeDocumentId, id), isNull(requirements.deletedAt)))
-      .orderBy(asc(requirements.id))
-      .for('update');
-    await syncPrdCheck(tx, actor, { id, productId: doc.productId, status: input.to }, covered.map((r) => r.id));
+    await setDocumentStatusTx(tx, actor, doc, input.to);
     return documentDetailInTx(tx, actor, id);
   });
+}
+
+/**
+ * 改 PRD 状态：记录 document.status_changed，再按 id 升序锁住覆盖的需求，把它们的「PRD」检查项同步为新状态对应的结果。
+ * 不检查权限与能否流转（调用方决定）。调用方已锁住文档行（锁顺序：PRD → 需求）。
+ */
+export async function setDocumentStatusTx(tx: Tx, actor: Actor, doc: DocRow, to: DocumentStatus): Promise<void> {
+  await tx.update(documents).set({ status: to, updatedAt: new Date() }).where(eq(documents.id, doc.id));
+  await recordEvent(tx, {
+    orgId: actor.orgId,
+    productId: doc.productId,
+    type: 'document.status_changed',
+    subjectType: 'document',
+    subjectId: doc.id,
+    actor,
+    payload: { changes: [{ field: 'status', old: doc.status, new: to }] },
+  });
+  const covered = await tx
+    .select({ id: requirements.id })
+    .from(requirements)
+    .where(and(eq(requirements.changeDocumentId, doc.id), isNull(requirements.deletedAt)))
+    .orderBy(asc(requirements.id))
+    .for('update');
+  await syncPrdCheck(tx, actor, { id: doc.id, productId: doc.productId, status: to }, covered.map((r) => r.id));
 }
 
 export async function convertExternalDocument(db: Db, actor: Actor, id: string, input: { baseVersion: number; markdown: string }): Promise<SaveResult> {

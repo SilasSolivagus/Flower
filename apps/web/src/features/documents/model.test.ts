@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { DocumentComment } from '@/lib/types';
-import { base64ToBytes, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, editorAnchors, findDataImages, findSectionIndex, groupThreads, importSummary, locateAnchorRange, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
+import type { DocumentComment, StructureNode } from '@/lib/types';
+import { base64ToBytes, CHANGE_TYPE_LABEL, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, documentView, domainOptions, editorAnchors, featureOptions, findDataImages, findSectionIndex, groupThreads, importSummary, locateAnchorRange, MERGE_STATUS_LABEL, moduleDocsHref, moduleOptions, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
 
 describe('PRD 列表筛选', () => {
   it('地址栏 ↔ 筛选；无效的状态与来源被忽略', () => {
@@ -10,6 +10,8 @@ describe('PRD 列表筛选', () => {
     expect(documentFilterToSearch(f)).toBe('product=PAN&status=review&owner=m1&source=external&q=%E6%94%AF%E4%BB%98');
     expect(documentFilterToApiQuery(f)).toBe('status=review&owner=m1&source=external&q=%E6%94%AF%E4%BB%98');
     expect(documentFilterToApiQuery({ product: 'PAN', status: '', owner: '', source: '', q: '' })).toBe('');
+    expect(parseDocumentFilter(new URLSearchParams('status=merged')).status).toBe('merged');
+    expect(parseDocumentFilter(new URLSearchParams('status=archived')).status).toBe('');
   });
 
   it('链接与来源文字', () => {
@@ -113,5 +115,59 @@ describe('评论锚点在编辑器中的位置', () => {
       { ...base, id: 'e', anchor, anchorState: 'ok' as const, parentId: 'a' },
     ];
     expect(editorAnchors(list)).toEqual([{ id: 'a', quote: '经常超时', prefix: 'p', suffix: 's' }]);
+  });
+});
+
+describe('模块文档页签', () => {
+  it('页签只由地址栏的 view 决定；模块文档页签的地址带产品与要定位的模块', () => {
+    expect(documentView(new URLSearchParams('product=PAN&view=modules'))).toBe('modules');
+    expect(documentView(new URLSearchParams('product=PAN'))).toBe('change');
+    expect(documentView(new URLSearchParams('view=bogus'))).toBe('change');
+    expect(moduleDocsHref('acme', 'PAN')).toBe('/acme/documents?product=PAN&view=modules');
+    expect(moduleDocsHref('acme', 'PAN', 'n1')).toBe('/acme/documents?product=PAN&view=modules&node=n1');
+  });
+
+  it('变更类型与合入状态的文字', () => {
+    expect(CHANGE_TYPE_LABEL).toEqual({ added: '新增', modified: '修改', removed: '删除' });
+    expect(MERGE_STATUS_LABEL).toEqual({ pending: '待合入', applied: '已应用', skipped: '已跳过' });
+  });
+});
+
+describe('声明影响的选项', () => {
+  const N = (id: string, parentId: string | null, depth: number, name: string, sort: number, status: 'active' | 'deprecated' = 'active'): StructureNode => ({
+    id,
+    parentId,
+    depth,
+    name,
+    description: null,
+    status,
+    sort,
+  });
+  const NODES = [
+    N('d1', null, 1, '存储', 0),
+    N('m1', 'd1', 2, '上传', 0),
+    N('f1', 'm1', 3, '分片上传', 0),
+    N('f2', 'm1', 3, '秒传', 1),
+    N('m2', 'd1', 2, '旧模块', 1, 'deprecated'),
+    N('f3', 'm2', 3, '旧功能', 0),
+    N('d2', null, 1, '会员', 1),
+  ];
+
+  it('功能点：第三层、本身与上级都没停用、未声明，按路径搜索，按树的顺序', () => {
+    expect(featureOptions(NODES, '', new Set())).toEqual([
+      { id: 'f1', path: '存储/上传/分片上传' },
+      { id: 'f2', path: '存储/上传/秒传' },
+    ]);
+    expect(featureOptions(NODES, ' 秒 ', new Set())).toEqual([{ id: 'f2', path: '存储/上传/秒传' }]);
+    expect(featureOptions(NODES, '上传', new Set(['f1']))).toEqual([{ id: 'f2', path: '存储/上传/秒传' }]);
+    expect(featureOptions(NODES, '旧功能', new Set())).toEqual([]);
+  });
+
+  it('模块与业务域：没停用的', () => {
+    expect(moduleOptions(NODES)).toEqual([{ id: 'm1', path: '存储/上传' }]);
+    expect(domainOptions(NODES)).toEqual([
+      { id: 'd1', path: '存储' },
+      { id: 'd2', path: '会员' },
+    ]);
   });
 });

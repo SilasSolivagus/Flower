@@ -53,6 +53,7 @@ export async function setDocumentCheckItemState(
   return withOrg(db, actor.orgId, async (tx) => {
     const doc = await loadDocument(tx, documentId, { lock: true });
     await requireProductRole(tx, actor, doc.productId, 'editor');
+    if (doc.kind !== 'change') throw new AppError('invalid', '模块文档没有检查项');
     const item = await documentItem(tx, doc.productId, itemKey);
     const changes = await writeSingleCheck(tx, actor, { type: 'document', id: doc.id }, item, input);
     await tx.update(documents).set({ updatedAt: new Date() }).where(eq(documents.id, doc.id));
@@ -66,6 +67,7 @@ export async function signDocumentCheckItem(db: Db, actor: Actor, documentId: st
   return withOrg(db, actor.orgId, async (tx) => {
     const doc = await loadDocument(tx, documentId, { lock: true });
     const role = await requireProductRole(tx, actor, doc.productId, 'viewer');
+    if (doc.kind !== 'change') throw new AppError('invalid', '模块文档没有检查项');
     const item = await documentItem(tx, doc.productId, itemKey);
     const r = await writeSignoff(tx, actor, role, { type: 'document', id: doc.id }, item, input);
     await tx.update(documents).set({ updatedAt: new Date() }).where(eq(documents.id, doc.id));

@@ -50,8 +50,10 @@ export async function deleteOrgData(tx: Tx, orgId: string): Promise<void> {
     .update(core.workflowDefinitions)
     .set({ productId: null, currentVersionId: null, forkedFromVersionId: null })
     .where(eq(core.workflowDefinitions.orgId, orgId));
-  // 导入不写、但正常使用会写的租户表：迭代快照在需求/迭代之前删，双链只引用组织、随时可删，Token 与邀请在成员之前删
+  // 导入不写、但正常使用会写的租户表：迭代快照在需求/迭代之前删，影响声明在文档、修订与结构树之前删，
+  // 双链只引用组织、随时可删，Token 与邀请在成员之前删
   await tx.execute(sql`delete from ${core.iterationScopeSnapshots} where org_id = ${orgId}`);
+  await tx.execute(sql`delete from ${core.documentAffectedNodes} where org_id = ${orgId}`);
   await tx.execute(sql`delete from ${core.entityLinks} where org_id = ${orgId}`);
   const tenantTables = [...INSERT_ORDER].reverse().filter((k) => k !== 'organizations').map((k) => TABLES[k]);
   for (const table of [...tenantTables.slice(0, -1), core.invitations, core.apiTokens, tenantTables.at(-1)!]) {

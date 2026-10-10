@@ -113,10 +113,28 @@ async function loadTargets(tx: Tx, rows: LinkRow[]): Promise<Map<string, Target>
   const nodeIds = ids('structure_node');
   if (nodeIds.length > 0) {
     const ns = await tx.select().from(structureNodes).where(inArray(structureNodes.id, nodeIds));
+    // 模块与功能点链接到模块文档：模块为自己，功能点为父模块；业务域仍链接到需求列表
+    const moduleOf = (n: { id: string; depth: number; parentId: string | null }): string | null => (n.depth === 2 ? n.id : n.depth === 3 ? n.parentId : null);
+    const moduleIds = [...new Set(ns.map(moduleOf).filter((x): x is string => !!x))];
+    const moduleDocs =
+      moduleIds.length > 0
+        ? await tx
+            .select({ nodeId: documents.nodeId, number: documents.number })
+            .from(documents)
+            .where(and(inArray(documents.nodeId, moduleIds), eq(documents.kind, 'module'), isNull(documents.deletedAt)))
+        : [];
+    const docNumberOf = new Map(moduleDocs.map((d) => [d.nodeId!, d.number]));
     for (const pid of new Set(ns.map((n) => n.productId))) {
       const paths = await nodePathTexts(tx, pid);
       const key = keyOf.get(pid)!;
       for (const n of ns.filter((x) => x.productId === pid)) {
+        const moduleId = moduleOf(n);
+        const number = moduleId ? docNumberOf.get(moduleId) : undefined;
+        const href = !moduleId
+          ? `requirements?product=${key}&node=${n.id}`
+          : number === undefined
+            ? `documents?product=${key}&view=modules&node=${moduleId}`
+            : `documents/${documentDisplayKey(key, number)}${n.depth === 3 ? `?section=${encodeURIComponent(n.name)}` : ''}`;
         out.set(`structure_node:${n.id}`, {
           productId: pid,
           numbered: false,
@@ -124,7 +142,7 @@ async function loadTargets(tx: Tx, rows: LinkRow[]): Promise<Map<string, Target>
           displayKey: paths.get(n.id)!.slice(key.length + 1),
           title: null,
           status: n.status === 'deprecated' ? { label: '已停用', color: null } : null,
-          href: `requirements?product=${key}&node=${n.id}`,
+          href,
         });
       }
     }

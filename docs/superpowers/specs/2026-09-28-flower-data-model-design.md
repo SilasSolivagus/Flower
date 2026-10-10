@@ -212,20 +212,20 @@ Flower 是一个多组织、多产品的产品研发管理平台，最终以 doc
 |---|---|---|
 | 状态 | draft / review / approved / launched / merged / discarded | active / archived |
 | 与需求的关系 | 覆盖 N 条需求；需求侧 `change_document_id` 保证一条需求最多一份 | 不直接关联需求 |
-| 影响声明 | `document_affected_nodes`：document_id、node_id、change_type（added / modified / removed） | — |
+| 影响声明 | `document_affected_nodes`：document_id、node_id、change_type（added / modified / removed）、source_sections、merge_status（pending / applied / skipped）、merged_revision_id、merged_by、merged_at（见 P2-B2 设计 §4） | — |
 | 检查项 | scope = document 的检查项结果挂在它上面 | — |
 
 ### 5.2 正文
 
 - markdown 是唯一数据源，编辑器为 BlockNote。
 - 变更 PRD 的正文是单个 markdown。
-- 模块文档按小节存储：`document_sections`（document_id、node_id（可空，空表示概述）、sort_key、heading、body）。编辑时整篇显示，保存时按小节拆开。
+- 模块文档为单篇 markdown，按二级标题（功能点名称）定位小节，不建 `document_sections`（2026-10-09 修改，见 P2-B2 设计 §3）。
 
 ### 5.3 修订与合入
 
 - `document_revisions`：document_id、version、snapshot（jsonb：标题与全部小节）、summary、author_member_id、merged_from_document_id（可空）、created_at。同一作者 5 分钟内的自动保存合并为一条。
-- `document_merges`：change_document_id、module_document_id、proposal（jsonb：按小节的改动）、status（proposed / applied / rejected）、proposed_by、applied_by、produced_revision_id。
-- 流程：变更 PRD 上线后，生成合入提案（可由 Agent 起草）→ 人按小节审阅 → 应用，产生模块文档新版本，功能点历史中出现系统链接（§6.4）。试验回滚的变更 PRD 标记为 discarded，不合入。
+- 人工合入（P2-B2）不建 `document_merges`：合入状态记在 `document_affected_nodes`（merge_status、merged_revision_id），合入产生的模块文档修订带 merged_from_document_id。Agent 起草合入提案（P5）时再确定提案的存储（2026-10-09，见 P2-B2 设计 §4、§5）。
+- 流程：变更 PRD 上线后，按功能点把来源小节的内容合入模块文档（逐个应用或跳过），全部处理完时 PRD 变为 merged。试验回滚的变更 PRD 标记为 discarded，不合入。
 
 ### 5.4 模板
 
@@ -275,7 +275,7 @@ sections 供 Agent 逐节写作，并由系统校验必填小节是否齐全。
 - 正文语法：`[[PAN-123]]`、`[[PAN-PRD-12]]`、`[[PAN-PRD-12#小节]]`、`[[PAN-T-12]]`（任务）、`[[迭代:名称]]`、`[[业务域/模块/功能点]]`。需求描述、文档、评论中均可使用。细则见 P2-B1 设计（2026-10-09 修改：文档与任务编号带产品前缀，增加任务与迭代）。
 - `entity_links`：org_id、source_type、source_id、source_section（可空）、target_type（可空）、target_id（可空）、target_text、context（引用处所在的一句）、origin（wikilink / system / manual）。
 - 保存时解析 wikilink 并重建该来源的链接。目标暂不存在时 target_id 为空，之后创建同名对象时自动接上。存目标 id，改标题不断链；旧编号通过 `entity_aliases` 解析。
-- 模块文档中功能点的历史、需求与变更 PRD 的关联等系统生成的链接，以 origin = system 写入同一张表，反向链接面板一次查全。
+- 需求与变更 PRD 的关联等系统生成的链接，以 origin = system 写入同一张表，反向链接面板一次查全。功能点的合入历史由 `document_affected_nodes` 与修订的 merged_from_document_id 读出，不写入本表（2026-10-09，见 P2-B2 设计 §5）。
 - 检索时可沿链接扩展上下文。关系图谱视图后置。
 
 ### 6.5 设置页面

@@ -1,5 +1,6 @@
-import { bestQuoteMatch, DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, normalizeHeading, splitSections, squash, type TemplateSection } from '@flower/core/markdown';
-import type { DocumentComment } from '@/lib/types';
+import { bestQuoteMatch, CHANGE_DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, normalizeHeading, splitSections, squash, type TemplateSection } from '@flower/core/markdown';
+import { nodeOptions } from '@/features/structure/model';
+import type { AffectedChangeType, DocumentComment, MergeStatus, StructureNode } from '@/lib/types';
 
 export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
   draft: '#8a9199',
@@ -8,6 +9,8 @@ export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
   launched: '#1e8a5a',
   merged: '#0f766e',
   discarded: '#5c6570',
+  active: '#1e8a5a',
+  archived: '#8a9199',
 };
 
 export const PROVIDER_LABEL: Record<ExternalProvider, string> = {
@@ -26,6 +29,18 @@ export function sourceLabel(d: { source: 'native' | 'external'; externalProvider
 
 export const documentHref = (org: string, displayKey: string): string => `/${org}/documents/${displayKey}`;
 
+export type DocumentView = 'change' | 'modules';
+
+/** 文档页的页签只由地址栏决定：?view=modules 为「模块文档」，否则为「变更 PRD」。 */
+export const documentView = (sp: URLSearchParams): DocumentView => (sp.get('view') === 'modules' ? 'modules' : 'change');
+
+/** 「模块文档」页签的地址；带 nodeId 时定位到这个模块。 */
+export function moduleDocsHref(org: string, productKey: string, nodeId?: string | null): string {
+  const p = new URLSearchParams({ product: productKey, view: 'modules' });
+  if (nodeId) p.set('node', nodeId);
+  return `/${org}/documents?${p.toString()}`;
+}
+
 export type DocumentListFilter = { product: string; status: DocumentStatus | ''; owner: string; source: 'native' | 'external' | ''; q: string };
 
 export function parseDocumentFilter(sp: URLSearchParams): DocumentListFilter {
@@ -33,7 +48,7 @@ export function parseDocumentFilter(sp: URLSearchParams): DocumentListFilter {
   const source = sp.get('source') ?? '';
   return {
     product: sp.get('product') ?? '',
-    status: (DOCUMENT_STATUSES as readonly string[]).includes(status) ? (status as DocumentStatus) : '',
+    status: (CHANGE_DOCUMENT_STATUSES as readonly string[]).includes(status) ? (status as DocumentStatus) : '',
     owner: sp.get('owner') ?? '',
     source: source === 'native' || source === 'external' ? source : '',
     q: sp.get('q') ?? '',
@@ -86,6 +101,8 @@ export function groupThreads(comments: DocumentComment[]): Thread[] {
 }
 
 export const SECTION_CHANGE_LABEL = { added: '新增', removed: '删除', modified: '修改' } as const;
+export const CHANGE_TYPE_LABEL: Record<AffectedChangeType, string> = { added: '新增', modified: '修改', removed: '删除' };
+export const MERGE_STATUS_LABEL: Record<MergeStatus, string> = { pending: '待合入', applied: '已应用', skipped: '已跳过' };
 export const ANCHOR_STATE_LABEL = { stale: '已失效', unanchored: '未定位' } as const;
 
 export const IMPORT_LIMITS = { markdownBytes: 2 * 1024 * 1024, docxBytes: 20 * 1024 * 1024 } as const;
@@ -164,3 +181,36 @@ export function editorAnchors(comments: DocumentComment[]): EditorAnchor[] {
     .filter((c) => !c.parentId && c.anchor && c.anchorState === 'ok' && !c.resolvedAt)
     .map((c) => ({ id: c.id, quote: c.anchor!.quote, prefix: c.anchor!.prefix, suffix: c.anchor!.suffix }));
 }
+
+export type NodeOption = { id: string; path: string };
+
+function pathOf(nodes: StructureNode[]): (id: string) => string {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  return (id) => {
+    const names: string[] = [];
+    for (let cur = byId.get(id); cur; cur = cur.parentId ? byId.get(cur.parentId) : undefined) names.unshift(cur.name);
+    return names.join('/');
+  };
+}
+
+/** 某一层没停用（本身与上级都没停用）的节点，按树的顺序，带名称路径。 */
+function activeAt(nodes: StructureNode[], depth: number): NodeOption[] {
+  const path = pathOf(nodes);
+  return nodeOptions(nodes, null)
+    .filter((n) => n.depth === depth)
+    .map((n) => ({ id: n.id, path: path(n.id) }));
+}
+
+/** 声明影响时可选的功能点：没停用、还没声明过，名称路径包含查询（不区分大小写），按树的顺序最多 20 个。 */
+export function featureOptions(nodes: StructureNode[], q: string, exclude: Set<string>): NodeOption[] {
+  const want = q.trim().toLowerCase();
+  return activeAt(nodes, 3)
+    .filter((o) => !exclude.has(o.id) && (!want || o.path.toLowerCase().includes(want)))
+    .slice(0, 20);
+}
+
+/** 当场新建功能点时可选的模块。 */
+export const moduleOptions = (nodes: StructureNode[]): NodeOption[] => activeAt(nodes, 2);
+
+/** 当场新建模块时可选的业务域。 */
+export const domainOptions = (nodes: StructureNode[]): NodeOption[] => activeAt(nodes, 1);

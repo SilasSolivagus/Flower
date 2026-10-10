@@ -26,6 +26,8 @@ test('需求挂 PRD：从需求新建 PRD；PRD 状态带动「PRD」检查项�
   const side = page.getByRole('complementary');
   await expect(side.getByRole('region', { name: '覆盖的需求' })).toContainText('PAN-1');
   await side.getByRole('button', { name: '改为评审中' }).click();
+  // 「状态」区域里本来就有「改为评审中」按钮，只查文字会立刻通过；等按钮消失，说明流转已提交并刷新
+  await expect(side.getByRole('button', { name: '改为评审中' })).toHaveCount(0);
   await expect(side.getByRole('region', { name: '状态' })).toContainText('评审中');
 
   await page.goto('/acme');
@@ -49,6 +51,7 @@ test('需求挂 PRD：从需求新建 PRD；PRD 状态带动「PRD」检查项�
   await page.getByRole('complementary').getByRole('listitem', { name: 'PRD 评审' }).getByRole('button', { name: '通过' }).click();
   await expect(page.getByText('已签字')).toBeVisible();
   await page.getByRole('complementary').getByRole('button', { name: '改为已通过' }).click();
+  await expect(page.getByRole('complementary').getByRole('button', { name: '改为已通过' })).toHaveCount(0);
   await expect(page.getByRole('complementary').getByRole('region', { name: '状态' })).toContainText('已通过');
 
   await page.goto('/acme/requirements/PAN-1');

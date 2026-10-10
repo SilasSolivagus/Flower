@@ -1,5 +1,7 @@
 import type {
   AccountView,
+  AffectedChangeType as CoreAffectedChangeType,
+  AffectedNodes as CoreAffectedNodes,
   AttachmentView,
   BacklinkGroup as CoreBacklinkGroup,
   BacklinkTargetType as CoreBacklinkTargetType,
@@ -28,6 +30,11 @@ import type {
   MemberTask as CoreMemberTask,
   MemberTasks as CoreMemberTasks,
   MemberView,
+  MergePlan as CoreMergePlan,
+  MergeRecord as CoreMergeRecord,
+  MergeResult as CoreMergeResult,
+  MergeStatus as CoreMergeStatus,
+  ModuleDocumentTree as CoreModuleDocumentTree,
   MyOrg as CoreMyOrg,
   OrgRole as CoreOrgRole,
   OrgView,
@@ -123,3 +130,12 @@ export type LinkSuggestion = CoreLinkSuggestion;
 export type BacklinkTargetType = CoreBacklinkTargetType;
 export type BacklinkGroup = Jsonify<CoreBacklinkGroup>;
 export type TaskDetail = Jsonify<CoreTaskDetail>;
+export type ModuleDocumentTree = Jsonify<CoreModuleDocumentTree>;
+export type AffectedChangeType = CoreAffectedChangeType;
+export type MergeStatus = CoreMergeStatus;
+export type AffectedNodes = Jsonify<CoreAffectedNodes>;
+export type AffectedNode = AffectedNodes['items'][number];
+export type MergePlan = Jsonify<CoreMergePlan>;
+export type MergeItem = MergePlan['groups'][number]['items'][number];
+export type MergeResult = Jsonify<CoreMergeResult>;
+export type MergeRecord = Jsonify<CoreMergeRecord>;

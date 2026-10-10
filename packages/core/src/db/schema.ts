@@ -18,7 +18,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import type { TokenScope } from '../domain-types';
-import { DOCUMENT_STATUSES, EXTERNAL_PROVIDERS, type RevisionSnapshot, type TemplateSection } from '../documents/constants';
+import { AFFECTED_CHANGE_TYPES, DOCUMENT_KINDS, DOCUMENT_STATUSES, EXTERNAL_PROVIDERS, MERGE_STATUSES, type RevisionSnapshot, type TemplateSection } from '../documents/constants';
 import { newId } from '../ids';
 import { LINK_ORIGINS, LINK_SOURCE_TYPES, LINK_TARGET_TYPES } from '../links/syntax';
 
@@ -628,7 +628,7 @@ export const documents = pgTable(
     orgId: orgRef(),
     productId: productRef(),
     number: integer('number').notNull(),
-    kind: text('kind', { enum: ['change', 'module'] }).notNull().default('change'),
+    kind: text('kind', { enum: DOCUMENT_KINDS }).notNull().default('change'),
     source: text('source', { enum: ['native', 'external'] }).notNull(),
     title: text('title').notNull(),
     ownerMemberId: memberRef('owner_member_id'),
@@ -651,6 +651,8 @@ export const documents = pgTable(
     uniqueIndex('documents_product_url').on(t.productId, t.externalUrlKey).where(sql`${t.externalUrlKey} is not null and ${t.deletedAt} is null`),
     index('documents_product_updated').on(t.productId, t.updatedAt.desc()),
     check('documents_external', sql`${t.source} <> 'external' or (${t.externalUrl} is not null and ${t.externalUrlKey} is not null and ${t.currentRevisionId} is null)`),
+    uniqueIndex('documents_module_node').on(t.nodeId).where(sql`${t.kind} = 'module' and ${t.deletedAt} is null`),
+    check('documents_kind_node', sql`(${t.kind} = 'module') = (${t.nodeId} is not null)`),
   ],
 );
 
@@ -719,4 +721,30 @@ export const entityLinks = pgTable(
     index('entity_links_target').on(t.targetType, t.targetId),
     index('entity_links_org_text').on(t.orgId, t.targetText),
   ],
+);
+
+// ---------- P2-B2：影响声明与合入 ----------
+
+export const documentAffectedNodes = pgTable(
+  'document_affected_nodes',
+  {
+    id: id(),
+    orgId: orgRef(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id),
+    nodeId: uuid('node_id')
+      .notNull()
+      .references(() => structureNodes.id),
+    changeType: text('change_type', { enum: AFFECTED_CHANGE_TYPES }).notNull(),
+    /** PRD 小节的键（splitSections 的标题路径），按声明顺序；空数组表示没有来源。 */
+    sourceSections: jsonb('source_sections').$type<string[]>().notNull().default([]),
+    mergeStatus: text('merge_status', { enum: MERGE_STATUSES }).notNull().default('pending'),
+    mergedRevisionId: uuid('merged_revision_id').references(() => documentRevisions.id),
+    /** 应用或跳过的人与时间。 */
+    mergedBy: memberRef('merged_by'),
+    mergedAt: ts('merged_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('document_affected_nodes_doc_node').on(t.documentId, t.nodeId), index('document_affected_nodes_node').on(t.nodeId)],
 );
