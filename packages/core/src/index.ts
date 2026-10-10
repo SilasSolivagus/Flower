@@ -72,3 +72,5 @@ export * from './notifications/channel-config';
 export * from './notifications/cron';
 export * from './notifications/template';
 export * from './notifications/channels';
+export * from './notifications/builtin';
+export * from './notifications/message-templates';
