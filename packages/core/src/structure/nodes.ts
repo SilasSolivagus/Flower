@@ -1,7 +1,7 @@
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { requireProductRole } from '../access/permissions';
 import type { Db } from '../db/client';
-import { structureNodes } from '../db/schema';
+import { documents, structureNodes } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { syncFeatureRenameTx } from '../documents/module-docs';
@@ -177,6 +177,10 @@ export async function moveStructureNode(db: Db, actor: Actor, nodeId: string, in
     const delta = depth - node.depth;
     const deepest = Math.max(...all.filter((n) => subtree.has(n.id)).map((n) => n.depth)) + delta;
     if (deepest > MAX_STRUCTURE_DEPTH) throw new AppError('invalid', '移动后层级超过 3 层');
+    if (delta !== 0) {
+      const [moduleDoc] = await tx.select({ id: documents.id }).from(documents).where(and(eq(documents.nodeId, nodeId), isNull(documents.deletedAt)));
+      if (moduleDoc) throw new AppError('invalid', '该模块已有模块文档，不能改变层级');
+    }
     const sort = await nextSort(tx, node.productId, input.parentId);
     let row: NodeRow;
     try {

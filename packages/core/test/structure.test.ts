@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { domainEvents } from '../src/db/schema';
 import { withOrg } from '../src/db/tx';
 import type { Actor } from '../src/domain-types';
+import { createModuleDocument } from '../src/documents/module-docs';
 import { listStructureNodes } from '../src/requirements/lookups';
 import { createStructureNode, moveStructureNode, reorderStructureNodes, updateStructureNode } from '../src/structure/nodes';
 import { createPlaceholderMember } from '../src/tenancy/members';
@@ -102,5 +103,14 @@ describe('结构树维护', () => {
     });
     await expect(reorderStructureNodes(t.db, pm, pan, { parentId: null, nodeIds: reversed.slice(1) })).rejects.toMatchObject({ code: 'invalid' });
     await expect(reorderStructureNodes(t.db, editor, pan, { parentId: null, nodeIds: reversed })).rejects.toMatchObject({ code: 'forbidden' });
+  });
+
+  it('移动已有模块文档的模块：改变层级被拒绝，移到另一个业务域下（层级不变）仍允许', async () => {
+    const d1 = (await createStructureNode(t.db, owner, doc, { name: '域一' })).id;
+    const d2 = (await createStructureNode(t.db, owner, doc, { name: '域二' })).id;
+    const mod = await createStructureNode(t.db, owner, doc, { parentId: d1, name: '模块甲' });
+    await createModuleDocument(t.db, owner, mod.id);
+    await expect(moveStructureNode(t.db, owner, mod.id, { parentId: null })).rejects.toMatchObject({ code: 'invalid', message: '该模块已有模块文档，不能改变层级' });
+    await expect(moveStructureNode(t.db, owner, mod.id, { parentId: d2 })).resolves.toMatchObject({ depth: 2, parentId: d2 });
   });
 });
