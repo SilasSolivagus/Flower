@@ -254,14 +254,18 @@ export async function deleteChannel(db: Db, actor: Actor, id: string): Promise<v
   });
 }
 
-/** 启用、且对该产品可用（allowed_product_ids 为空或包含该产品）的通道；ids 为 null 时不限通道。 */
-export async function usableChannelsTx(tx: Tx, ids: string[] | null, productId: string | null): Promise<ChannelRow[]> {
+/**
+ * 启用、且对该产品可用（allowed_product_ids 为空或包含该产品）的通道；ids 为 null 时不限通道。
+ * `lock` 时对读到的通道加 FOR KEY SHARE，与删除通道的 FOR UPDATE 串行，避免随后插入的发送记录外键失效。
+ */
+export async function usableChannelsTx(tx: Tx, ids: string[] | null, productId: string | null, opts: { lock?: boolean } = {}): Promise<ChannelRow[]> {
   if (ids !== null && ids.length === 0) return [];
-  const rows = await tx
+  const q = tx
     .select()
     .from(notificationChannels)
     .where(and(eq(notificationChannels.enabled, true), ids === null ? undefined : inArray(notificationChannels.id, ids)))
     .orderBy(asc(notificationChannels.name));
+  const rows = opts.lock ? await q.for('key share') : await q;
   return rows.filter((r) => r.allowedProductIds.length === 0 || (productId !== null && r.allowedProductIds.includes(productId)));
 }
 
