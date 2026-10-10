@@ -40,6 +40,6 @@ PR 会跑 GitHub Actions CI（`.github/workflows/ci.yml`）：类型检查 + web
 - 每个写操作在同一事务内调用 `recordEvent`。后台与系统写入不记事件：预置模板补齐、定时推送的到点执行、发送记录的状态更新。
 - 服务函数一律声明为 `async`，保证权限校验失败以 Promise 拒绝的形式返回。
 - 面向用户的错误信息用中文，通过 `AppError(code, message, details?)` 抛出。
-- 页面是客户端组件，通过 `/api/v1` 取数；只允许 `import type` 引用 `@flower/core`，以及浏览器安全的 `@flower/core/workflow-schema`、`@flower/core/schedule`、`@flower/core/markdown`、`@flower/core/links`。`markdown` 只依赖 `diff` 和类型导入，其余三个不导入任何其他模块。
+- 页面是客户端组件，通过 `/api/v1` 取数；只允许 `import type` 引用 `@flower/core`，以及浏览器安全的 `@flower/core/workflow-schema`、`@flower/core/schedule`、`@flower/core/markdown`、`@flower/core/links`、`@flower/core/notifications`。`markdown` 只依赖 `diff` 和类型导入，其余四个不导入任何其他模块。
 - 纯逻辑放在 `apps/web/src/features/**/model.ts` 并写 Vitest 单测；页面行为用 Playwright 覆盖，每个 spec 自己调用 `resetDatabase()`。
 - `.local-data/` 存放生产数据副本、对照表和对账报告，含员工个人信息，只在本地，不提交。迁移写入需要 `DATABASE_ADMIN_URL`；同一组织再次导入必须加 `--replace`，会先删除该组织的全部数据。prd 系统的附件文件需要先从服务器只读导出到 .local-data/prd_uploads/（导出前征得用户同意）；没有导出时导入仍可进行，报告列出缺失的文件数。
