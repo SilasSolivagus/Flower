@@ -66,3 +66,6 @@ export * from './documents/checks';
 export * from './documents/module-docs';
 export * from './documents/affected';
 export * from './documents/merge';
+export * from './notifications/constants';
+export * from './notifications/secrets';
+export * from './notifications/channel-config';

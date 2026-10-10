@@ -8,6 +8,7 @@
     "./schedule": "./src/tasks/schedule.ts",
     "./markdown": "./src/documents/markdown.ts",
     "./links": "./src/links/syntax.ts",
+    "./notifications": "./src/notifications/constants.ts",
     "./testing": "./test/db.ts",
     "./testing/factories": "./test/factories.ts",
     "./testing/global-setup": "./test/global-setup.ts"
