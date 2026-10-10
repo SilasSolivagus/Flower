@@ -1,5 +1,6 @@
 import { bestQuoteMatch, CHANGE_DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, normalizeHeading, splitSections, squash, type TemplateSection } from '@flower/core/markdown';
-import type { AffectedChangeType, DocumentComment, MergeStatus } from '@/lib/types';
+import { nodeOptions } from '@/features/structure/model';
+import type { AffectedChangeType, DocumentComment, MergeStatus, StructureNode } from '@/lib/types';
 
 export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
   draft: '#8a9199',
@@ -180,3 +181,36 @@ export function editorAnchors(comments: DocumentComment[]): EditorAnchor[] {
     .filter((c) => !c.parentId && c.anchor && c.anchorState === 'ok' && !c.resolvedAt)
     .map((c) => ({ id: c.id, quote: c.anchor!.quote, prefix: c.anchor!.prefix, suffix: c.anchor!.suffix }));
 }
+
+export type NodeOption = { id: string; path: string };
+
+function pathOf(nodes: StructureNode[]): (id: string) => string {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  return (id) => {
+    const names: string[] = [];
+    for (let cur = byId.get(id); cur; cur = cur.parentId ? byId.get(cur.parentId) : undefined) names.unshift(cur.name);
+    return names.join('/');
+  };
+}
+
+/** 某一层没停用（本身与上级都没停用）的节点，按树的顺序，带名称路径。 */
+function activeAt(nodes: StructureNode[], depth: number): NodeOption[] {
+  const path = pathOf(nodes);
+  return nodeOptions(nodes, null)
+    .filter((n) => n.depth === depth)
+    .map((n) => ({ id: n.id, path: path(n.id) }));
+}
+
+/** 声明影响时可选的功能点：没停用、还没声明过，名称路径包含查询（不区分大小写），按树的顺序最多 20 个。 */
+export function featureOptions(nodes: StructureNode[], q: string, exclude: Set<string>): NodeOption[] {
+  const want = q.trim().toLowerCase();
+  return activeAt(nodes, 3)
+    .filter((o) => !exclude.has(o.id) && (!want || o.path.toLowerCase().includes(want)))
+    .slice(0, 20);
+}
+
+/** 当场新建功能点时可选的模块。 */
+export const moduleOptions = (nodes: StructureNode[]): NodeOption[] => activeAt(nodes, 2);
+
+/** 当场新建模块时可选的业务域。 */
+export const domainOptions = (nodes: StructureNode[]): NodeOption[] => activeAt(nodes, 1);

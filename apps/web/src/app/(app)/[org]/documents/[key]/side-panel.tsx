@@ -13,6 +13,7 @@ import { activePeople, canListMembers, pickerOptions } from '@/features/members/
 import { ApiError, api } from '@/lib/api';
 import { documentKeys, qk, requirementKeys, useApiMutation, useMembers, useOrg } from '@/lib/queries';
 import type { DocumentDetail } from '@/lib/types';
+import { AffectedNodes } from './affected-nodes';
 import { StatusCard } from './status-card';
 import { Revisions } from './revisions';
 
@@ -104,6 +105,8 @@ export function SidePanel({ org, doc, onReload, saveEditor }: { org: string; doc
           </form>
         )}
       </section>
+
+      <AffectedNodes org={org} doc={doc} />
 
       <CheckItems items={doc.checkItems} canEdit={canEdit} basePath={`/orgs/${org}/documents/${doc.id}/checks`} invalidate={invalidate} />
 

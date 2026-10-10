@@ -180,3 +180,8 @@ export async function applyPrdWorkflow(request: APIRequestContext, productId: st
 export async function createNode(request: APIRequestContext, productId: string, parentId: string | null, name: string): Promise<string> {
   return (await json<{ node: { id: string } }>(request.post(`/api/v1/orgs/acme/products/${productId}/nodes`, { data: { parentId, name } }))).node.id;
 }
+
+/** 把 PRD 从草稿依次改为评审中、已通过、已上线。 */
+export async function launchDocument(request: APIRequestContext, documentId: string): Promise<void> {
+  for (const to of ['review', 'approved', 'launched']) await ok(request.post(`/api/v1/orgs/acme/documents/${documentId}/transitions`, { data: { to } }));
+}
