@@ -40,6 +40,8 @@ const BATCH = 50;
  * 排在后面的记录要等前面的发完，租约按位置递增，保证在正常超时内发完之前不会被其他实例回收重发。
  */
 const LEASE_BASE_MS = 60_000;
+/** 一轮领取的发送余量合计上限：租约（基础 + 余量）不超过 5 分钟，超出的留给下一轮（至少领取一条）。 */
+const MAX_ALLOWANCE_MS = 240_000;
 /** 每条的发送余量：HTTP 超时 10 秒；SMTP 连接、问候各 10 秒，收发静默 20 秒。 */
 const SEND_ALLOWANCE_MS: Record<ChannelKind, number> = { wecom_robot: 15_000, webhook: 15_000, email: 60_000 };
 const RATE_WINDOW_MS = 60_000;
@@ -150,6 +152,7 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
         .select()
         .from(D)
         .where(and(eq(D.status, 'sending'), lte(D.nextAttemptAt, now)))
+        .limit(BATCH)
         .for('no key update', { skipLocked: true });
       for (const d of expired) tally(await finalizeTx(tx, d, { result: 'failed', response: INTERRUPTED }, now, eq(D.id, d.id)));
     }
@@ -163,8 +166,10 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
     const byChannel = new Map<string, DeliveryRow[]>();
     for (const d of due) byChannel.set(d.channelId, [...(byChannel.get(d.channelId) ?? []), d]);
     const out: Array<{ d: DeliveryRow; channel: ChannelRow }> = [];
-    let leaseMs = LEASE_BASE_MS;
+    let allowanceMs = 0;
+    let full = false;
     for (const [channelId, list] of byChannel) {
+      if (full) break;
       const [channel] = await tx.select().from(notificationChannels).where(eq(notificationChannels.id, channelId));
       if (!channel || !channel.enabled) {
         for (const d of list) {
@@ -186,18 +191,25 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
         summary.rateLimited += over.length;
       }
       for (const d of list.slice(0, quota)) {
+        // 余量用完就停止领取（跨通道）；未领取的行不改动，事务结束后释放行锁，下一轮再取
+        if (out.length > 0 && allowanceMs + SEND_ALLOWANCE_MS[channel.kind] > MAX_ALLOWANCE_MS) {
+          full = true;
+          break;
+        }
         let payload = d.payload;
         if (!payload) {
           try {
             // 每条在自己的 savepoint 里渲染：查询出错只回滚这一条，本轮其余记录照常处理
             payload = await tx.transaction((sp) => renderRuleDeliveryTx(sp, d, channel, deps));
           } catch (e) {
-            tally(await finalizeTx(tx, d, { result: 'failed', response: `渲染失败：${errorText(e)}` }, now, eq(D.id, d.id)));
+            // 渲染错误是确定性的，重试也一样，直接放弃
+            await markDeadTx(tx, d, `渲染失败：${errorText(e)}`.slice(0, RESPONSE_MAX_CHARS), now);
+            summary.dead++;
             continue;
           }
         }
-        leaseMs += SEND_ALLOWANCE_MS[channel.kind];
-        const lease = new Date(now.getTime() + leaseMs);
+        allowanceMs += SEND_ALLOWANCE_MS[channel.kind];
+        const lease = new Date(now.getTime() + LEASE_BASE_MS + allowanceMs);
         await tx.update(D).set({ status: 'sending', payload, nextAttemptAt: lease }).where(eq(D.id, d.id));
         out.push({ d: { ...d, status: 'sending', payload, nextAttemptAt: lease }, channel });
       }
@@ -323,21 +335,25 @@ export async function resendDelivery(db: Db, actor: Actor, id: string): Promise<
   return viewOf(db, actor.orgId, newId);
 }
 
-/** 发送记录：按创建时间倒序；游标为上一页最后一条的 `{createdAt ISO}|{id}`。 */
+const CURSOR_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+
+/**
+ * 发送记录：按 (created_at, id) 倒序。游标为上一页最后一条的 `{created_at 微秒精度 UTC}|{id}`：
+ * 同一事务写入的记录 created_at 相同，且 JS Date 只有毫秒精度，所以时间取数据库里的文本，按行值比较。
+ */
 export async function listDeliveries(db: Db, actor: Actor, q: DeliveryQuery): Promise<{ deliveries: DeliveryView[]; nextCursor: string | null }> {
   requireOrgAdmin(actor);
   const limit = Math.min(Math.max(q.limit ?? 50, 1), 100);
-  let cursor: { at: Date; id: string } | null = null;
+  let cursor: { at: string; id: string } | null = null;
   if (q.before) {
-    const [at, cid] = q.before.split('|');
-    const date = new Date(at ?? '');
-    if (!cid || Number.isNaN(date.getTime())) throw new AppError('invalid', '分页参数无效');
-    cursor = { at: date, id: cid };
+    const m = CURSOR_RE.exec(q.before);
+    if (!m) throw new AppError('invalid', '分页参数无效');
+    cursor = { at: m[1]!, id: m[2]! };
   }
   return withOrg(db, actor.orgId, async (tx) => {
     const D = notificationDeliveries;
     const rows = await tx
-      .select()
+      .select({ row: D, cursorAt: sql<string>`to_char(${D.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` })
       .from(D)
       .where(
         and(
@@ -346,13 +362,13 @@ export async function listDeliveries(db: Db, actor: Actor, q: DeliveryQuery): Pr
           q.status ? eq(D.status, q.status) : undefined,
           q.from ? gte(D.createdAt, q.from) : undefined,
           q.to ? lt(D.createdAt, q.to) : undefined,
-          cursor ? or(lt(D.createdAt, cursor.at), and(eq(D.createdAt, cursor.at), lt(D.id, cursor.id))) : undefined,
+          cursor ? sql`(${D.createdAt}, ${D.id}) < (${cursor.at}::timestamptz, ${cursor.id}::uuid)` : undefined,
         ),
       )
       .orderBy(desc(D.createdAt), desc(D.id))
       .limit(limit + 1);
     const page = rows.slice(0, limit);
     const last = page.at(-1);
-    return { deliveries: await viewsTx(tx, page), nextCursor: rows.length > limit && last ? `${last.createdAt.toISOString()}|${last.id}` : null };
+    return { deliveries: await viewsTx(tx, page.map((r) => r.row)), nextCursor: rows.length > limit && last ? `${last.cursorAt}|${last.row.id}` : null };
   });
 }

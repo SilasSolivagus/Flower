@@ -215,7 +215,7 @@ describe('后台发送', () => {
     expect(open[0]!.runId).toBeNull();
   });
 
-  it('渲染出错的记录在自己的 savepoint 里回滚，按一次失败处理并记原因，同一轮其余记录照常发送', async () => {
+  it('渲染出错的记录在自己的 savepoint 里回滚，直接放弃并记原因，同一轮其余记录照常发送', async () => {
     const productId = await newProduct();
     const ch = await wecomChannel(t.db, owner, '渲染群', { url: url('render') });
     const rule = await createRule(t.db, owner, productId, { name: '渲染规则', eventTypes: ['requirement.created'], channelIds: [ch.id] });
@@ -231,11 +231,11 @@ describe('后台发送', () => {
       .returning();
     const now = later();
     await process(now);
-    const failed = await row(bad!.id);
-    expect(failed).toMatchObject({ status: 'failed', attempts: 1, payload: null });
-    expect(failed.response).toMatch(/^渲染失败：/);
-    expect(failed.response).not.toMatch(/select/i);
-    expect(failed.nextAttemptAt!.getTime() - now.getTime()).toBe(30_000);
+    const dead = await row(bad!.id);
+    // 没有真正发出，attempts 保持 0
+    expect(dead).toMatchObject({ status: 'dead', attempts: 0, payload: null, nextAttemptAt: null });
+    expect(dead.response).toMatch(/^渲染失败：/);
+    expect(dead.response).not.toMatch(/select/i);
     expect((await ofRule(rule.id)).filter((d) => d.status === 'sent')).toHaveLength(1);
     expect(callsTo(url('render'))).toHaveLength(1);
   });
@@ -267,6 +267,42 @@ describe('后台发送', () => {
     const rows = await ofRule(rule.id);
     expect(rows.map((d) => d.status).sort()).toEqual(['failed', 'sent', 'sent']);
     expect(rows.find((d) => d.status === 'failed')).toMatchObject({ response: '已被回收', attempts: 0 });
+  });
+
+  it('一轮领取的发送余量合计不超过 240 秒（租约不超过 5 分钟），其余留给下一轮', async () => {
+    const mail = await createChannel(
+      t.db,
+      owner,
+      { kind: 'email', name: '批量邮件', rateLimitPerMin: 100, config: { host: 'smtp.example.com', port: 465, secure: true, user: 'robot@example.com', pass: 'demo-pass', from: 'robot@example.com', to: ['pm@example.com'] } },
+      TEST_DEPS,
+    );
+    await t.adminDb.insert(notificationDeliveries).values(
+      Array.from({ length: 6 }, (_, i) => ({
+        orgId: owner.orgId,
+        kind: 'test' as const,
+        channelId: mail.id,
+        payload: { type: 'email' as const, subject: `批量 ${i}`, text: '正文' },
+        status: 'pending' as const,
+        nextAttemptAt: new Date(Date.now() - 1000),
+      })),
+    );
+    const ofMail = () => t.adminDb.select().from(notificationDeliveries).where(eq(notificationDeliveries.channelId, mail.id));
+    let leases: number[] = [];
+    const probe: Transport = {
+      ...fake.transport,
+      async sendMail(cfg, msg) {
+        if (leases.length === 0) leases = (await ofMail()).filter((d) => d.status === 'sending').map((d) => d.nextAttemptAt!.getTime());
+        return fake.transport.sendMail(cfg, msg);
+      },
+    };
+    const now = later();
+    await processDueDeliveries(t.db, owner.orgId, { ...deps, transport: probe }, now);
+    expect(fake.mails).toHaveLength(4);
+    expect(Math.max(...leases) - now.getTime()).toBe(300_000);
+    expect((await ofMail()).filter((d) => d.status === 'pending')).toHaveLength(2);
+    await processDueDeliveries(t.db, owner.orgId, { ...deps, transport: probe }, now);
+    expect(fake.mails).toHaveLength(6);
+    expect((await ofMail()).every((d) => d.status === 'sent' && d.attempts === 1)).toBe(true);
   });
 
   it('测试消息只处理自己的记录，不回收其他实例的发送中记录', async () => {
@@ -316,6 +352,24 @@ describe('重发与发送记录列表', () => {
     await expect(resendDelivery(t.db, owner, legacy!.id)).rejects.toThrow('迁移来的历史记录不能重发');
     const member = await asMember(t.db, owner, '成员庚');
     await expect(resendDelivery(t.db, member, sent.id)).rejects.toThrow('需要组织管理员权限');
+  });
+
+  it('同一事务写入、created_at 相同的记录跨页时每条恰好出现一次', async () => {
+    const ch = await wecomChannel(t.db, owner, '分页群', { url: url('page') });
+    const inserted = await t.adminDb
+      .insert(notificationDeliveries)
+      .values(Array.from({ length: 5 }, () => ({ orgId: owner.orgId, kind: 'test' as const, channelId: ch.id, payload: { type: 'json' as const, body: {} }, status: 'sent' as const, attempts: 1 })))
+      .returning();
+    expect(new Set(inserted.map((d) => d.createdAt.getTime())).size).toBe(1);
+    const seen: string[] = [];
+    let before: string | undefined;
+    do {
+      const page = await listDeliveries(t.db, owner, { channelId: ch.id, limit: 2, before });
+      seen.push(...page.deliveries.map((d) => d.id));
+      before = page.nextCursor ?? undefined;
+    } while (before);
+    expect(seen.sort()).toEqual(inserted.map((d) => d.id).sort());
+    await expect(listDeliveries(t.db, owner, { before: 'bad|cursor' })).rejects.toThrow('分页参数无效');
   });
 
   it('按来源、状态、通道筛选，按时间倒序分页；不含通道配置', async () => {
