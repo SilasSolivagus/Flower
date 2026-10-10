@@ -83,5 +83,10 @@ describe('模块文档、影响声明与合入接口', () => {
   it('畸形 id 返回 400，不是 500', async () => {
     expect((await call(app, 'GET', '/orgs/acme/documents/not-a-uuid/merge', { session })).status).toBe(400);
     expect((await call(app, 'POST', '/orgs/acme/nodes/not-a-uuid/module-document', { session })).status).toBe(400);
+    const prd = (await call(app, 'POST', `/orgs/acme/products/${productId}/documents`, { session, body: { title: '畸形请求体 PRD' } })).body.document;
+    const badNode = await call(app, 'POST', `/orgs/acme/documents/${prd.id}/affected-nodes`, { session, body: { nodeId: 'not-a-uuid', changeType: 'added' } });
+    expect(badNode).toMatchObject({ status: 400, body: { error: { message: '请求参数有误' } } });
+    const badParent = await call(app, 'POST', `/orgs/acme/documents/${prd.id}/affected-nodes/new-node`, { session, body: { parentId: 'not-a-uuid', name: '某模块' } });
+    expect(badParent).toMatchObject({ status: 400, body: { error: { message: '请求参数有误' } } });
   });
 });

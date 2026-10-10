@@ -45,13 +45,13 @@ export function registerModuleDocRoutes(app: App, deps: ApiDeps): void {
 
   app.post('/orgs/:org/documents/:id/affected-nodes', async (c) => {
     const id = idParam(c, 'id', 'PRD 无效');
-    const body = await readJson(c, z.object({ nodeId: z.string(), changeType: z.enum(AFFECTED_CHANGE_TYPES), sourceSections: sourceSections.optional() }));
+    const body = await readJson(c, z.object({ nodeId: uuidParam, changeType: z.enum(AFFECTED_CHANGE_TYPES), sourceSections: sourceSections.optional() }));
     return c.json({ affected: await addAffectedNode(deps.db, c.get('actor'), id, body) }, 201);
   });
 
   app.post('/orgs/:org/documents/:id/affected-nodes/new-node', async (c) => {
     const id = idParam(c, 'id', 'PRD 无效');
-    const body = await readJson(c, z.object({ parentId: z.string(), name: z.string() }));
+    const body = await readJson(c, z.object({ parentId: uuidParam, name: z.string() }));
     return c.json({ node: await createNodeForDocument(deps.db, c.get('actor'), id, body) }, 201);
   });
 
