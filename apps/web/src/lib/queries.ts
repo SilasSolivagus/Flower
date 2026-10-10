@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { ApiError, api } from './api';
 import type {
   Account,
+  AffectedNodes,
   BacklinkGroup,
   BacklinkTargetType,
   DocumentComment,
@@ -27,6 +28,9 @@ import type {
   LinkSuggestion,
   Member,
   MemberTasks,
+  MergePlan,
+  MergeRecord,
+  ModuleDocumentTree,
   MyOrg,
   Org,
   OrgMe,
@@ -82,6 +86,10 @@ export const qk = {
   documentDiff: (o: string, id: string, from: number, to: number) => ['org', o, 'documents', 'diff', id, from, to] as const,
   documentComments: (o: string, id: string) => ['org', o, 'documents', 'comments', id] as const,
   documentReviews: (o: string, productId: string) => ['org', o, 'documents', 'reviews', productId] as const,
+  moduleDocuments: (o: string, productId: string) => ['org', o, 'documents', 'modules', productId] as const,
+  affectedNodes: (o: string, id: string) => ['org', o, 'documents', 'affected', id] as const,
+  mergePlan: (o: string, id: string) => ['org', o, 'documents', 'merge', id] as const,
+  mergeRecords: (o: string, id: string) => ['org', o, 'documents', 'merge-records', id] as const,
   templates: (o: string, scope: string) => ['org', o, 'templates', scope] as const,
   backlinks: (o: string, type: string, id: string) => ['org', o, 'links', 'backlinks', type, id] as const,
   documentLinks: (o: string, id: string) => ['org', o, 'links', 'document', id] as const,
@@ -268,6 +276,24 @@ export const useDocumentReviews = (o: string, productId: string | undefined) =>
     select: (d) => d.queue,
     enabled: !!productId,
   });
+export const useModuleDocuments = (o: string, productId: string | undefined) =>
+  useQuery({
+    queryKey: qk.moduleDocuments(o, productId ?? ''),
+    queryFn: () => api<{ tree: ModuleDocumentTree }>(`/orgs/${o}/products/${productId}/module-documents`),
+    select: (d) => d.tree,
+    enabled: !!productId,
+  });
+export const useAffectedNodes = (o: string, id: string) =>
+  useQuery({ queryKey: qk.affectedNodes(o, id), queryFn: () => api<{ affected: AffectedNodes }>(`/orgs/${o}/documents/${id}/affected-nodes`), select: (d) => d.affected });
+export const useMergePlan = (o: string, id: string | undefined) =>
+  useQuery({
+    queryKey: qk.mergePlan(o, id ?? ''),
+    queryFn: () => api<{ plan: MergePlan }>(`/orgs/${o}/documents/${id}/merge`),
+    select: (d) => d.plan,
+    enabled: !!id,
+  });
+export const useMergeRecords = (o: string, id: string) =>
+  useQuery({ queryKey: qk.mergeRecords(o, id), queryFn: () => api<{ records: MergeRecord[] }>(`/orgs/${o}/documents/${id}/merge-records`), select: (d) => d.records });
 export const useTemplates = (o: string, opts: { productId?: string; usable?: boolean }, enabled = true) =>
   useQuery({
     queryKey: qk.templates(o, `${opts.productId ?? 'org'}:${opts.usable ? 'usable' : 'all'}`),
