@@ -31,6 +31,9 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
 | `docs/superpowers/specs/2026-10-09-flower-p2b1-links-design.md` | P2-B1 设计（双链与反向链接，已确认） |
 | `docs/superpowers/plans/2026-10-09-flower-p2b1-links.md` | P2-B1 计划（已完成） |
 | `docs/p2b1-validation.md` | P2-B1 真实数据验证记录与人工验收清单 |
+| `docs/superpowers/specs/2026-10-09-flower-p2b2-module-docs-design.md` | P2-B2 设计（模块文档、影响声明与人工合入，已确认） |
+| `docs/superpowers/plans/2026-10-09-flower-p2b2-module-docs.md` | P2-B2 计划 |
+| `docs/p2b2-validation.md` | P2-B2 真实数据验证记录与人工验收清单 |
 | `docs/story-map/flower-story-map.html` | 用户故事地图（在线版：https://claude.ai/artifact/TsrYHNpBZ2TLc6uq6suadu） |
 | 视觉样稿 | https://claude.ai/artifact/DgxTagCVRUGsKbvZSm9XPL （最上面一行"定稿"：A 配色 + C 密度） |
 | `docs/diagrams/` | 服务器现状图、目标架构草案 |
@@ -73,13 +76,22 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
   - 补号迁移（只读核对，未重导）：任务 377 个，编号 1..377 连续不重复，顺序与 `(created_at, id)` 排序 0 处不符，`task_seq` 377；常规迭代 11 个互不重名。详见 `docs/p2b1-validation.md`。
   - 迁移 0011 建「同一产品内迭代名称唯一」索引前，会把同一产品内未删除的常规迭代中重名的按 `(created_at, id)` 排序，第 2 个起改名为「名称（N）」（N 从 2 起取未被占用的最小值）；已删除的迭代和专项迭代不动。
 
+- **P2-B2 模块文档、影响声明与人工合入：已完成，待合并**（分支 `feat/p2b2-module-docs`）。
+  - 模块文档（每个模块最多一份、按功能点分节的 markdown，与变更 PRD 共用编辑器、修订、链接与评论；归档只读、可恢复）。
+  - 影响声明（PRD 侧栏「影响的功能点」，来源小节与失效提示，声明时产品编辑可当场新建模块与功能点；PRD 开始合入后锁定）。
+  - 合入页（按模块分组逐个应用 / 跳过 / 撤销，版本冲突提示刷新；全部处理完 PRD 变为已合入并同步需求上的「PRD」检查项）。
+  - 修订带合入来源、模块文档有合入记录；功能点改名同步模块文档小节标题；`[[ ]]` 节点链接指向模块文档（功能点带小节）。
+  - 迁移核对结果（Task 14，只读）：迁移前深度 1 节点（业务域）23 个、文档 204 份（node_id 均未设置）；迁移后 `document_affected_nodes` RLS 已开启（0 行）、`documents_module_node` 唯一索引与 `documents_kind_node` 检查约束已建立，pan123 文档数仍为 204。详见 `docs/p2b2-validation.md`。
+
 ## 下一步
 
-1. 合并 P2-B1（分支 `feat/p2b1-links`）。
-2. 用户按 `docs/p2b1-validation.md` 第 4 节在本地 pan123 上验收（可用控制方留下的复验数据：需求 PAN-765、PRD PAN-PRD-204）。
-3. 规划 P2-B2：模块文档、影响声明、人工合入、结构树补建模块与功能点。
-4. 用户按 `docs/p1b-validation.md`「P1-B2」第 3、4 节与「P1-C」第 2 节在本地 pan123 上验收和试用，问题记在对应位置；用户按 `docs/p2a-validation.md` 第 5 节在本地 pan123 上验收。
+1. 合并 P2-B2（分支 `feat/p2b2-module-docs`）。
+2. 用户按 `docs/p2b2-validation.md` 第 4 节在本地 pan123 上验收（可用控制方留下的复验数据：业务域「P2-B2 复验」、测试 PRD PAN-PRD-205、模块文档 PAN-PRD-206）。
+3. 规划 P3：通知中心（先接测试群 webhook 联调，正式环境切换另行安排）与基础数据看板（设计 §6.6 中已可计算的指标）。
+4. 用户按 `docs/p1b-validation.md`「P1-B2」第 3、4 节与「P1-C」第 2 节在本地 pan123 上验收和试用，问题记在对应位置；用户按 `docs/p2a-validation.md` 第 5 节、`docs/p2b1-validation.md` 第 4 节在本地 pan123 上验收。
 5. 下次 `--replace` 重导前先跑 `--dry-run`：真实数据如果出现同名的不同人，会报「多人共用这个写法」，需要先在 `people.json` 里区分；重导后执行一次 `legacy rejoin`。
+
+P2-B2 验证中记下的留观项（非阻塞）：并发的嵌套子树移动可能死锁（属于已有的一类问题，Postgres 会中止其中一个事务）；归档切换过程中如果正在输入，可能丢失最后一次编辑；「是否已归档」的判断在 web 侧写了两处；结构树层级标签加载中会显示「第 N 层」；合入页在后台重新取数失败时会静默显示旧数据，「删除」类声明的文案在两种情况下不准确；归档的模块文档仍允许上传图片附件；`loadTree` 与声明相关查询在每次写操作里重复执行，`featureCount` 统计把已废弃的功能点算在内。
 
 P2-B1 验证中记下的留观项（非阻塞）：装饰插件在每次文档变化时整篇重扫，大文档多锚点时输入延迟升高但仍在阈值内，改进方向是增量重扫，并让性能基准测试页传入装饰数据；Android 输入法的 `keyCode 229` 会挡住 PRD 编辑器 `[[` 补全菜单里用 Enter 选中；编辑器链接卡的 Cmd/Ctrl/中键点击不会新开标签页；「被引用 0」的标题会和空列表一起显示；过期的补全候选项没有视觉区分；按字搜索是逐条扫描，pan123 规模下没问题，数据量到 10 万级以上需要上 pg_trgm；迁移来的 PRD 评论（pan123 有 3 条）没有已读标记；缺测试：对看不到来源产品的被引用隐藏、隐藏迭代或节点的链接卡、同名的常规迭代与专项迭代。
 
