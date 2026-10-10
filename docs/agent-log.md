@@ -21,7 +21,7 @@
 ## 记录
 
 ### 2026-10-10 · 本地 · P2-B2 模块文档、影响声明与人工合入
-- 分支 / PR：`feat/p2b2-module-docs`，PR TBD
+- 分支 / PR：`feat/p2b2-module-docs`，PR #14
 - 做了什么：
   - 数据模型：document_affected_nodes（RLS，声明与合入状态）；documents 每个模块一份模块文档（部分唯一索引）、kind 与 node_id 的检查约束；模块文档状态 active / archived 并入 documents.status。
   - 模块文档：与变更 PRD 共用编辑器、修订、链接与评论；按二级标题（功能点名称）分节；功能点改名同步小节标题；归档只读。
