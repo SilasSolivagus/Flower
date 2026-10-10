@@ -70,3 +70,4 @@ export * from './notifications/constants';
 export * from './notifications/secrets';
 export * from './notifications/channel-config';
 export * from './notifications/cron';
+export * from './notifications/template';
