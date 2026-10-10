@@ -23,11 +23,38 @@ async function dueOrgIds(db: Db, now: Date): Promise<string[]> {
   });
 }
 
+/** 只取底层原因（drizzle 的查询错误把 SQL 与参数放在外层 message 里，原因在 cause 中）。 */
+function causeMessage(e: unknown): string {
+  const cause = e instanceof Error && e.cause instanceof Error ? e.cause : e;
+  return cause instanceof Error ? cause.message : String(cause);
+}
+
 async function recordGenerationFailure(db: Db, orgId: string, id: string, error: unknown, now: Date): Promise<void> {
   await withOrg(db, orgId, async (tx) => {
     const [s] = await tx.select().from(S).where(eq(S.id, id)).for('update');
     if (!s) return;
     const failures = s.consecutiveFailures + 1;
+    let next: Date;
+    try {
+      next = nextRunAt(s.cron, s.timezone, now);
+    } catch (e) {
+      // 存储的 cron 或时区无效，不会自行恢复：停用并告警，避免每轮重复出错
+      const reason = causeMessage(e);
+      await tx
+        .update(S)
+        .set({
+          enabled: false,
+          nextRunAt: null,
+          lastRunAt: now,
+          lastError: `定时规则或时区无效，已停用：${reason}`.slice(0, 500),
+          consecutiveFailures: failures,
+          alertState: 'alert',
+          updatedAt: now,
+        })
+        .where(eq(S.id, id));
+      console.warn(`[notify] 定时推送的定时规则或时区无效，已停用：org=${orgId} schedule=${id}：${reason}`);
+      return;
+    }
     await tx
       .update(S)
       .set({
@@ -35,7 +62,7 @@ async function recordGenerationFailure(db: Db, orgId: string, id: string, error:
         lastError: `生成内容失败：${error instanceof Error ? error.message : String(error)}`.slice(0, 500),
         consecutiveFailures: failures,
         alertState: failures >= s.failThreshold ? 'alert' : s.alertState,
-        nextRunAt: nextRunAt(s.cron, s.timezone, now),
+        nextRunAt: next,
         updatedAt: now,
       })
       .where(eq(S.id, id));
@@ -76,12 +103,17 @@ export async function runNotificationTick(db: Db, deps: NotifyDeps, now: Date = 
   const summary: TickSummary = { orgs: 0, schedulesRun: 0, sent: 0, failed: 0, dead: 0, rateLimited: 0 };
   for (const orgId of await dueOrgIds(db, now)) {
     summary.orgs++;
-    summary.schedulesRun += await runDueSchedules(db, orgId, deps, now);
-    const r = await processDueDeliveries(db, orgId, deps, now);
-    summary.sent += r.sent;
-    summary.failed += r.failed;
-    summary.dead += r.dead;
-    summary.rateLimited += r.rateLimited;
+    // 每个组织单独兜底：一个组织出错只跳过它本轮剩下的处理，不影响其他组织
+    try {
+      summary.schedulesRun += await runDueSchedules(db, orgId, deps, now);
+      const r = await processDueDeliveries(db, orgId, deps, now);
+      summary.sent += r.sent;
+      summary.failed += r.failed;
+      summary.dead += r.dead;
+      summary.rateLimited += r.rateLimited;
+    } catch (e) {
+      console.warn(`[notify] 组织本轮处理出错，已跳过：org=${orgId}：${causeMessage(e)}`);
+    }
   }
   return summary;
 }

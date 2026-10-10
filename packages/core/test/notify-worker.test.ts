@@ -1,12 +1,14 @@
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { messageTemplates, notificationDeliveries, notificationSchedules } from '../src/db/schema';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { messageTemplates, notificationDeliveries, notificationRules, notificationSchedules } from '../src/db/schema';
+import type { AccountView } from '../src/auth/accounts';
 import type { Actor } from '../src/domain-types';
 import { createMessageTemplate } from '../src/notifications/message-templates';
 import { createRule } from '../src/notifications/rules';
 import { createSchedule } from '../src/notifications/schedules';
 import { createNotificationWorker, runNotificationTick } from '../src/notifications/worker';
 import { createRequirement } from '../src/requirements/requirements';
+import { createOrganization, resolveActor } from '../src/tenancy/orgs';
 import { createProduct } from '../src/tenancy/products';
 import { createTestDb } from './db';
 import { seedInstance } from './factories';
@@ -14,6 +16,7 @@ import { TEST_DEPS, wecomChannel } from './notify-helpers';
 import { fakeTransport } from './notify-transport';
 
 let t: Awaited<ReturnType<typeof createTestDb>>;
+let account: AccountView;
 let owner: Actor;
 let productId: string;
 let channelId: string;
@@ -37,7 +40,7 @@ async function until(check: () => Promise<boolean>, ms = 3000): Promise<void> {
 
 beforeAll(async () => {
   t = await createTestDb();
-  ({ owner } = await seedInstance(t.db));
+  ({ account, owner } = await seedInstance(t.db));
   productId = (await createProduct(t.db, owner, { name: '网盘', key: 'PAN' })).id;
   channelId = (await wecomChannel(t.db, owner, '研发群', { url: URL_, rateLimitPerMin: 100 })).id;
 });
@@ -93,6 +96,37 @@ describe('一轮处理', () => {
     expect(after.lastError).toMatch(/^生成内容失败：模板语法错误/);
     expect(after.nextRunAt!.getTime()).toBeGreaterThan(now.getTime());
     expect(await deliveriesOf(s.id)).toHaveLength(0);
+  });
+  it('一个组织的定时推送 cron 无效：停用并告警，同一轮其他组织照常执行与发送', async () => {
+    await createOrganization(t.db, account, { name: '第二组织', slug: 'other' });
+    const other = (await resolveActor(t.db, account.id, 'other'))!;
+    const otherProduct = await createProduct(t.db, other, { name: '相册', key: 'ALB' });
+    const otherChannel = await wecomChannel(t.db, other, '相册群', { url: URL_, rateLimitPerMin: 100 });
+    const bad = await createSchedule(t.db, other, { productId: otherProduct.id, name: '坏日报', cron: '0 19 * * 1-5', source: 'overview_card', channelIds: [otherChannel.id] });
+    const due = await overview();
+    const rule = await createRule(t.db, owner, productId, { name: '跨组织规则', eventTypes: ['requirement.created'], channelIds: [channelId] });
+    await createRequirement(t.db, owner, productId, { title: '另一个组织照常发送' });
+    const now = new Date();
+    // 绕过 assertCron 直接写入无效的 cron（迁移导入的数据不经过校验）
+    await t.adminDb.update(notificationSchedules).set({ cron: 'not a cron', nextRunAt: new Date(now.getTime() - 1000) }).where(eq(notificationSchedules.id, bad.id));
+    await t.adminDb.update(notificationSchedules).set({ nextRunAt: new Date(now.getTime() - 1000) }).where(eq(notificationSchedules.id, due.id));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const summary = await runNotificationTick(t.db, deps, now);
+      expect(summary).toMatchObject({ orgs: 2, schedulesRun: 1, sent: 2 });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining(`schedule=${bad.id}`));
+    } finally {
+      warn.mockRestore();
+    }
+    expect((await deliveriesOf(due.id)).map((d) => d.status)).toEqual(['sent']);
+    const ruleRows = await t.adminDb.select().from(notificationDeliveries).where(eq(notificationDeliveries.ruleId, rule.id));
+    expect(ruleRows.map((d) => d.status)).toEqual(['sent']);
+    const after = await schedule(bad.id);
+    expect(after).toMatchObject({ enabled: false, nextRunAt: null, alertState: 'alert', consecutiveFailures: 1 });
+    expect(after.lastError).toMatch(/^定时规则或时区无效，已停用/);
+    expect(await deliveriesOf(bad.id)).toHaveLength(0);
+    // 停用本用例的规则，免得后面的循环用例多发一条
+    await t.adminDb.update(notificationRules).set({ enabled: false }).where(eq(notificationRules.id, rule.id));
   });
 });
 
