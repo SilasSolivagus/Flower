@@ -149,9 +149,10 @@ export async function updateStructureNode(
       await recordEvent(tx, { orgId: actor.orgId, productId: cur.productId, type: 'structure_node.updated', subjectType: 'structure_node', subjectId: nodeId, actor, payload: { changes } });
     }
     if (next.name !== cur.name) {
+      // 先同步模块文档再接悬空链接：锁顺序为「功能点行 → 模块文档行 → entity_links」，与合入、保存一致，避免死锁。
+      if (cur.depth === 3) await syncFeatureRenameTx(tx, actor, { id: nodeId, parentId: cur.parentId, oldName: cur.name, newName: next.name });
       const all = await tx.select({ id: structureNodes.id, parentId: structureNodes.parentId }).from(structureNodes).where(eq(structureNodes.productId, cur.productId));
       await relinkNodes(tx, cur.productId, subtreeIds(all, nodeId));
-      if (cur.depth === 3) await syncFeatureRenameTx(tx, actor, { id: nodeId, parentId: cur.parentId, oldName: cur.name, newName: next.name });
     }
     return view(row);
   });
