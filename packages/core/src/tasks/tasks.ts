@@ -115,13 +115,13 @@ function normalize(input: TaskPatch): { columns: Columns; meta: MetaPatch } {
 }
 
 /** 组织时区的当天日期；时区值无效（如已损坏的设置）时退回默认时区，不让任务读写因此报错。 */
-export async function orgToday(tx: Tx, orgId: string): Promise<string> {
+export async function orgToday(tx: Tx, orgId: string, now: Date = new Date()): Promise<string> {
   const [org] = await tx.select({ settings: organizations.settings }).from(organizations).where(eq(organizations.id, orgId));
   const timeZone = org?.settings.timezone ?? DEFAULT_TIMEZONE;
   try {
-    return todayInZone(timeZone);
+    return todayInZone(timeZone, now);
   } catch {
-    return todayInZone(DEFAULT_TIMEZONE);
+    return todayInZone(DEFAULT_TIMEZONE, now);
   }
 }
 
@@ -140,7 +140,8 @@ async function requireTaskWrite(tx: Tx, actor: Actor, productId: string): Promis
   if (!atLeast(role, 'editor')) throw new AppError('forbidden', '权限不足');
 }
 
-export async function hydrateTasks(tx: Tx, actor: Actor, rows: TaskRow[], today: string): Promise<TaskView[]> {
+/** actor 为空（后台推送取数）时 canEdit 一律为 false。 */
+export async function hydrateTasks(tx: Tx, actor: Actor | null, rows: TaskRow[], today: string): Promise<TaskView[]> {
   if (rows.length === 0) return [];
   const reqIds = [...new Set(rows.map((r) => r.requirementId).filter((x): x is string => !!x))];
   const reqs = reqIds.length
@@ -157,7 +158,7 @@ export async function hydrateTasks(tx: Tx, actor: Actor, rows: TaskRow[], today:
     .where(inArray(products.id, [...new Set(rows.map((r) => r.productId))]));
   const keyOf = new Map(keyRows.map((p) => [p.id, p.key]));
   const roles = new Map<string, ProductRole | null>();
-  for (const pid of new Set(rows.map((r) => r.productId))) roles.set(pid, await productRoleOf(tx, actor, pid));
+  for (const pid of new Set(rows.map((r) => r.productId))) roles.set(pid, actor ? await productRoleOf(tx, actor, pid) : null);
   return rows.map((r) => {
     const req = reqs.find((x) => x.id === r.requirementId);
     const progressOverride = typeof r.meta.progress === 'number' ? r.meta.progress : null;
