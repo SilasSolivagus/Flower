@@ -64,3 +64,4 @@ export * from './documents/comments';
 export * from './documents/coverage';
 export * from './documents/checks';
 export * from './documents/module-docs';
+export * from './documents/affected';
