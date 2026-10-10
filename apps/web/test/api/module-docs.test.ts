@@ -39,6 +39,7 @@ describe('模块文档、影响声明与合入接口', () => {
     const area = await node(null, '下载域');
     const prd = (await call(app, 'POST', `/orgs/acme/products/${productId}/documents`, { session, body: { title: '下载 PRD' } })).body.document;
     await call(app, 'PUT', `/orgs/acme/documents/${prd.id}/content`, { session, body: { baseVersion: prd.version, markdown: '## 需求说明\n\n支持离线下载' } });
+    expect((await call(app, 'POST', `/orgs/acme/documents/${prd.id}/affected-nodes/new-node`, { token: readToken, body: { parentId: area, name: '离线' } })).status).toBe(403);
     const mod = await call(app, 'POST', `/orgs/acme/documents/${prd.id}/affected-nodes/new-node`, { session, body: { parentId: area, name: '离线' } });
     expect(mod.status).toBe(201);
     expect(mod.body.node).toMatchObject({ depth: 2, name: '离线' });
@@ -48,6 +49,7 @@ describe('模块文档、影响声明与合入接口', () => {
     expect(added.status).toBe(201);
     expect(added.body.affected.items).toMatchObject([{ path: '下载域/离线/离线下载', changeType: 'added', sourceSections: [{ key: '需求说明', stale: false }] }]);
     expect((await call(app, 'POST', `/orgs/acme/documents/${prd.id}/affected-nodes`, { session, body: { nodeId: feature.id, changeType: 'bogus' } })).status).toBe(400);
+    expect((await call(app, 'PATCH', `/orgs/acme/documents/${prd.id}/affected-nodes/${feature.id}`, { token: readToken, body: { changeType: 'modified' } })).status).toBe(403);
     const patched = await call(app, 'PATCH', `/orgs/acme/documents/${prd.id}/affected-nodes/${feature.id}`, { session, body: { changeType: 'modified' } });
     expect(patched.body.affected.items[0].changeType).toBe('modified');
     expect((await call(app, 'GET', `/orgs/acme/documents/${prd.id}/affected-nodes`, { token: readToken })).body.affected).toMatchObject({ editable: false, sections: ['需求说明'] });
@@ -70,8 +72,11 @@ describe('模块文档、影响声明与合入接口', () => {
     expect((await call(app, 'GET', `/orgs/acme/documents/${moduleId}/merge-records`, { token: readToken })).body.records).toMatchObject([
       { changeType: 'modified', feature: { name: '离线下载' }, changeDocument: { displayKey: prd.displayKey } },
     ]);
+    expect((await call(app, 'DELETE', `/orgs/acme/documents/${prd.id}/affected-nodes/${feature.id}`, { token: readToken })).status).toBe(403);
     expect((await call(app, 'DELETE', `/orgs/acme/documents/${prd.id}/affected-nodes/${feature.id}`, { session })).status).toBe(400);
+    expect((await call(app, 'POST', `/orgs/acme/documents/${prd.id}/merge/${feature.id}/skip`, { token: readToken })).status).toBe(403);
     expect((await call(app, 'POST', `/orgs/acme/documents/${prd.id}/merge/${feature.id}/skip`, { session })).status).toBe(400);
+    expect((await call(app, 'POST', `/orgs/acme/documents/${prd.id}/merge/${feature.id}/reopen`, { token: readToken })).status).toBe(403);
     expect((await call(app, 'POST', `/orgs/acme/documents/${prd.id}/merge/${feature.id}/reopen`, { session })).status).toBe(400);
   });
 
