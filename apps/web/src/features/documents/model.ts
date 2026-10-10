@@ -28,6 +28,18 @@ export function sourceLabel(d: { source: 'native' | 'external'; externalProvider
 
 export const documentHref = (org: string, displayKey: string): string => `/${org}/documents/${displayKey}`;
 
+export type DocumentView = 'change' | 'modules';
+
+/** 文档页的页签只由地址栏决定：?view=modules 为「模块文档」，否则为「变更 PRD」。 */
+export const documentView = (sp: URLSearchParams): DocumentView => (sp.get('view') === 'modules' ? 'modules' : 'change');
+
+/** 「模块文档」页签的地址；带 nodeId 时定位到这个模块。 */
+export function moduleDocsHref(org: string, productKey: string, nodeId?: string | null): string {
+  const p = new URLSearchParams({ product: productKey, view: 'modules' });
+  if (nodeId) p.set('node', nodeId);
+  return `/${org}/documents?${p.toString()}`;
+}
+
 export type DocumentListFilter = { product: string; status: DocumentStatus | ''; owner: string; source: 'native' | 'external' | ''; q: string };
 
 export function parseDocumentFilter(sp: URLSearchParams): DocumentListFilter {

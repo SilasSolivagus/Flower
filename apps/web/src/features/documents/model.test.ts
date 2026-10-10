@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DocumentComment } from '@/lib/types';
-import { base64ToBytes, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, editorAnchors, findDataImages, findSectionIndex, groupThreads, importSummary, locateAnchorRange, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
+import { base64ToBytes, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, documentView, editorAnchors, findDataImages, findSectionIndex, groupThreads, importSummary, locateAnchorRange, moduleDocsHref, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
 
 describe('PRD 列表筛选', () => {
   it('地址栏 ↔ 筛选；无效的状态与来源被忽略', () => {
@@ -115,5 +115,15 @@ describe('评论锚点在编辑器中的位置', () => {
       { ...base, id: 'e', anchor, anchorState: 'ok' as const, parentId: 'a' },
     ];
     expect(editorAnchors(list)).toEqual([{ id: 'a', quote: '经常超时', prefix: 'p', suffix: 's' }]);
+  });
+});
+
+describe('模块文档页签', () => {
+  it('页签只由地址栏的 view 决定；模块文档页签的地址带产品与要定位的模块', () => {
+    expect(documentView(new URLSearchParams('product=PAN&view=modules'))).toBe('modules');
+    expect(documentView(new URLSearchParams('product=PAN'))).toBe('change');
+    expect(documentView(new URLSearchParams('view=bogus'))).toBe('change');
+    expect(moduleDocsHref('acme', 'PAN')).toBe('/acme/documents?product=PAN&view=modules');
+    expect(moduleDocsHref('acme', 'PAN', 'n1')).toBe('/acme/documents?product=PAN&view=modules&node=n1');
   });
 });
