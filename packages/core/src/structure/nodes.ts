@@ -129,7 +129,7 @@ export async function updateStructureNode(
 ): Promise<StructureNodeView> {
   if (input.status !== undefined && input.status !== 'active' && input.status !== 'deprecated') throw new AppError('invalid', '节点状态无效');
   return withOrg(db, actor.orgId, async (tx) => {
-    const cur = await loadNode(tx, nodeId);
+    const cur = await loadNode(tx, nodeId, { lock: true });
     await requireProductRole(tx, actor, cur.productId, 'admin');
     const next = {
       name: input.name === undefined ? cur.name : assertName(input.name),

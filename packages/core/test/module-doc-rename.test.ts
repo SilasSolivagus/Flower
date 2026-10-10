@@ -1,8 +1,9 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { domainEvents } from '../src/db/schema';
+import { domainEvents, structureNodes } from '../src/db/schema';
+import { withOrg } from '../src/db/tx';
 import { type DocumentDetail, getDocument, listRevisions, saveDocumentContent } from '../src/documents/documents';
-import { createModuleDocument } from '../src/documents/module-docs';
+import { createModuleDocument, syncFeatureRenameTx } from '../src/documents/module-docs';
 import type { Actor } from '../src/domain-types';
 import type { StructureNodeView } from '../src/requirements/lookups';
 import { createStructureNode, updateStructureNode } from '../src/structure/nodes';
@@ -16,6 +17,7 @@ let pan: string;
 let storage: StructureNodeView;
 let upload: StructureNodeView;
 let chunk: StructureNodeView;
+let instant: StructureNodeView;
 let doc: DocumentDetail;
 
 beforeAll(async () => {
@@ -25,7 +27,7 @@ beforeAll(async () => {
   storage = await createStructureNode(t.db, owner, pan, { name: '存储' });
   upload = await createStructureNode(t.db, owner, pan, { parentId: storage.id, name: '上传' });
   chunk = await createStructureNode(t.db, owner, pan, { parentId: upload.id, name: '分片上传' });
-  await createStructureNode(t.db, owner, pan, { parentId: upload.id, name: '秒传' });
+  instant = await createStructureNode(t.db, owner, pan, { parentId: upload.id, name: '秒传' });
   doc = await createModuleDocument(t.db, owner, upload.id);
   await saveDocumentContent(t.db, owner, doc.id, { baseVersion: doc.version, markdown: '总述\n\n## 1. 分片上传\n\n说明\n\n## 秒传\n\n秒传说明\n' });
 });
@@ -54,5 +56,29 @@ describe('功能点改名', () => {
     const download = await createStructureNode(t.db, owner, pan, { parentId: storage.id, name: '下载' });
     const offline = await createStructureNode(t.db, owner, pan, { parentId: download.id, name: '离线下载' });
     expect((await updateStructureNode(t.db, owner, offline.id, { name: '后台下载' })).name).toBe('后台下载');
+  });
+
+  it('两个改名同时进行时，后一个等前一个提交后按最新名称同步小节', async () => {
+    let ready!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((r) => (ready = r));
+    const held = new Promise<void>((r) => (release = r));
+    const first = withOrg(t.db, owner.orgId, async (tx) => {
+      await tx.update(structureNodes).set({ name: '闪传' }).where(eq(structureNodes.id, instant.id));
+      await syncFeatureRenameTx(tx, owner, { id: instant.id, parentId: upload.id, oldName: '秒传', newName: '闪传' });
+      ready();
+      await held;
+    });
+    await started;
+    const second = updateStructureNode(t.db, owner, instant.id, { name: '极速传' });
+    for (let i = 0; i < 100; i++) {
+      const [row] = await t.adminDb.execute<{ n: number }>(sql`select count(*)::int as n from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock'`);
+      if (row!.n > 0) break;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    release();
+    await first;
+    await second;
+    expect((await getDocument(t.db, owner, doc.id)).markdown).toContain('## 极速传\n');
   });
 });
