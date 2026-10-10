@@ -501,25 +501,33 @@ export async function transitionDocument(db: Db, actor: Actor, id: string, input
       const missing = tpl ? missingRequiredSections(rev?.snapshot.markdown ?? '', tpl) : [];
       if (missing.length > 0) throw new AppError('invalid', `以下必填小节未填写：${missing.join('、')}`, { missing });
     }
-    await tx.update(documents).set({ status: input.to, updatedAt: new Date() }).where(eq(documents.id, id));
-    await recordEvent(tx, {
-      orgId: actor.orgId,
-      productId: doc.productId,
-      type: 'document.status_changed',
-      subjectType: 'document',
-      subjectId: id,
-      actor,
-      payload: { changes: [{ field: 'status', old: doc.status, new: input.to }] },
-    });
-    const covered = await tx
-      .select({ id: requirements.id })
-      .from(requirements)
-      .where(and(eq(requirements.changeDocumentId, id), isNull(requirements.deletedAt)))
-      .orderBy(asc(requirements.id))
-      .for('update');
-    await syncPrdCheck(tx, actor, { id, productId: doc.productId, status: input.to }, covered.map((r) => r.id));
+    await setDocumentStatusTx(tx, actor, doc, input.to);
     return documentDetailInTx(tx, actor, id);
   });
+}
+
+/**
+ * 改 PRD 状态：记录 document.status_changed，再按 id 升序锁住覆盖的需求，把它们的「PRD」检查项同步为新状态对应的结果。
+ * 不检查权限与能否流转（调用方决定）。调用方已锁住文档行（锁顺序：PRD → 需求）。
+ */
+export async function setDocumentStatusTx(tx: Tx, actor: Actor, doc: DocRow, to: DocumentStatus): Promise<void> {
+  await tx.update(documents).set({ status: to, updatedAt: new Date() }).where(eq(documents.id, doc.id));
+  await recordEvent(tx, {
+    orgId: actor.orgId,
+    productId: doc.productId,
+    type: 'document.status_changed',
+    subjectType: 'document',
+    subjectId: doc.id,
+    actor,
+    payload: { changes: [{ field: 'status', old: doc.status, new: to }] },
+  });
+  const covered = await tx
+    .select({ id: requirements.id })
+    .from(requirements)
+    .where(and(eq(requirements.changeDocumentId, doc.id), isNull(requirements.deletedAt)))
+    .orderBy(asc(requirements.id))
+    .for('update');
+  await syncPrdCheck(tx, actor, { id: doc.id, productId: doc.productId, status: to }, covered.map((r) => r.id));
 }
 
 export async function convertExternalDocument(db: Db, actor: Actor, id: string, input: { baseVersion: number; markdown: string }): Promise<SaveResult> {
