@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { setDocumentCheckItemState } from '../src/documents/checks';
+import { setDocumentCheckItemState, signDocumentCheckItem } from '../src/documents/checks';
 import { addDocumentComment } from '../src/documents/comments';
 import { linkDocumentRequirements } from '../src/documents/coverage';
 import { createDocument, getDocumentByKey, listDocuments, restoreRevision, saveDocumentContent, transitionDocument, updateDocument } from '../src/documents/documents';
@@ -85,6 +85,10 @@ describe('模块文档', () => {
     const req = await createRequirement(t.db, owner, pan, { title: '一条需求' });
     await expect(linkDocumentRequirements(t.db, owner, d.id, { requirementIds: [req.id] })).rejects.toThrow('模块文档不关联需求');
     await expect(setDocumentCheckItemState(t.db, owner, d.id, 'prd_review', { state: 'passed' })).rejects.toThrow('模块文档没有检查项');
+    await expect(signDocumentCheckItem(t.db, owner, d.id, 'prd_review', { decision: 'passed' })).rejects.toThrow('模块文档没有检查项');
+    const guest = await asMember(t.db, owner, '访客丙', 'guest');
+    await expect(setDocumentCheckItemState(t.db, guest, d.id, 'prd_review', { state: 'passed' })).rejects.toMatchObject({ code: 'not_found' });
+    await expect(signDocumentCheckItem(t.db, guest, d.id, 'prd_review', { decision: 'passed' })).rejects.toMatchObject({ code: 'not_found' });
   });
 
   it('归档后只读：不能改正文、标题、恢复版本；评论照常；可以恢复为使用中', async () => {
