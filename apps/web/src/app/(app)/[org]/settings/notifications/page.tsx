@@ -6,10 +6,11 @@ import { PageHeader } from '@/components/page-header';
 import { RequireOrgAdmin } from '@/components/require-org-admin';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChannelsTab } from './channels-tab';
+import { DeliveriesTab } from './deliveries-tab';
 import { ScheduleList } from './schedule-list';
 import { TemplatesTab } from './templates-tab';
 
-const TABS = ['channels', 'schedules', 'templates'];
+const TABS = ['channels', 'schedules', 'templates', 'deliveries'];
 
 function NotificationsPage() {
   const { org } = useParams<{ org: string }>();
@@ -26,6 +27,7 @@ function NotificationsPage() {
           <TabsTrigger value="channels">通道</TabsTrigger>
           <TabsTrigger value="schedules">定时推送</TabsTrigger>
           <TabsTrigger value="templates">消息模板</TabsTrigger>
+          <TabsTrigger value="deliveries">发送记录</TabsTrigger>
         </TabsList>
         <TabsContent value="channels">
           <ChannelsTab org={org} />
@@ -35,6 +37,9 @@ function NotificationsPage() {
         </TabsContent>
         <TabsContent value="templates">
           <TemplatesTab org={org} />
+        </TabsContent>
+        <TabsContent value="deliveries">
+          <DeliveriesTab org={org} />
         </TabsContent>
       </Tabs>
     </>
