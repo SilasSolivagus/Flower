@@ -65,3 +65,4 @@ export * from './documents/coverage';
 export * from './documents/checks';
 export * from './documents/module-docs';
 export * from './documents/affected';
+export * from './documents/merge';
