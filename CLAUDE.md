@@ -35,9 +35,9 @@ PR 会跑 GitHub Actions CI（`.github/workflows/ci.yml`）：类型检查 + web
 ## 约定
 
 - 业务逻辑只写在 `packages/core`，服务函数签名为 `(db, actor, input)`；`apps/web/src/server/routes` 只做参数校验和调用。
-- 租户数据一律在 `withOrg(db, actor.orgId, ...)` 中读写；`withSystem` 只用于登录、成员关系查找、Token 认证、邀请接受。
+- 租户数据一律在 `withOrg(db, actor.orgId, ...)` 中读写；`withSystem` 只用于登录、成员关系查找、Token 认证、邀请接受，以及推送后台循环查出有待办的组织 id（之后的读写仍在 `withOrg` 中）。
 - 新增租户表必须带 `org_id`，并在一个新的自定义迁移里为它开启 RLS（参照 `0002_rls.sql`）。
-- 每个写操作在同一事务内调用 `recordEvent`。
+- 每个写操作在同一事务内调用 `recordEvent`。后台与系统写入不记事件：预置模板补齐、定时推送的到点执行、发送记录的状态更新。
 - 服务函数一律声明为 `async`，保证权限校验失败以 Promise 拒绝的形式返回。
 - 面向用户的错误信息用中文，通过 `AppError(code, message, details?)` 抛出。
 - 页面是客户端组件，通过 `/api/v1` 取数；只允许 `import type` 引用 `@flower/core`，以及浏览器安全的 `@flower/core/workflow-schema`、`@flower/core/schedule`、`@flower/core/markdown`、`@flower/core/links`。`markdown` 只依赖 `diff` 和类型导入，其余三个不导入任何其他模块。
