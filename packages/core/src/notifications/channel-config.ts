@@ -113,8 +113,8 @@ export function channelPublicSettings(kind: ChannelKind, config: ChannelConfig):
   return { host, port, secure, user, from, to };
 }
 
-/** 环回地址 127.0.0.0/8。 */
-const isLoopbackV4 = (a: number): boolean => a === 127;
+/** 环回地址 127.0.0.0/8，以及未指定地址 0.0.0.0/8（Linux、macOS 上都会连到本机）。 */
+const isLoopbackV4 = (a: number): boolean => a === 127 || a === 0;
 /** RFC1918 私有地址。 */
 const isPrivateV4 = (a: number, b: number): boolean => a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
 /** 链路本地地址 169.254.0.0/16。 */
@@ -148,12 +148,13 @@ function expandIpv6(h: string): number[] | undefined {
   return [...head, ...Array(missing).fill(0), ...tail];
 }
 
-/** IPv6 字面量（hostname 带中括号）是否为回环 `::1`、链路本地 `fe80::/10`、唯一本地 `fc00::/7`，或映射到不安全 IPv4 地址的 `::ffff:a.b.c.d`。 */
+/** IPv6 字面量（hostname 带中括号）是否为回环 `::1`、未指定地址 `::`、链路本地 `fe80::/10`、唯一本地 `fc00::/7`，或映射到不安全 IPv4 地址的 `::ffff:a.b.c.d`。 */
 function isUnsafeIpv6(bracketed: string): boolean | undefined {
   if (!bracketed.startsWith('[') || !bracketed.endsWith(']')) return undefined;
   const groups = expandIpv6(bracketed.slice(1, -1).toLowerCase());
   if (!groups) return false;
   const [g0, , , , , g5, g6, g7] = groups;
+  if (groups.every((n) => n === 0)) return true; // ::（未指定地址，本机会当作本地连接）
   if (groups.slice(0, 7).every((n) => n === 0) && g7 === 1) return true; // ::1
   if (groups.slice(0, 5).every((n) => n === 0) && g5 === 0xffff) {
     const a = (g6! >> 8) & 0xff;
@@ -179,7 +180,8 @@ export function assertSafeOutboundUrl(raw: string): void {
     throw fail();
   }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') throw fail();
-  const hostname = u.hostname.toLowerCase();
+  // 域名末尾的 `.`（如 `localhost.`）解析器会当作没有这个点，去掉后再比较
+  const hostname = u.hostname.toLowerCase().replace(/\.$/, '');
   if (hostname === 'localhost' || hostname.endsWith('.local')) throw fail();
   if (isUnsafeIpv4(hostname) || isUnsafeIpv6(hostname)) throw fail();
 }

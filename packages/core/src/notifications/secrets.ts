@@ -22,9 +22,13 @@ export function decryptConfig<T>(token: string, secretKey: string): T {
   const [version, iv, tag, ct] = token.split(':');
   const fail = () => new AppError('precondition_failed', '通道配置无法解密：FLOWER_SECRET_KEY 与加密时不同，或数据已损坏');
   if (version !== VERSION || !iv || !tag || ct === undefined) throw fail();
+  const ivBuf = Buffer.from(iv, 'base64url');
+  const tagBuf = Buffer.from(tag, 'base64url');
+  // 长度必须等于加密时写入的 12 字节 IV、16 字节认证标签；截断的标签会让伪造密文的难度从 2^128 降到可行范围
+  if (ivBuf.length !== 12 || tagBuf.length !== 16) throw fail();
   try {
-    const decipher = createDecipheriv('aes-256-gcm', deriveKey(secretKey), Buffer.from(iv, 'base64url'));
-    decipher.setAuthTag(Buffer.from(tag, 'base64url'));
+    const decipher = createDecipheriv('aes-256-gcm', deriveKey(secretKey), ivBuf, { authTagLength: 16 });
+    decipher.setAuthTag(tagBuf);
     const plain = Buffer.concat([decipher.update(Buffer.from(ct, 'base64url')), decipher.final()]).toString('utf8');
     return JSON.parse(plain) as T;
   } catch {

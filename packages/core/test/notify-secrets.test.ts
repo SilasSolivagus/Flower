@@ -25,6 +25,14 @@ describe('通道配置加密', () => {
     expect(() => decryptConfig([v, iv, tag, flipped].join(':'), KEY)).toThrow('通道配置无法解密');
     expect(() => decryptConfig(`v9:${iv}:${tag}:${ct}`, KEY)).toThrow('通道配置无法解密');
   });
+
+  it('认证标签被截断时报错，不接受变短的标签', () => {
+    const token = encryptConfig(EMAIL, KEY);
+    const [v, iv, tag, ct] = token.split(':');
+    // 4 字节是 GCM 允许的合法标签长度之一，Node 不会因为「长度不合法」而报错——必须靠我们自己校验长度拦住
+    const truncatedTag = Buffer.from(tag!, 'base64url').subarray(0, 4).toString('base64url');
+    expect(() => decryptConfig([v, iv, truncatedTag, ct].join(':'), KEY)).toThrow('通道配置无法解密');
+  });
 });
 
 describe('通道配置校验、脱敏与修改', () => {
@@ -71,10 +79,12 @@ describe('assertSafeOutboundUrl', () => {
     expect(() => assertSafeOutboundUrl('not-a-url')).toThrow('网址不能指向本机或内网地址');
   });
 
-  it('拒绝 localhost 与 .local', () => {
+  it('拒绝 localhost 与 .local，包括末尾带点的写法', () => {
     expect(() => assertSafeOutboundUrl('http://localhost/x')).toThrow();
     expect(() => assertSafeOutboundUrl('http://LOCALHOST/x')).toThrow();
     expect(() => assertSafeOutboundUrl('http://printer.local/x')).toThrow();
+    expect(() => assertSafeOutboundUrl('http://localhost./x')).toThrow();
+    expect(() => assertSafeOutboundUrl('http://printer.local./x')).toThrow();
   });
 
   it('拒绝 IPv4 环回、链路本地、RFC1918 私有与 CGNAT 地址', () => {
@@ -87,6 +97,9 @@ describe('assertSafeOutboundUrl', () => {
     expect(() => assertSafeOutboundUrl('http://192.168.1.1/x')).toThrow();
     expect(() => assertSafeOutboundUrl('http://100.64.0.1/x')).toThrow();
     expect(() => assertSafeOutboundUrl('http://100.127.255.255/x')).toThrow();
+    expect(() => assertSafeOutboundUrl('http://0.0.0.0/x')).toThrow();
+    expect(() => assertSafeOutboundUrl('http://0/x')).toThrow();
+    expect(() => assertSafeOutboundUrl('http://0.1.2.3/x')).toThrow();
     // 边界之外应放行
     expect(() => assertSafeOutboundUrl('http://172.15.255.255/x')).not.toThrow();
     expect(() => assertSafeOutboundUrl('http://172.32.0.0/x')).not.toThrow();
@@ -94,7 +107,8 @@ describe('assertSafeOutboundUrl', () => {
     expect(() => assertSafeOutboundUrl('http://100.128.0.0/x')).not.toThrow();
   });
 
-  it('拒绝 IPv6 回环、链路本地与唯一本地地址', () => {
+  it('拒绝 IPv6 回环、未指定地址、链路本地与唯一本地地址', () => {
+    expect(() => assertSafeOutboundUrl('http://[::]/x')).toThrow();
     expect(() => assertSafeOutboundUrl('http://[::1]/x')).toThrow();
     expect(() => assertSafeOutboundUrl('http://[fe80::1]/x')).toThrow();
     expect(() => assertSafeOutboundUrl('http://[fc00::1]/x')).toThrow();
