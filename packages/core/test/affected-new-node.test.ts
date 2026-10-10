@@ -14,6 +14,7 @@ let t: Awaited<ReturnType<typeof createTestDb>>;
 let owner: Actor;
 let editor: Actor;
 let viewer: Actor;
+let readToken: Actor;
 let pan: string;
 let storage: StructureNodeView;
 let prd: DocumentDetail;
@@ -25,6 +26,7 @@ beforeAll(async () => {
   editor = await asMember(t.db, owner, '编辑甲');
   viewer = await asMember(t.db, owner, '只读乙');
   await setProductRole(t.db, owner, pan, viewer.memberId, 'viewer');
+  readToken = { ...owner, tokenId: '00000000-0000-0000-0000-0000000000f1', tokenScope: { products: 'all', access: 'read' } };
   storage = await createStructureNode(t.db, owner, pan, { name: '存储' });
   prd = await createDocument(t.db, owner, pan, { title: '上传改版' });
 });
@@ -54,6 +56,7 @@ describe('当场新建节点', () => {
 
   it('只读成员不能新建；声明不能修改时（已废弃）也不能新建', async () => {
     await expect(createNodeForDocument(t.db, viewer, prd.id, { parentId: storage.id, name: '只读新建' })).rejects.toMatchObject({ code: 'forbidden' });
+    await expect(createNodeForDocument(t.db, readToken, prd.id, { parentId: storage.id, name: '只读 token 新建' })).rejects.toMatchObject({ code: 'forbidden' });
     const dropped = await createDocument(t.db, owner, pan, { title: '将废弃' });
     await transitionDocument(t.db, owner, dropped.id, { to: 'discarded' });
     await expect(createNodeForDocument(t.db, owner, dropped.id, { parentId: storage.id, name: '废弃后新建' })).rejects.toThrow('「已废弃」的 PRD 不能修改影响声明');

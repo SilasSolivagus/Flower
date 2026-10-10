@@ -44,8 +44,9 @@ function duplicateName(e: unknown): never {
 const siblingsOf = (productId: string, parentId: string | null) =>
   and(eq(structureNodes.productId, productId), parentId === null ? isNull(structureNodes.parentId) : eq(structureNodes.parentId, parentId));
 
-async function loadNode(tx: Tx, id: string): Promise<NodeRow> {
-  const [n] = await tx.select().from(structureNodes).where(eq(structureNodes.id, id));
+async function loadNode(tx: Tx, id: string, opts: { lock?: boolean } = {}): Promise<NodeRow> {
+  const q = tx.select().from(structureNodes).where(eq(structureNodes.id, id));
+  const [n] = opts.lock ? await q.for('update') : await q;
   if (!n) throw new AppError('not_found', '节点不存在');
   return n;
 }
@@ -158,7 +159,7 @@ export async function updateStructureNode(
 
 export async function moveStructureNode(db: Db, actor: Actor, nodeId: string, input: { parentId: string | null }): Promise<StructureNodeView> {
   return withOrg(db, actor.orgId, async (tx) => {
-    const node = await loadNode(tx, nodeId);
+    const node = await loadNode(tx, nodeId, { lock: true });
     await requireProductRole(tx, actor, node.productId, 'admin');
     if (input.parentId === node.parentId) return view(node);
     const all = await tx
