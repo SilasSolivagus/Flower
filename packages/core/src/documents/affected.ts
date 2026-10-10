@@ -7,7 +7,9 @@ import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
 import { memberNames } from '../requirements/context';
+import type { StructureNodeView } from '../requirements/lookups';
 import type { MemberRef } from '../requirements/requirements';
+import { insertStructureNodeTx } from '../structure/nodes';
 import { AFFECTED_CHANGE_TYPES, type AffectedChangeType, type DocumentStatus, type MergeStatus } from './constants';
 import { type DocumentRow, documentMarkdownTx, loadDocument } from './documents';
 import { DOCUMENT_STATUS_LABELS } from './markdown';
@@ -249,5 +251,21 @@ export async function removeAffectedNode(db: Db, actor: Actor, documentId: strin
       payload: { nodeId, changes: [{ field: 'affectedNode', old: declared(tree.path(nodeId), row), new: null }] },
     });
     return affectedNodesInTx(tx, doc, role);
+  });
+}
+
+/**
+ * 声明影响时当场新建：parentId 为业务域时新建模块，为模块时新建功能点。声明可以修改时产品编辑及以上可用
+ * （结构树页签的新建仍要求产品管理员）；同名检查、事件与接上悬空链接沿用结构树服务。
+ */
+export async function createNodeForDocument(db: Db, actor: Actor, documentId: string, input: { parentId: string; name: string }): Promise<StructureNodeView> {
+  return withOrg(db, actor.orgId, async (tx) => {
+    const doc = await loadDocument(tx, documentId, { lock: true });
+    await requireProductRole(tx, actor, doc.productId, 'editor');
+    await assertDeclarationsEditable(tx, doc);
+    const [parent] = await tx.select().from(structureNodes).where(eq(structureNodes.id, input.parentId));
+    if (!parent || parent.productId !== doc.productId) throw new AppError('invalid', '上级节点不属于该产品');
+    if (parent.depth > 2) throw new AppError('invalid', '只能在业务域下新建模块，或在模块下新建功能点');
+    return insertStructureNodeTx(tx, actor, doc.productId, { parentId: parent.id, name: input.name });
   });
 }

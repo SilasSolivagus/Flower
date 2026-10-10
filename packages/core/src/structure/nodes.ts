@@ -70,43 +70,53 @@ function subtreeIds(all: Array<{ id: string; parentId: string | null }>, rootId:
   return out;
 }
 
-export async function createStructureNode(
-  db: Db,
+/** 新建节点：名称与说明校验、上级检查、层级上限、同名检查、事件、接上悬空链接。调用方已检查权限。 */
+export async function insertStructureNodeTx(
+  tx: Tx,
   actor: Actor,
   productId: string,
   input: { parentId?: string | null; name: string; description?: string | null },
 ): Promise<StructureNodeView> {
   const name = assertName(input.name);
   const description = assertDescription(input.description);
+  const parentId = input.parentId ?? null;
+  let depth = 1;
+  if (parentId) {
+    const parent = await loadNode(tx, parentId);
+    if (parent.productId !== productId) throw new AppError('invalid', '上级节点不属于该产品');
+    if (parent.status === 'deprecated') throw new AppError('invalid', '不能在已停用的节点下新增');
+    depth = parent.depth + 1;
+    if (depth > MAX_STRUCTURE_DEPTH) throw new AppError('invalid', `结构树最多 ${MAX_STRUCTURE_DEPTH} 层`);
+  }
+  const sort = await nextSort(tx, productId, parentId);
+  let row: NodeRow;
+  try {
+    [row] = (await tx.insert(structureNodes).values({ orgId: actor.orgId, productId, parentId, depth, name, description, sort }).returning()) as [NodeRow];
+  } catch (e) {
+    duplicateName(e);
+  }
+  await recordEvent(tx, {
+    orgId: actor.orgId,
+    productId,
+    type: 'structure_node.created',
+    subjectType: 'structure_node',
+    subjectId: row.id,
+    actor,
+    payload: { name, parentId, depth },
+  });
+  await relinkNodes(tx, productId, [row.id]);
+  return view(row);
+}
+
+export async function createStructureNode(
+  db: Db,
+  actor: Actor,
+  productId: string,
+  input: { parentId?: string | null; name: string; description?: string | null },
+): Promise<StructureNodeView> {
   return withOrg(db, actor.orgId, async (tx) => {
     await requireProductRole(tx, actor, productId, 'admin');
-    const parentId = input.parentId ?? null;
-    let depth = 1;
-    if (parentId) {
-      const parent = await loadNode(tx, parentId);
-      if (parent.productId !== productId) throw new AppError('invalid', '上级节点不属于该产品');
-      if (parent.status === 'deprecated') throw new AppError('invalid', '不能在已停用的节点下新增');
-      depth = parent.depth + 1;
-      if (depth > MAX_STRUCTURE_DEPTH) throw new AppError('invalid', `结构树最多 ${MAX_STRUCTURE_DEPTH} 层`);
-    }
-    const sort = await nextSort(tx, productId, parentId);
-    let row: NodeRow;
-    try {
-      [row] = (await tx.insert(structureNodes).values({ orgId: actor.orgId, productId, parentId, depth, name, description, sort }).returning()) as [NodeRow];
-    } catch (e) {
-      duplicateName(e);
-    }
-    await recordEvent(tx, {
-      orgId: actor.orgId,
-      productId,
-      type: 'structure_node.created',
-      subjectType: 'structure_node',
-      subjectId: row.id,
-      actor,
-      payload: { name, parentId, depth },
-    });
-    await relinkNodes(tx, productId, [row.id]);
-    return view(row);
+    return insertStructureNodeTx(tx, actor, productId, input);
   });
 }
 
