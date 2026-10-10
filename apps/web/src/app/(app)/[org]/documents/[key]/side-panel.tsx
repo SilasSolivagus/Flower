@@ -1,11 +1,9 @@
 'use client';
 
-import { DOCUMENT_STATUS_LABELS } from '@flower/core/markdown';
 import { X } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { CheckItems } from '@/components/check-items';
-import { DocumentStatusBadge } from '@/components/document-status';
 import { FormError } from '@/components/form-error';
 import { MemberPicker } from '@/components/member-picker';
 import { Button } from '@/components/ui/button';
@@ -14,7 +12,8 @@ import { parseRequirementKeys } from '@/features/documents/model';
 import { activePeople, canListMembers, pickerOptions } from '@/features/members/model';
 import { ApiError, api } from '@/lib/api';
 import { documentKeys, qk, requirementKeys, useApiMutation, useMembers, useOrg } from '@/lib/queries';
-import type { DocumentDetail, DocumentStatus } from '@/lib/types';
+import type { DocumentDetail } from '@/lib/types';
+import { StatusCard } from './status-card';
 import { Revisions } from './revisions';
 
 const CARD = 'rounded-md border bg-card p-4';
@@ -25,18 +24,6 @@ export function SidePanel({ org, doc, onReload, saveEditor }: { org: string; doc
   const members = useMembers(org, canListMembers(orgQ.data?.me));
   const invalidate = [documentKeys(org), requirementKeys(org), qk.workbench];
   const [keys, setKeys] = useState('');
-  const move = useApiMutation(
-    async (to: DocumentStatus) => {
-      // 必填小节按服务端正文校验，先把编辑器里没到时间的修改存上
-      await saveEditor();
-      return api(`/orgs/${org}/documents/${doc.id}/transitions`, { method: 'POST', body: { to } });
-    },
-    {
-      silentError: true,
-      invalidate,
-      success: '已更新状态',
-    },
-  );
   const setOwner = useApiMutation((ownerMemberId: string | null) => api(`/orgs/${org}/documents/${doc.id}`, { method: 'PATCH', body: { ownerMemberId } }), {
     invalidate: [documentKeys(org)],
     success: '已保存',
@@ -57,24 +44,7 @@ export function SidePanel({ org, doc, onReload, saveEditor }: { org: string; doc
 
   return (
     <aside className="flex min-w-0 flex-col gap-4">
-      <section className={CARD} aria-labelledby="doc-status-title">
-        <h2 id="doc-status-title" className="mb-2 text-sm font-semibold">
-          状态
-        </h2>
-        <DocumentStatusBadge status={doc.status} />
-        {doc.transitions.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {doc.transitions.map((to) => (
-              <Button key={to} size="sm" variant="outline" disabled={move.isPending} onClick={() => move.mutate(to)}>
-                改为{DOCUMENT_STATUS_LABELS[to]}
-              </Button>
-            ))}
-          </div>
-        )}
-        <div className="mt-2">
-          <FormError error={move.error} />
-        </div>
-      </section>
+      <StatusCard org={org} doc={doc} saveEditor={saveEditor} />
 
       <section className={CARD} aria-labelledby="doc-owner-title">
         <h2 id="doc-owner-title" className="mb-2 text-sm font-semibold">

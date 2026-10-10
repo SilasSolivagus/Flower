@@ -1,5 +1,5 @@
 import { bestQuoteMatch, CHANGE_DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, normalizeHeading, splitSections, squash, type TemplateSection } from '@flower/core/markdown';
-import type { DocumentComment } from '@/lib/types';
+import type { AffectedChangeType, DocumentComment, MergeStatus } from '@/lib/types';
 
 export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
   draft: '#8a9199',
@@ -100,6 +100,8 @@ export function groupThreads(comments: DocumentComment[]): Thread[] {
 }
 
 export const SECTION_CHANGE_LABEL = { added: '新增', removed: '删除', modified: '修改' } as const;
+export const CHANGE_TYPE_LABEL: Record<AffectedChangeType, string> = { added: '新增', modified: '修改', removed: '删除' };
+export const MERGE_STATUS_LABEL: Record<MergeStatus, string> = { pending: '待合入', applied: '已应用', skipped: '已跳过' };
 export const ANCHOR_STATE_LABEL = { stale: '已失效', unanchored: '未定位' } as const;
 
 export const IMPORT_LIMITS = { markdownBytes: 2 * 1024 * 1024, docxBytes: 20 * 1024 * 1024 } as const;

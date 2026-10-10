@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DocumentComment } from '@/lib/types';
-import { base64ToBytes, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, documentView, editorAnchors, findDataImages, findSectionIndex, groupThreads, importSummary, locateAnchorRange, moduleDocsHref, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
+import { base64ToBytes, CHANGE_TYPE_LABEL, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, documentView, editorAnchors, findDataImages, findSectionIndex, groupThreads, importSummary, locateAnchorRange, MERGE_STATUS_LABEL, moduleDocsHref, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
 
 describe('PRD 列表筛选', () => {
   it('地址栏 ↔ 筛选；无效的状态与来源被忽略', () => {
@@ -125,5 +125,10 @@ describe('模块文档页签', () => {
     expect(documentView(new URLSearchParams('view=bogus'))).toBe('change');
     expect(moduleDocsHref('acme', 'PAN')).toBe('/acme/documents?product=PAN&view=modules');
     expect(moduleDocsHref('acme', 'PAN', 'n1')).toBe('/acme/documents?product=PAN&view=modules&node=n1');
+  });
+
+  it('变更类型与合入状态的文字', () => {
+    expect(CHANGE_TYPE_LABEL).toEqual({ added: '新增', modified: '修改', removed: '删除' });
+    expect(MERGE_STATUS_LABEL).toEqual({ pending: '待合入', applied: '已应用', skipped: '已跳过' });
   });
 });
