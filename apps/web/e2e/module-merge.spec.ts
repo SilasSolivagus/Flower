@@ -102,6 +102,20 @@ test('版本冲突：合入页打开后模块文档被别人改过，应用时�
   await expect(instant).toContainText('已应用');
 });
 
+test('模块文档已归档：合入页不显示应用，只能跳过', async ({ page, request }) => {
+  const { prd, mod } = await setup(request);
+  await ok(request.post(`/api/v1/orgs/acme/documents/${mod.id}/transitions`, { data: { to: 'archived' } }));
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/documents/${prd.displayKey}/merge`);
+  const instant = page.getByRole('article', { name: '存储/上传/秒传' });
+  await expect(instant).toContainText('模块文档已归档，恢复为使用中后才能应用');
+  await expect(instant.getByRole('button', { name: '应用 秒传' })).toHaveCount(0);
+  await expect(instant.getByRole('button', { name: '跳过 秒传' })).toBeVisible();
+  const offline = page.getByRole('article', { name: '存储/下载/离线下载' });
+  await expect(offline.getByRole('button', { name: '应用 离线下载' })).toBeVisible();
+  await expect(offline).not.toContainText('模块文档已归档');
+});
+
 test('模块文档：合入后的正文、修订来源与合入记录；节点链接跳到模块文档小节或模块文档页签；两种宽度不横向滚动', async ({ page, request }) => {
   const { productId, prd, mod, download } = await setup(request);
   const plan = await json<{ plan: { groups: Array<{ document: { version: number } | null; items: Array<{ nodeId: string; prefill: string }> }> } }>(

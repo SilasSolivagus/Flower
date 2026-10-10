@@ -12,7 +12,7 @@ import type { MergeItem, MergeResult } from '@/lib/types';
 /**
  * 合入页的一个功能点：左侧模块文档现状，右侧可编辑的合入内容（用户改过之前跟随服务端预填），应用 / 跳过 / 撤销跳过。
  * baseVersion 是本页看到的模块文档版本号（文档还不存在时为 null），模块文档有更新的版本时服务端返回 409。
- * canApply 为 false 时功能点已不在任何模块下，服务端拒绝应用，只能跳过。
+ * applyBlocked 不为空时（功能点已不在模块下，或模块文档已归档）服务端拒绝应用，只能跳过，显示这段说明。
  */
 export function MergeItemCard({
   org,
@@ -20,7 +20,7 @@ export function MergeItemCard({
   baseVersion,
   item,
   canMerge,
-  canApply,
+  applyBlocked,
   canReopen,
   onRefresh,
 }: {
@@ -29,7 +29,7 @@ export function MergeItemCard({
   baseVersion: number | null;
   item: MergeItem;
   canMerge: boolean;
-  canApply: boolean;
+  applyBlocked: string | null;
   canReopen: boolean;
   onRefresh: () => void;
 }) {
@@ -49,6 +49,7 @@ export function MergeItemCard({
     m.mutate();
   };
   const pending = item.mergeStatus === 'pending';
+  const canApply = applyBlocked === null;
   const removing = item.changeType === 'removed';
   const stale = item.sourceSections.filter((s) => s.stale);
   const actions = (pending && canMerge) || (item.mergeStatus === 'skipped' && canReopen);
@@ -92,7 +93,7 @@ export function MergeItemCard({
       {(error || actions) && (
         <footer className="flex flex-col gap-2 border-t px-4 py-2">
           <FormError error={error} />
-          {pending && canMerge && !canApply && <p className="text-xs text-muted-foreground">功能点已不在模块下，只能跳过</p>}
+          {pending && canMerge && applyBlocked && <p className="text-xs text-muted-foreground">{applyBlocked}</p>}
           <div className="flex flex-wrap gap-2">
             {conflict && (
               <Button

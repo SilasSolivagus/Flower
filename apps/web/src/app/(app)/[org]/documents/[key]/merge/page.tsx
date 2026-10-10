@@ -11,7 +11,14 @@ import { PageHeader } from '@/components/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { documentHref } from '@/features/documents/model';
 import { useDocument, useMergePlan } from '@/lib/queries';
+import type { MergePlan } from '@/lib/types';
 import { MergeItemCard } from './merge-item';
+
+function applyBlockedOf(g: MergePlan['groups'][number]): string | null {
+  if (g.module === null) return '功能点已不在模块下，只能跳过';
+  if (g.document?.status === 'archived') return '模块文档已归档，恢复为使用中后才能应用';
+  return null;
+}
 
 /** 合入页：按模块分组，逐个功能点把变更 PRD 的来源小节合入模块文档。 */
 function MergePage() {
@@ -59,7 +66,7 @@ function MergePage() {
               )}
             </h2>
             {g.items.map((it) => (
-              <MergeItemCard key={it.nodeId} org={org} documentId={p.document.id} baseVersion={g.document?.version ?? null} item={it} canMerge={p.canMerge} canApply={g.module !== null} canReopen={p.canReopen} onRefresh={() => void plan.refetch()} />
+              <MergeItemCard key={it.nodeId} org={org} documentId={p.document.id} baseVersion={g.document?.version ?? null} item={it} canMerge={p.canMerge} applyBlocked={applyBlockedOf(g)} canReopen={p.canReopen} onRefresh={() => void plan.refetch()} />
             ))}
           </section>
         ))
