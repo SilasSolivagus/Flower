@@ -55,6 +55,10 @@ export async function deleteOrgData(tx: Tx, orgId: string): Promise<void> {
   await tx.execute(sql`delete from ${core.iterationScopeSnapshots} where org_id = ${orgId}`);
   await tx.execute(sql`delete from ${core.documentAffectedNodes} where org_id = ${orgId}`);
   await tx.execute(sql`delete from ${core.entityLinks} where org_id = ${orgId}`);
+  // 推送：摘要条目与发送记录引用规则、定时推送、通道与领域事件，规则引用定时推送与模板，定时推送引用模板与产品
+  for (const table of [core.notificationDigestItems, core.notificationDeliveries, core.notificationRules, core.notificationSchedules, core.messageTemplates, core.notificationChannels]) {
+    await tx.execute(sql`delete from ${table} where org_id = ${orgId}`);
+  }
   const tenantTables = [...INSERT_ORDER].reverse().filter((k) => k !== 'organizations').map((k) => TABLES[k]);
   for (const table of [...tenantTables.slice(0, -1), core.invitations, core.apiTokens, tenantTables.at(-1)!]) {
     await tx.execute(sql`delete from ${table} where org_id = ${orgId}`);

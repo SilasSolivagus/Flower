@@ -60,6 +60,7 @@ P3 拆为两段：
 - 限流：每个通道按 `rate_limit_per_min` 滑动窗口计数，超出的留到下一轮。
 - 后台循环：应用进程启动时启动，每 5 秒运行一次：用 `FOR UPDATE SKIP LOCKED` 取一批到期的 pending 记录改为 sending 后发送；同一轮检查到点的定时推送（用 advisory lock 保证同一个定时推送不被两个实例同时执行）。进程退出前停止取新任务。测试与 e2e 环境可以关闭循环、改为手动驱动。
 - 发送记录页（组织设置）：按通道、来源、状态、时间筛选；单条可以「重发」（复制为新的 pending 记录）。
+- 实现补充（2026-10-10，见 P3-A 计划「设计决定」）：`notification_deliveries` 增加 `kind`（rule / schedule / test）与 `run_id`（同一次定时执行的记录共享，用于执行结果与告警）；`notification_digest_items` 增加 `run_id`；`notification_schedules` 增加 `last_error`；`message_templates` 增加 `builtin_key`（预置模板的用途）。P3-A 的三种内容来源都要求选择产品。
 
 ## 7. 迁移与联调
 

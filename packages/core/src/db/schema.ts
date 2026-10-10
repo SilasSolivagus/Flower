@@ -21,6 +21,18 @@ import type { TokenScope } from '../domain-types';
 import { AFFECTED_CHANGE_TYPES, DOCUMENT_KINDS, DOCUMENT_STATUSES, EXTERNAL_PROVIDERS, MERGE_STATUSES, type RevisionSnapshot, type TemplateSection } from '../documents/constants';
 import { newId } from '../ids';
 import { LINK_ORIGINS, LINK_SOURCE_TYPES, LINK_TARGET_TYPES } from '../links/syntax';
+import {
+  ALERT_STATES,
+  BUILTIN_TEMPLATE_KEYS,
+  CHANNEL_KINDS,
+  DELIVERY_KINDS,
+  DELIVERY_STATUSES,
+  type DeliveryPayload,
+  RULE_MODES,
+  type RuleFilter,
+  SCHEDULE_SOURCES,
+  TEMPLATE_FORMATS,
+} from '../notifications/constants';
 
 const id = () => uuid('id').primaryKey().$defaultFn(newId);
 const ts = (name: string) => timestamp(name, { withTimezone: true });
@@ -747,4 +759,165 @@ export const documentAffectedNodes = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('document_affected_nodes_doc_node').on(t.documentId, t.nodeId), index('document_affected_nodes_node').on(t.nodeId)],
+);
+
+// ---------- P3-A：推送 ----------
+
+export const notificationChannels = pgTable(
+  'notification_channels',
+  {
+    id: id(),
+    orgId: orgRef(),
+    kind: text('kind', { enum: CHANNEL_KINDS }).notNull(),
+    name: text('name').notNull(),
+    /** 所属群，仅用于展示与归组。 */
+    groupLabel: text('group_label'),
+    /** 加密后的配置（notifications/secrets.ts 的 `v1:…`），明文只在发送时解密。 */
+    config: text('config').notNull(),
+    configHint: text('config_hint').notNull(),
+    rateLimitPerMin: integer('rate_limit_per_min').notNull(),
+    /** 空数组表示全部产品。 */
+    allowedProductIds: uuid('allowed_product_ids').array().notNull().default(sql`'{}'`),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('notification_channels_org_name').on(t.orgId, t.name), check('notification_channels_rate', sql`${t.rateLimitPerMin} between 1 and 600`)],
+);
+
+export const messageTemplates = pgTable(
+  'message_templates',
+  {
+    id: id(),
+    orgId: orgRef(),
+    name: text('name').notNull(),
+    format: text('format', { enum: TEMPLATE_FORMATS }).notNull(),
+    body: text('body').notNull(),
+    builtin: boolean('builtin').notNull().default(false),
+    /** 预置模板的用途；自建模板为空。 */
+    builtinKey: text('builtin_key', { enum: BUILTIN_TEMPLATE_KEYS }),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('message_templates_org_name').on(t.orgId, t.name),
+    uniqueIndex('message_templates_org_builtin').on(t.orgId, t.builtinKey).where(sql`${t.builtinKey} is not null`),
+    check('message_templates_builtin', sql`${t.builtin} = (${t.builtinKey} is not null)`),
+  ],
+);
+
+export const notificationSchedules = pgTable(
+  'notification_schedules',
+  {
+    id: id(),
+    orgId: orgRef(),
+    /** P3-A 的三种来源都必须有产品（服务层校验）；列可空，留给以后的组织级来源。 */
+    productId: uuid('product_id').references(() => products.id),
+    name: text('name').notNull(),
+    cron: text('cron').notNull(),
+    timezone: text('timezone').notNull().default('Asia/Shanghai'),
+    source: text('source', { enum: SCHEDULE_SOURCES }).notNull(),
+    sourceConfig: jsonb('source_config').$type<Record<string, unknown>>().notNull().default({}),
+    channelIds: uuid('channel_ids').array().notNull().default(sql`'{}'`),
+    templateId: uuid('template_id').references(() => messageTemplates.id),
+    enabled: boolean('enabled').notNull().default(true),
+    nextRunAt: ts('next_run_at'),
+    lastRunAt: ts('last_run_at'),
+    lastSuccessAt: ts('last_success_at'),
+    consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+    failThreshold: integer('fail_threshold').notNull().default(1),
+    alertState: text('alert_state', { enum: ALERT_STATES }).notNull().default('normal'),
+    lastError: text('last_error'),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('notification_schedules_product').on(t.productId),
+    index('notification_schedules_due').on(t.nextRunAt).where(sql`${t.enabled}`),
+    check('notification_schedules_threshold', sql`${t.failThreshold} between 1 and 10`),
+  ],
+);
+
+export const notificationRules = pgTable(
+  'notification_rules',
+  {
+    id: id(),
+    orgId: orgRef(),
+    productId: productRef(),
+    name: text('name').notNull(),
+    eventTypes: text('event_types').array().notNull(),
+    filter: jsonb('filter').$type<RuleFilter>().notNull().default({}),
+    /** 即时规则的通道；摘要规则为空（用定时推送的通道）。 */
+    channelIds: uuid('channel_ids').array().notNull().default(sql`'{}'`),
+    templateId: uuid('template_id').references(() => messageTemplates.id),
+    mode: text('mode', { enum: RULE_MODES }).notNull().default('immediate'),
+    digestScheduleId: uuid('digest_schedule_id').references(() => notificationSchedules.id),
+    enabled: boolean('enabled').notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [index('notification_rules_product').on(t.productId), check('notification_rules_digest', sql`(${t.mode} = 'digest') = (${t.digestScheduleId} is not null)`)],
+);
+
+export const notificationDigestItems = pgTable(
+  'notification_digest_items',
+  {
+    id: id(),
+    orgId: orgRef(),
+    ruleId: uuid('rule_id')
+      .notNull()
+      .references(() => notificationRules.id),
+    scheduleId: uuid('schedule_id')
+      .notNull()
+      .references(() => notificationSchedules.id),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => domainEvents.id),
+    /** 被某次执行取用后、发送成功前的执行 id；该次全部放弃时清空，留给下一次。 */
+    runId: uuid('run_id'),
+    createdAt: createdAt(),
+    consumedAt: ts('consumed_at'),
+  },
+  (t) => [
+    uniqueIndex('notification_digest_items_rule_event').on(t.ruleId, t.eventId),
+    index('notification_digest_items_open').on(t.scheduleId, t.createdAt).where(sql`${t.consumedAt} is null`),
+    index('notification_digest_items_run').on(t.runId),
+  ],
+);
+
+export const notificationDeliveries = pgTable(
+  'notification_deliveries',
+  {
+    id: id(),
+    orgId: orgRef(),
+    kind: text('kind', { enum: DELIVERY_KINDS }).notNull(),
+    ruleId: uuid('rule_id').references(() => notificationRules.id),
+    scheduleId: uuid('schedule_id').references(() => notificationSchedules.id),
+    /** 同一次定时执行的记录共享，用于执行结果与告警。 */
+    runId: uuid('run_id'),
+    channelId: uuid('channel_id')
+      .notNull()
+      .references(() => notificationChannels.id),
+    eventId: uuid('event_id').references(() => domainEvents.id),
+    /** 渲染后的请求体；事件规则的记录在第一次发送前渲染，此前为空。 */
+    payload: jsonb('payload').$type<DeliveryPayload>(),
+    status: text('status', { enum: DELIVERY_STATUSES }).notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    /** 待发、失败待重试时为下次尝试时间；发送中为租约到期时间。 */
+    nextAttemptAt: ts('next_attempt_at'),
+    response: text('response'),
+    sentAt: ts('sent_at'),
+    createdAt: createdAt(),
+    legacyKey: text('legacy_key'),
+  },
+  (t) => [
+    index('notification_deliveries_due').on(t.nextAttemptAt).where(sql`${t.status} in ('pending', 'failed', 'sending')`),
+    index('notification_deliveries_channel_sent').on(t.channelId, t.sentAt),
+    index('notification_deliveries_org_created').on(t.orgId, t.createdAt.desc()),
+    index('notification_deliveries_run').on(t.runId),
+    check(
+      'notification_deliveries_source',
+      sql`(${t.kind} = 'rule' and ${t.ruleId} is not null and ${t.scheduleId} is null) or (${t.kind} = 'schedule' and ${t.scheduleId} is not null and ${t.ruleId} is null) or (${t.kind} = 'test' and ${t.ruleId} is null and ${t.scheduleId} is null)`,
+    ),
+  ],
 );

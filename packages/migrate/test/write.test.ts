@@ -14,6 +14,7 @@ import {
   documentAffectedNodes,
   documentRevisions,
   documents,
+  domainEvents,
   entityLinks,
   fieldDefinitions,
   iterations,
@@ -27,6 +28,12 @@ import {
   listFields,
   listProducts,
   listRequirements,
+  messageTemplates,
+  notificationChannels,
+  notificationDeliveries,
+  notificationDigestItems,
+  notificationRules,
+  notificationSchedules,
   readAttachment,
   requirements,
   resolveActor,
@@ -97,6 +104,22 @@ describe('写入数据库', () => {
     await t.adminDb.insert(documentAffectedNodes).values({ orgId: actor.orgId, documentId: prd.id, nodeId: feature.id, changeType: 'added' });
     const [iteration] = await t.adminDb.select({ id: iterations.id }).from(iterations).where(eq(iterations.orgId, actor.orgId));
     await t.adminDb.insert(iterationScopeSnapshots).values({ orgId: actor.orgId, iterationId: iteration!.id, requirementId: created.id, snapshotKind: 'committed' });
+    const [createdEvent] = await t.adminDb.select({ id: domainEvents.id }).from(domainEvents).where(eq(domainEvents.subjectId, created.id));
+    const [ch] = await t.adminDb
+      .insert(notificationChannels)
+      .values({ orgId: actor.orgId, kind: 'wecom_robot', name: '导入后通道', config: 'v1:a:b:c', configHint: 'h', rateLimitPerMin: 20 })
+      .returning();
+    const [tpl] = await t.adminDb.insert(messageTemplates).values({ orgId: actor.orgId, name: '导入后模板', format: 'markdown', body: 'x' }).returning();
+    const [sch] = await t.adminDb
+      .insert(notificationSchedules)
+      .values({ orgId: actor.orgId, productId: product!.id, name: '导入后摘要', cron: '0 18 * * *', source: 'digest', channelIds: [ch!.id], templateId: tpl!.id })
+      .returning();
+    const [rl] = await t.adminDb
+      .insert(notificationRules)
+      .values({ orgId: actor.orgId, productId: product!.id, name: '导入后规则', eventTypes: ['requirement.created'], mode: 'digest', digestScheduleId: sch!.id, templateId: tpl!.id })
+      .returning();
+    await t.adminDb.insert(notificationDigestItems).values({ orgId: actor.orgId, ruleId: rl!.id, scheduleId: sch!.id, eventId: createdEvent!.id });
+    await t.adminDb.insert(notificationDeliveries).values({ orgId: actor.orgId, kind: 'rule', ruleId: rl!.id, channelId: ch!.id, eventId: createdEvent!.id });
 
     await writeImport(t.adminDb, plan, { replace: true });
 
@@ -110,6 +133,9 @@ describe('写入数据库', () => {
     expect(await t.adminDb.select().from(iterationScopeSnapshots)).toEqual([]);
     expect(await t.adminDb.select().from(entityLinks)).toEqual([]);
     expect(await t.adminDb.select().from(documentAffectedNodes)).toEqual([]);
+    for (const table of [notificationDigestItems, notificationDeliveries, notificationRules, notificationSchedules, messageTemplates, notificationChannels]) {
+      expect(await t.adminDb.select().from(table)).toEqual([]);
+    }
     expect(await t.adminDb.select().from(comments).where(eq(comments.body, '导入后的评论'))).toEqual([]);
   });
 
