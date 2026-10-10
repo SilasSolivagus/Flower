@@ -1,6 +1,6 @@
 import { type APIRequestContext, expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { acceptInvite, createDocument, createNode, createProduct, expectNoPageOverflow, json, launchDocument, login, ok, OWNER, setupInstance } from './helpers';
+import { acceptInvite, createDocument, createNode, createProduct, expectNoPageOverflow, FAIL_500, json, launchDocument, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -66,6 +66,14 @@ test('合入页：逐个应用与跳过，撤销跳过后再应用；全部处�
   await expect(page.getByRole('region', { name: '存储/下载' })).toContainText('模块文档将在第一次应用时自动新建');
   const offline = page.getByRole('article', { name: '存储/下载/离线下载' });
   await offline.getByLabel('离线下载 合入内容').fill('支持离线下载');
+  // 跳过最后一个即变为已合入；撤销这次跳过退回已上线，再应用
+  await offline.getByRole('button', { name: '跳过 离线下载' }).click();
+  await expect(progress).toHaveText('已处理 4 / 4，全部处理完，PRD 已变为「已合入」');
+  await expect(page.getByText('已合入', { exact: true })).toBeVisible();
+  await offline.getByRole('button', { name: '撤销跳过 离线下载' }).click();
+  await expect(progress).toHaveText('已处理 3 / 4');
+  await expect(page.getByText('已上线', { exact: true })).toBeVisible();
+  await expect(offline.getByLabel('离线下载 合入内容')).toHaveValue('支持离线下载');
   await offline.getByRole('button', { name: '应用 离线下载' }).click();
   await expect(progress).toHaveText('已处理 4 / 4，全部处理完，PRD 已变为「已合入」');
   await expect(page.getByRole('region', { name: '存储/下载' }).getByRole('link', { name: 'PAN-PRD-3' })).toBeVisible();
@@ -83,11 +91,13 @@ test('版本冲突：合入页打开后模块文档被别人改过，应用时�
   await expect(instant.getByLabel('秒传 现状')).toHaveText('秒传说明');
   const cur = await json<{ document: { version: number } }>(request.get(`/api/v1/orgs/acme/documents/${mod.displayKey}`));
   await ok(request.put(`/api/v1/orgs/acme/documents/${mod.id}/content`, { data: { baseVersion: cur.document.version, markdown: '上传总述\n\n## 秒传\n\n别人刚改的秒传说明\n\n## 旧接口\n\n旧接口说明\n' } }));
+  await instant.getByLabel('秒传 合入内容').fill('断点续传，改过的合入内容');
   await instant.getByRole('button', { name: '应用 秒传' }).click();
   await expect(instant.getByRole('alert')).toContainText('模块文档已被其他人修改，请刷新左侧内容后重试');
   await instant.getByRole('button', { name: '刷新左侧' }).click();
   await expect(instant.getByLabel('秒传 现状')).toHaveText('别人刚改的秒传说明');
   await expect(instant.getByRole('alert')).toHaveCount(0);
+  await expect(instant.getByLabel('秒传 合入内容')).toHaveValue('断点续传，改过的合入内容');
   await instant.getByRole('button', { name: '应用 秒传' }).click();
   await expect(instant).toContainText('已应用');
 });
@@ -145,4 +155,16 @@ test('只读成员能看合入页，没有应用、跳过按钮', async ({ brows
   await expect(chunk.getByLabel('分片上传 合入内容')).toHaveValue('上传改为分片\n\n### 细节\n\n断点续传');
   await expect(page.getByRole('button', { name: /^(应用|跳过) / })).toHaveCount(0);
   await ctx.close();
+});
+
+test('合入页加载失败显示重试，重试后恢复', async ({ page, request }) => {
+  const { prd } = await setup(request);
+  await login(page, OWNER.email, OWNER.password);
+  const planUrl = `**/api/v1/orgs/acme/documents/${prd.id}/merge`;
+  await page.route(planUrl, (route) => route.fulfill(FAIL_500));
+  await page.goto(`/acme/documents/${prd.displayKey}/merge`);
+  await expect(page.getByText('加载合入内容失败，请重试。')).toBeVisible({ timeout: 15_000 });
+  await page.unroute(planUrl);
+  await page.getByRole('button', { name: '重试' }).click();
+  await expect(page.getByRole('article', { name: '存储/上传/分片上传' })).toBeVisible();
 });

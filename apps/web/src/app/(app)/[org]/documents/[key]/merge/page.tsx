@@ -18,10 +18,11 @@ function MergePage() {
   const { org, key } = useParams<{ org: string; key: string }>();
   const d = useDocument(org, decodeURIComponent(key));
   const plan = useMergePlan(org, d.data?.id);
-  if (d.isError) {
+  // 已有数据时后台刷新失败不替换整页，避免卡片里没应用的修改丢失
+  if (!d.data && d.isError) {
     return <QueryError error={d.error} noAccessMessage="PRD 不存在，或你没有查看它所在产品的权限。" retryMessage="加载 PRD 失败，请重试。" onRetry={() => d.refetch()} />;
   }
-  if (plan.isError) {
+  if (!plan.data && plan.isError) {
     return <QueryError error={plan.error} noAccessMessage="没有查看合入的权限。" retryMessage="加载合入内容失败，请重试。" onRetry={() => plan.refetch()} />;
   }
   if (!d.data || !plan.data) return <Skeleton className="h-64" />;
@@ -58,7 +59,7 @@ function MergePage() {
               )}
             </h2>
             {g.items.map((it) => (
-              <MergeItemCard key={it.nodeId} org={org} documentId={p.document.id} baseVersion={g.document?.version ?? null} item={it} canMerge={p.canMerge} canReopen={p.canReopen} onRefresh={() => void plan.refetch()} />
+              <MergeItemCard key={it.nodeId} org={org} documentId={p.document.id} baseVersion={g.document?.version ?? null} item={it} canMerge={p.canMerge} canApply={g.module !== null} canReopen={p.canReopen} onRefresh={() => void plan.refetch()} />
             ))}
           </section>
         ))
