@@ -53,11 +53,19 @@ export function parseChannelConfig(kind: ChannelKind, raw: unknown): ChannelConf
   if (!r.success) {
     throw new AppError('invalid', '通道配置有误', r.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })));
   }
+  if (kind === 'wecom_robot') {
+    const { url } = r.data as WecomConfig;
+    assertSafeOutboundUrl(url);
+    return { url };
+  }
   if (kind === 'webhook') {
     const { url, secret } = r.data as WebhookConfig;
+    assertSafeOutboundUrl(url);
     return secret ? { url, secret } : { url };
   }
-  return r.data as ChannelConfig;
+  const config = r.data as EmailConfig;
+  assertSafeOutboundHost(config.host, 'SMTP 服务器不能是本机或内网地址');
+  return config;
 }
 
 const filled = (v: string | undefined): string | undefined => (v === undefined || v.trim() === '' ? undefined : v);
@@ -169,10 +177,23 @@ function isUnsafeIpv6(bracketed: string): boolean | undefined {
 /**
  * 只做主机名/字面量检查，不做 DNS 解析：公网域名即便实际解析到内网地址也不会被拦住。
  * 真正杜绝 DNS rebinding 需要在发送时对已解析的 IP 再次校验，本函数只覆盖保存与发送前的静态检查。
+ *
+ * hostname 既接受 URL 的 `hostname`（IPv6 带中括号，如 `[::1]`），也接受裸主机名（如 SMTP 的 `host`，
+ * IPv6 字面量不带中括号，如 `::1`）——按是否已带中括号自行判断。
  */
-export function assertSafeOutboundUrl(raw: string): void {
-  const fail = () => new AppError('invalid', '网址不能指向本机或内网地址');
+export function assertSafeOutboundHost(hostname: string, message = '网址不能指向本机或内网地址'): void {
   if (process.env.FLOWER_NOTIFY_ALLOW_PRIVATE === '1') return;
+  // 域名末尾的 `.`（如 `localhost.`）解析器会当作没有这个点，去掉后再比较
+  const h = hostname.toLowerCase().replace(/\.$/, '');
+  const bracketed = h.startsWith('[') || !h.includes(':') ? h : `[${h}]`;
+  if (h === 'localhost' || h.endsWith('.local') || isUnsafeIpv4(h) || isUnsafeIpv6(bracketed)) {
+    throw new AppError('invalid', message);
+  }
+}
+
+export function assertSafeOutboundUrl(raw: string): void {
+  if (process.env.FLOWER_NOTIFY_ALLOW_PRIVATE === '1') return;
+  const fail = () => new AppError('invalid', '网址不能指向本机或内网地址');
   let u: URL;
   try {
     u = new URL(raw);
@@ -180,8 +201,5 @@ export function assertSafeOutboundUrl(raw: string): void {
     throw fail();
   }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') throw fail();
-  // 域名末尾的 `.`（如 `localhost.`）解析器会当作没有这个点，去掉后再比较
-  const hostname = u.hostname.toLowerCase().replace(/\.$/, '');
-  if (hostname === 'localhost' || hostname.endsWith('.local')) throw fail();
-  if (isUnsafeIpv4(hostname) || isUnsafeIpv6(hostname)) throw fail();
+  assertSafeOutboundHost(u.hostname);
 }

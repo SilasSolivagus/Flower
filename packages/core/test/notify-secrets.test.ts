@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertSafeOutboundUrl, channelConfigHint, channelPublicSettings, mergeChannelConfig, parseChannelConfig } from '../src/notifications/channel-config';
+import { assertSafeOutboundHost, assertSafeOutboundUrl, channelConfigHint, channelPublicSettings, mergeChannelConfig, parseChannelConfig } from '../src/notifications/channel-config';
 import { decryptConfig, encryptConfig } from '../src/notifications/secrets';
 
 const KEY = 'unit-test-secret-unit-test-secret-unit-test-secret';
@@ -127,5 +127,49 @@ describe('assertSafeOutboundUrl', () => {
       if (prev === undefined) delete process.env.FLOWER_NOTIFY_ALLOW_PRIVATE;
       else process.env.FLOWER_NOTIFY_ALLOW_PRIVATE = prev;
     }
+  });
+});
+
+describe('assertSafeOutboundHost（SMTP 服务器等裸主机名）', () => {
+  it('放行公网域名；拒绝 localhost 与 .local', () => {
+    expect(() => assertSafeOutboundHost('smtp.example.com')).not.toThrow();
+    expect(() => assertSafeOutboundHost('localhost')).toThrow();
+    expect(() => assertSafeOutboundHost('LOCALHOST')).toThrow();
+    expect(() => assertSafeOutboundHost('printer.local')).toThrow();
+  });
+
+  it('拒绝裸 IPv4 环回、私有地址', () => {
+    expect(() => assertSafeOutboundHost('127.0.0.1')).toThrow();
+    expect(() => assertSafeOutboundHost('10.0.0.5')).toThrow();
+    expect(() => assertSafeOutboundHost('192.168.1.1')).toThrow();
+  });
+
+  it('拒绝不带中括号的裸 IPv6 环回地址', () => {
+    expect(() => assertSafeOutboundHost('::1')).toThrow();
+    expect(() => assertSafeOutboundHost('fe80::1')).toThrow();
+    expect(() => assertSafeOutboundHost('2001:db8::1')).not.toThrow();
+  });
+
+  it('可传入自定义错误文案', () => {
+    expect(() => assertSafeOutboundHost('127.0.0.1', 'SMTP 服务器不能是本机或内网地址')).toThrow('SMTP 服务器不能是本机或内网地址');
+  });
+
+  it('FLOWER_NOTIFY_ALLOW_PRIVATE=1 时跳过检查', () => {
+    const prev = process.env.FLOWER_NOTIFY_ALLOW_PRIVATE;
+    process.env.FLOWER_NOTIFY_ALLOW_PRIVATE = '1';
+    try {
+      expect(() => assertSafeOutboundHost('127.0.0.1')).not.toThrow();
+    } finally {
+      if (prev === undefined) delete process.env.FLOWER_NOTIFY_ALLOW_PRIVATE;
+      else process.env.FLOWER_NOTIFY_ALLOW_PRIVATE = prev;
+    }
+  });
+});
+
+describe('parseChannelConfig 接入网址/主机安全检查', () => {
+  it('企微、Webhook 网址指向内网时拒绝；SMTP 主机指向内网时拒绝', () => {
+    expect(() => parseChannelConfig('wecom_robot', { url: 'http://127.0.0.1/send?key=x' })).toThrow('网址不能指向本机或内网地址');
+    expect(() => parseChannelConfig('webhook', { url: 'http://localhost/in' })).toThrow('网址不能指向本机或内网地址');
+    expect(() => parseChannelConfig('email', { ...EMAIL, host: '127.0.0.1' })).toThrow('SMTP 服务器不能是本机或内网地址');
   });
 });
