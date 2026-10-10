@@ -110,7 +110,17 @@ describe('结构树维护', () => {
     const d2 = (await createStructureNode(t.db, owner, doc, { name: '域二' })).id;
     const mod = await createStructureNode(t.db, owner, doc, { parentId: d1, name: '模块甲' });
     await createModuleDocument(t.db, owner, mod.id);
-    await expect(moveStructureNode(t.db, owner, mod.id, { parentId: null })).rejects.toMatchObject({ code: 'invalid', message: '该模块已有模块文档，不能改变层级' });
+    await expect(moveStructureNode(t.db, owner, mod.id, { parentId: null })).rejects.toMatchObject({ code: 'invalid', message: '该节点或其下级的模块已有模块文档，不能改变层级' });
     await expect(moveStructureNode(t.db, owner, mod.id, { parentId: d2 })).resolves.toMatchObject({ depth: 2, parentId: d2 });
+  });
+
+  it('移动业务域：下级模块已有模块文档时，改变层级被拒绝', async () => {
+    const d3 = (await createStructureNode(t.db, owner, doc, { name: '域三' })).id;
+    const d4 = (await createStructureNode(t.db, owner, doc, { name: '域四' })).id;
+    const mod = await createStructureNode(t.db, owner, doc, { parentId: d3, name: '模块乙' });
+    await createModuleDocument(t.db, owner, mod.id);
+    await expect(moveStructureNode(t.db, owner, d3, { parentId: d4 })).rejects.toMatchObject({ code: 'invalid', message: '该节点或其下级的模块已有模块文档，不能改变层级' });
+    const after = await listStructureNodes(t.db, owner, doc);
+    expect(after.find((n) => n.id === mod.id)).toMatchObject({ depth: 2, parentId: d3 });
   });
 });

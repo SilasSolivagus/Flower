@@ -179,8 +179,15 @@ export async function moveStructureNode(db: Db, actor: Actor, nodeId: string, in
     const deepest = Math.max(...all.filter((n) => subtree.has(n.id)).map((n) => n.depth)) + delta;
     if (deepest > MAX_STRUCTURE_DEPTH) throw new AppError('invalid', '移动后层级超过 3 层');
     if (delta !== 0) {
-      const [moduleDoc] = await tx.select({ id: documents.id }).from(documents).where(and(eq(documents.nodeId, nodeId), isNull(documents.deletedAt)));
-      if (moduleDoc) throw new AppError('invalid', '该模块已有模块文档，不能改变层级');
+      // 锁住整个子树（按 id 排序），与新建模块文档时锁模块节点互斥；子树里任何一个模块已有模块文档都不能改变层级。
+      const ids = [...subtree];
+      await tx.select({ id: structureNodes.id }).from(structureNodes).where(inArray(structureNodes.id, ids)).orderBy(asc(structureNodes.id)).for('update');
+      const [moduleDoc] = await tx
+        .select({ id: documents.id })
+        .from(documents)
+        .where(and(inArray(documents.nodeId, ids), isNull(documents.deletedAt)))
+        .limit(1);
+      if (moduleDoc) throw new AppError('invalid', '该节点或其下级的模块已有模块文档，不能改变层级');
     }
     const sort = await nextSort(tx, node.productId, input.parentId);
     let row: NodeRow;
