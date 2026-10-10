@@ -263,6 +263,7 @@ sections 供 Agent 逐节写作，并由系统校验必填小节是否齐全。
 - 通道由组织管理员登记；通知规则可以由产品 admin 在本产品内配置，只能选择对本产品可用的通道。
 - 不支持"执行脚本"作为内容来源。"http"来源只允许实例管理员配置，且受白名单限制。
 - 外部触发：用 API Token 调用"立即执行某个定时推送"，取代 push 的 `/trigger/:id`。
+- P3-A 的实现细节与差异（2026-10-10）：通道先做企微机器人、Webhook、邮件；新增 `notification_digest_items` 承接合并推送；定时推送来源为 overview_card / new_requirements / digest，「http」来源与 AI 日报后置。见 P3-A 设计。
 
 ### 6.3 知识库
 
