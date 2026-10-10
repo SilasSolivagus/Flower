@@ -77,3 +77,5 @@ export * from './notifications/message-templates';
 export * from './notifications/schedules';
 export * from './notifications/match';
 export * from './notifications/rules';
+export * from './notifications/sources';
+export * from './notifications/run';
