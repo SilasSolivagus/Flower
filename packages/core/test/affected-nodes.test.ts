@@ -93,7 +93,7 @@ describe('影响声明', () => {
     expect(kept.items[0]!.sourceSections).toEqual([{ key: '背景', stale: true }, { key: '现状分析', stale: false }]);
   });
 
-  it('已停用的功能点（或其上级已停用）不能声明，已声明的也不能再修改', async () => {
+  it('已停用的功能点（或其上级已停用）不能新增声明；已有声明仍可修改、移除', async () => {
     const draft = await createDocument(t.db, owner, pan, { title: '停用校验' });
     const area = await createStructureNode(t.db, owner, pan, { name: '分享域' });
     const mod = await createStructureNode(t.db, owner, pan, { parentId: area.id, name: '外链' });
@@ -103,7 +103,8 @@ describe('影响声明', () => {
     await updateStructureNode(t.db, owner, old.id, { status: 'deprecated' });
     await expect(addAffectedNode(t.db, owner, draft.id, { nodeId: old.id, changeType: 'removed' })).rejects.toMatchObject({ code: 'invalid', message: '该功能点或其上级已停用，不能声明' });
     await updateStructureNode(t.db, owner, mod.id, { status: 'deprecated' });
-    await expect(updateAffectedNode(t.db, owner, draft.id, live.id, { changeType: 'removed' })).rejects.toMatchObject({ code: 'invalid', message: '该功能点或其上级已停用，不能声明' });
+    const changed = await updateAffectedNode(t.db, owner, draft.id, live.id, { changeType: 'removed' });
+    expect(changed.items.map((i) => [i.name, i.changeType])).toEqual([['新外链', 'removed']]);
     expect((await removeAffectedNode(t.db, owner, draft.id, live.id)).items).toEqual([]);
   });
 

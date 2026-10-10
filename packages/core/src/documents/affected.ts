@@ -215,8 +215,6 @@ export async function updateAffectedNode(
     const role = await requireProductRole(tx, actor, doc.productId, 'editor');
     await assertDeclarationsEditable(tx, doc);
     const row = await loadDeclaration(tx, doc.id, nodeId);
-    const tree = await loadTree(tx, doc.productId);
-    assertNotDeprecated(tree, nodeId);
     const next = {
       changeType: input.changeType ?? row.changeType,
       sourceSections: input.sourceSections === undefined ? row.sourceSections : cleanSources(doc, await documentMarkdownTx(tx, doc), input.sourceSections, row.sourceSections),
@@ -227,6 +225,7 @@ export async function updateAffectedNode(
     ];
     if (changes.length > 0) {
       await tx.update(documentAffectedNodes).set(next).where(eq(documentAffectedNodes.id, row.id));
+      const tree = await loadTree(tx, doc.productId);
       await recordEvent(tx, {
         orgId: actor.orgId,
         productId: doc.productId,
