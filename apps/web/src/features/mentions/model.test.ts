@@ -70,7 +70,19 @@ describe('@ 的打开条件与 PRD 编辑器里的写法转换', () => {
   it('前面有反斜杠的（正文里的普通文字）与不带姓名编码的链接不换', () => {
     const href = mentionEditorHref(A, 'x');
     expect(restoreMentionMarkup(`\\[@x](${href})`)).toBe(`\\[@x](${href})`);
+    expect(restoreMentionMarkup(`C:\\\\\\[@x](${href})`)).toBe(`C:\\\\\\[@x](${href})`);
     expect(restoreMentionMarkup(`[@x](member:${A})`)).toBe(`[@x](member:${A})`);
     expect(encodeMentionsForEditor('没有 @')).toBe('没有 @');
+  });
+
+  it('前面是偶数个反斜杠（反斜杠本身，如路径 C:\\）的 @ 照常换回；读入再保存写法不变，服务端识别出成员', () => {
+    const href = mentionEditorHref(A, '张三');
+    expect(restoreMentionMarkup(`C:\\\\[@](${href})`)).toBe(`C:\\\\[@张三](member:${A})`);
+    expect(restoreMentionMarkup(`\\\\\\\\[@](${href}) 行首`)).toBe(`\\\\\\\\[@张三](member:${A}) 行首`);
+    const md = `路径 C:\\\\[@张三](member:${A}) 尾`;
+    const encoded = encodeMentionsForEditor(md);
+    expect(encoded).toBe(`路径 C:\\\\[@](${href}) 尾`);
+    expect(restoreMentionMarkup(encoded)).toBe(md);
+    expect(parseMentions(restoreMentionMarkup(encoded)).map((m) => m.memberId)).toEqual([A]);
   });
 });

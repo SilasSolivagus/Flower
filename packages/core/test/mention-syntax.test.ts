@@ -18,6 +18,11 @@ describe('@ 成员的写法', () => {
     expect(parseMentions(text).map((m) => [m.memberId, m.name])).toEqual([[A, '张三']]);
   });
 
+  it('前面是偶数个反斜杠（反斜杠本身）的照常解析，奇数个的不算', () => {
+    expect(mentionedMemberIds(`C:\\\\[@张三](member:${A})`)).toEqual([A]);
+    expect(mentionedMemberIds(`\\\\\\[@张三](member:${A})`)).toEqual([]);
+  });
+
   it('成员 ID 统一小写；同一人出现多次只算一次', () => {
     const text = `[@张三](member:${A.toUpperCase()}) 和 [@张三](member:${A}) 以及 [@李四](member:${B})`;
     expect(mentionedMemberIds(text)).toEqual([A, B]);

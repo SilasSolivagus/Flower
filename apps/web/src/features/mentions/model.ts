@@ -68,7 +68,8 @@ export function encodeMentionsForEditor(markdown: string): string {
   return out + markdown.slice(at);
 }
 
-const EDITOR_MENTION = /(?<!\\)\[@[^[\n]*\]\(member:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\?n=([0-9A-Za-z%._~-]*)\)/g;
+// 前面有奇数个反斜杠时 `[` 被转义，是普通文字；偶数个（如导出的 `C:\\`）是反斜杠本身，@ 照常换回
+const EDITOR_MENTION = /(?<=(?:^|[^\\])(?:\\\\)*)\[@[^[\n]*\]\(member:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\?n=([0-9A-Za-z%._~-]*)\)/g;
 
 /**
  * BlockNote 导出的 Markdown 里，@ 是带姓名编码的链接，链接文字还可能被转义。这里按编码换回 `[@姓名](member:ID)`，

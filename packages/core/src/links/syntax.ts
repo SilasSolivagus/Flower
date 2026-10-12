@@ -177,13 +177,20 @@ export type RichSegment = WikiSegment | { kind: 'mention'; mention: Mention };
 
 const MENTION_RE = /\[@([^[\]\n]{1,50})\]\(member:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)/g;
 
+/** start 前连续的反斜杠为奇数个时，这里的 `[` 被转义；偶数个是反斜杠本身（如 `C:\\`）。 */
+function escapedAt(text: string, start: number): boolean {
+  let n = 0;
+  while (text[start - 1 - n] === '\\') n++;
+  return n % 2 === 1;
+}
+
 /** 解析 @：围栏代码块、行内代码里的，以及前面有反斜杠转义的不算。成员 ID 统一小写。 */
 export function parseMentions(text: string): Mention[] {
   const code = codeRanges(text);
   const out: Mention[] = [];
   for (const m of text.matchAll(MENTION_RE)) {
     const start = m.index;
-    if (text[start - 1] === '\\' || code.some(([s, e]) => start >= s && start < e)) continue;
+    if (escapedAt(text, start) || code.some(([s, e]) => start >= s && start < e)) continue;
     const name = m[1]!.trim();
     if (!name) continue;
     out.push({ memberId: m[2]!.toLowerCase(), name, raw: m[0], start, end: start + m[0].length });
