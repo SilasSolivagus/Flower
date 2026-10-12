@@ -84,3 +84,4 @@ export * from './notifications/sender';
 export * from './notifications/deliveries';
 export * from './notifications/worker';
 export * from './member-notifications/subscriptions';
+export * from './member-notifications/prefs';
