@@ -2,11 +2,10 @@ import { and, eq, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { domainEvents, memberNotifications, notificationCursors, notificationDeliveries, notificationSchedules, organizations, wecomBindStates } from '../db/schema';
 import { withOrg, withSystem } from '../db/tx';
-import { notifyScheduleAlertTx } from '../member-notifications/alerts';
 import { generateMemberNotifications } from '../member-notifications/generate';
 import { deleteExpiredNotifications, retentionCutoff } from '../member-notifications/inbox';
 import { nextRunAt } from './cron';
-import { type ProcessSummary, processDueDeliveries } from './deliveries';
+import { alertAdminsTx, type ProcessSummary, processDueDeliveries } from './deliveries';
 import { generateScheduleRunTx, tryScheduleLockTx } from './run';
 import type { NotifyDeps } from './sender';
 
@@ -72,7 +71,7 @@ async function recordGenerationFailure(db: Db, orgId: string, id: string, error:
           updatedAt: now,
         })
         .where(eq(S.id, id));
-      if (s.alertState !== 'alert') await notifyScheduleAlertTx(tx, s, '定时规则或时区无效，已停用并进入告警', publicUrl, now);
+      if (s.alertState !== 'alert') await alertAdminsTx(tx, s, '定时规则或时区无效，已停用并进入告警', publicUrl, now);
       console.warn(`[notify] 定时推送的定时规则或时区无效，已停用：org=${orgId} schedule=${id}：${reason}`);
       return;
     }
@@ -88,7 +87,7 @@ async function recordGenerationFailure(db: Db, orgId: string, id: string, error:
         updatedAt: now,
       })
       .where(eq(S.id, id));
-    if (alert && s.alertState !== 'alert') await notifyScheduleAlertTx(tx, s, `连续失败 ${failures} 次，已进入告警`, publicUrl, now);
+    if (alert && s.alertState !== 'alert') await alertAdminsTx(tx, s, `连续失败 ${failures} 次，已进入告警`, publicUrl, now);
   });
 }
 

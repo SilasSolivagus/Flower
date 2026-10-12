@@ -11,6 +11,7 @@ import { type ChannelRow, readChannelConfig } from './channels';
 import { type ChannelKind, type ChannelPayload, type DeliveryKind, type DeliveryStatus, RESPONSE_MAX_CHARS } from './constants';
 import { notifyScheduleAlertTx } from '../member-notifications/alerts';
 import { resolveTemplateTx } from './message-templates';
+import type { ScheduleRow } from './schedules';
 import { type NotifyDeps, retryDelayMs, type SendOutcome, sendPayload } from './sender';
 import { CARD_LIMITS, clip, eventMessageDataTx, formatMinute, type OrgContext, orgContextTx } from './sources';
 import { payloadPreview, type RenderedMessage, renderMessage, TRUNCATED_MARK, toChannelPayloads, truncateBytes, WECOM_MARKDOWN_MAX_BYTES } from './template';
@@ -67,6 +68,18 @@ async function tryChannelLockTx(tx: Tx, channelId: string): Promise<boolean> {
 }
 
 /**
+ * 给管理员写系统告警，放在 savepoint 里：出错只回滚告警部分并记警告，调用方的结算、认领与发送结果照常提交
+ * （否则已发出的消息会因记录回滚而重发，或该组织每轮在同一处失败）。
+ */
+export async function alertAdminsTx(tx: Tx, s: ScheduleRow, body: string, publicUrl: string, now: Date): Promise<void> {
+  try {
+    await tx.transaction((sp) => notifyScheduleAlertTx(sp, s, body, publicUrl, now));
+  } catch (e) {
+    console.warn(`[notify] 系统告警通知写入失败，本次不通知管理员：org=${s.orgId} schedule=${s.id}：${errorText(e)}`);
+  }
+}
+
+/**
  * 定时推送一次执行的结果：任一条成功 → 清零、解除告警、记 last_success_at（执行时间）、摘要条目已消费；
  * 同一次的记录全部放弃 → 连续失败加一、达到阈值告警、摘要条目释放。
  * 先锁定时推送行：同一次执行的几条记录在不同事务里结束时，按顺序判断「是否全部放弃」。
@@ -95,7 +108,7 @@ async function settleRunTx(tx: Tx, d: DeliveryRow, now: Date, outcome: 'sent' | 
     .update(notificationSchedules)
     .set({ consecutiveFailures: failures, alertState: alert ? 'alert' : s.alertState, updatedAt: now })
     .where(eq(notificationSchedules.id, s.id));
-  if (alert && s.alertState !== 'alert') await notifyScheduleAlertTx(tx, s, `连续失败 ${failures} 次，已进入告警`, publicUrl, now);
+  if (alert && s.alertState !== 'alert') await alertAdminsTx(tx, s, `连续失败 ${failures} 次，已进入告警`, publicUrl, now);
   await tx.update(notificationDigestItems).set({ runId: null }).where(and(eq(notificationDigestItems.runId, d.runId), isNull(notificationDigestItems.consumedAt)));
 }
 
