@@ -21,6 +21,8 @@ import { InvitationsTab } from './invitations-tab';
 import { InviteDialog } from './invite-dialog';
 import { MemberDrawer } from './member-drawer';
 import { PlaceholderDialog } from './placeholder-dialog';
+import { WecomImportDialog } from './wecom-import-dialog';
+import { WecomUseridDialog } from './wecom-dialog';
 
 const KIND_STYLE = {
   account: 'bg-accent text-accent-foreground',
@@ -38,6 +40,8 @@ function MembersPage() {
   const [selected, setSelected] = useState<Member | null>(null);
   const [inviting, setInviting] = useState<{ open: boolean; bindTo: Member | null }>({ open: false, bindTo: null });
   const [placeholder, setPlaceholder] = useState(false);
+  const [wecomFor, setWecomFor] = useState<Member | null>(null);
+  const [importing, setImporting] = useState(false);
   const tagById = new Map((tags.data ?? []).map((t) => [t.id, t]));
   const rows = filterMembers(members.data ?? [], filter);
   const pending = (invitations.data ?? []).filter((i) => invitationState(i) === 'pending').length;
@@ -50,6 +54,9 @@ function MembersPage() {
         description="无账号成员也可以被指派为提出人或负责人，之后发送邀请即可关联账号。"
         actions={
           <>
+            <Button variant="outline" onClick={() => setImporting(true)}>
+              导入企业微信账号
+            </Button>
             <Button variant="outline" onClick={() => setPlaceholder(true)}>
               登记无账号成员
             </Button>
@@ -113,6 +120,7 @@ function MembersPage() {
                     <TableHead>类型</TableHead>
                     <TableHead>组织角色</TableHead>
                     <TableHead>职能</TableHead>
+                    <TableHead>企业微信账号</TableHead>
                     <TableHead>状态</TableHead>
                     <TableHead className="w-20" />
                   </TableRow>
@@ -147,6 +155,16 @@ function MembersPage() {
                                 </span>
                               ) : null;
                             })}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <span className={m.wecomUserid ? 'font-mono text-[13px]' : 'text-muted-foreground'}>{m.wecomUserid ?? '—'}</span>
+                            {m.kind === 'human' && (
+                              <Button variant="ghost" size="sm" className="h-7 px-2" aria-label={`修改${m.displayName}的企业微信账号`} onClick={() => setWecomFor(m)}>
+                                修改
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell className={m.status === 'left' ? 'text-muted-foreground' : 'text-emerald-700 dark:text-emerald-400'}>
@@ -189,6 +207,8 @@ function MembersPage() {
         onOpenChange={(v) => setInviting({ open: v, bindTo: v ? inviting.bindTo : null })}
       />
       <PlaceholderDialog org={org} open={placeholder} onOpenChange={setPlaceholder} />
+      {wecomFor && <WecomUseridDialog key={wecomFor.id} org={org} member={wecomFor} onClose={() => setWecomFor(null)} />}
+      {importing && <WecomImportDialog org={org} onClose={() => setImporting(false)} />}
     </>
   );
 }
