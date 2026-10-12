@@ -42,6 +42,7 @@ export function RuleDialog({ org, productId, rule, onClose }: { org: string; pro
   const channelOptions = [...(channels.data ?? []), ...(rule?.channels ?? []).filter((c) => !(channels.data ?? []).some((x) => x.id === c.id))];
   const digests = (schedules.data ?? []).filter((s) => s.source === 'digest');
   const priorityField = fields.data?.find((f) => f.key === 'priority');
+  const digestMissing = mode === 'digest' && digestScheduleId === NONE;
   // 推送方式与通道都没改时不提交通道，已停用的通道不妨碍修改其他字段
   const targetChanged = !rule || mode !== rule.mode || digestScheduleId !== (rule.digestScheduleId ?? NONE) || [...channelIds].sort().join() !== [...rule.channelIds].sort().join();
   const body = {
@@ -137,6 +138,7 @@ export function RuleDialog({ org, productId, rule, onClose }: { org: string; pro
                   ))}
                 </SelectContent>
               </Select>
+              {digestMissing && <p className="text-xs text-muted-foreground">选择摘要定时推送后才能保存</p>}
             </div>
           )}
           <div className="flex flex-col gap-3 rounded-md border p-3">
@@ -163,7 +165,7 @@ export function RuleDialog({ org, productId, rule, onClose }: { org: string; pro
             <Button type="button" variant="outline" onClick={onClose}>
               取消
             </Button>
-            <Button type="submit" disabled={save.isPending}>
+            <Button type="submit" disabled={save.isPending || digestMissing}>
               保存
             </Button>
           </DialogFooter>
