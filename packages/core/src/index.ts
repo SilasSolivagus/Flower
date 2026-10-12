@@ -83,3 +83,4 @@ export * from './notifications/run';
 export * from './notifications/sender';
 export * from './notifications/deliveries';
 export * from './notifications/worker';
+export * from './member-notifications/subscriptions';
