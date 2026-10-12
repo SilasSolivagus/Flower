@@ -9,6 +9,7 @@ import { AppError } from '../errors';
 import { recordEvent } from '../events';
 import { type LinkCard, linkCardsFor, sourceKey } from '../links/cards';
 import { syncSourceLinks } from '../links/links';
+import { mentionedMemberIds } from '../links/syntax';
 import { memberNames } from '../requirements/context';
 import { type MemberRef, productKeyOf } from '../requirements/requirements';
 import type { TextAnchor } from './constants';
@@ -110,7 +111,7 @@ export async function addDocumentComment(
       subjectType: 'document',
       subjectId: documentId,
       actor,
-      payload: { commentId: row!.id, anchored: anchor !== null },
+      payload: { commentId: row!.id, anchored: anchor !== null, mentionedMemberIds: mentionedMemberIds(body) },
     });
     return (await views(tx, actor, [row!]))[0]!;
   });

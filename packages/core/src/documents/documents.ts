@@ -7,6 +7,7 @@ import type { Actor, ProductRole } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
 import { recordEvent } from '../events';
 import { relinkDangling, syncSourceLinks } from '../links/links';
+import { newMentionIds } from '../links/syntax';
 import { assertAssignableMember, memberNames } from '../requirements/context';
 import type { CheckItemView } from '../requirements/check-views';
 import { assertTitle, productKeyOf, displayKey as requirementDisplayKey, type MemberRef } from '../requirements/requirements';
@@ -310,7 +311,7 @@ export async function createDocument(
       subjectType: 'document',
       subjectId: doc.id,
       actor,
-      payload: { number: doc.number, title, source: doc.source, externalUrl: doc.externalUrl, templateId },
+      payload: { number: doc.number, title, source: doc.source, externalUrl: doc.externalUrl, templateId, ownerMemberId: doc.ownerMemberId },
     });
     await relinkDangling(tx, { type: 'document', id: doc.id, texts: [documentDisplayKey(await productKeyOf(tx, productId), doc.number)], withSections: true });
     if (input.requirementIds?.length) await linkRequirementsTx(tx, actor, doc.id, input.requirementIds);
@@ -411,6 +412,7 @@ export async function saveDocumentContent(db: Db, actor: Actor, id: string, inpu
     if (doc.source !== 'native') throw new AppError('invalid', '外部 PRD 没有正文，请先转为 Flower 文档');
     assertBaseVersion(doc, input.baseVersion);
     const title = input.title === undefined ? doc.title : assertTitle(input.title);
+    const previous = await documentMarkdownTx(tx, doc);
     const rev = await writeRevision(tx, actor, doc, { title, markdown }, { summary: null, allowMerge: true });
     const version = doc.version + 1;
     await tx.update(documents).set({ title, version, currentRevisionId: rev.id, updatedAt: new Date() }).where(eq(documents.id, id));
@@ -423,7 +425,12 @@ export async function saveDocumentContent(db: Db, actor: Actor, id: string, inpu
       subjectType: 'document',
       subjectId: id,
       actor,
-      payload: { revision: rev.number, merged: rev.merged, changes: title === doc.title ? [] : [{ field: 'title', old: doc.title, new: title }] },
+      payload: {
+        revision: rev.number,
+        merged: rev.merged,
+        changes: title === doc.title ? [] : [{ field: 'title', old: doc.title, new: title }],
+        mentionedMemberIds: newMentionIds(previous, markdown),
+      },
     });
     return { version, revisionNumber: rev.number, merged: rev.merged };
   });

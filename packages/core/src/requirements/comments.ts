@@ -9,6 +9,7 @@ import { AppError } from '../errors';
 import { recordEvent } from '../events';
 import { type LinkCard, linkCardsFor, sourceKey } from '../links/cards';
 import { syncSourceLinks } from '../links/links';
+import { mentionedMemberIds } from '../links/syntax';
 import { loadRequirement, memberNames } from './context';
 import { type MemberRef, productKeyOf } from './requirements';
 
@@ -80,7 +81,7 @@ export async function addRequirementComment(
       subjectType: 'requirement',
       subjectId: requirementId,
       actor,
-      payload: { commentId: row!.id, kind: row!.kind },
+      payload: { commentId: row!.id, kind: row!.kind, mentionedMemberIds: mentionedMemberIds(body) },
     });
     const names = await memberNames(tx, [actor.memberId]);
     const cards = await linkCardsFor(tx, actor, [{ type: 'comment', id: row!.id }]);
