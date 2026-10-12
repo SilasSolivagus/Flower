@@ -276,8 +276,8 @@ export function clip(text: string, max: number): string {
   return chars.length <= max ? text : `${chars.slice(0, Math.max(0, max - 1)).join('')}…`;
 }
 
-/** 企微文本通知卡片的建议长度：主标题 26、辅助信息 30、关键数据 10 / 说明 15。 */
-export const CARD_LIMITS = { title: 26, desc: 30, emphasisTitle: 10, emphasisDesc: 15 } as const;
+/** 企微文本通知卡片的建议长度：主标题 26、辅助信息 30、关键数据 10 / 说明 15；引用区每行 40。 */
+export const CARD_LIMITS = { title: 26, desc: 30, emphasisTitle: 10, emphasisDesc: 15, quoteLine: 40 } as const;
 
 /** 「{前缀} · YYYY-MM-DD」：前缀（产品名或自定义标题，用户可改）按剩余长度截断。 */
 const cardTitle = (prefix: string, date: string): string => {
@@ -328,7 +328,7 @@ export async function overviewCardDataTx(tx: Tx, s: ScheduleRow, ctx: OrgContext
   const release = releaseText(it.endDate, today);
   const desc = `${clip(it.name, CARD_LIMITS.desc - ` · ${release}`.length)} · ${release}`;
   const ganttUrl = `${ctx.base}/iterations/${it.id}?tab=gantt`;
-  const attention = overview.attention.slice(0, 3).map((a) => [a.title, a.assignees.join('、'), a.note].filter(Boolean).join(' · '));
+  const attention = overview.attention.slice(0, 3).map((a) => clip([a.title, a.assignees.join('、'), a.note].filter(Boolean).join(' · '), CARD_LIMITS.quoteLine));
   return {
     title,
     desc,

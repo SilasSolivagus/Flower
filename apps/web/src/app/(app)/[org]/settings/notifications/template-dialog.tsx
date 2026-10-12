@@ -48,6 +48,7 @@ export function TemplateDialog({ org, template, onClose }: { org: string; templa
             <DialogTitle>{template ? `修改模板「${template.name}」` : '新建模板'}</DialogTitle>
             <DialogDescription>
               变量写作 {'{{path}}'}，如 {'{{subject.title}}'}；{'{{#list}}…{{/list}}'} 按列表重复，{'{{^x}}…{{/x}}'} 在为空时显示。缺少的字段显示为空。
+              <span className="block">模板卡片里，值恰好是一个 {'{{变量}}'} 时按数据原样插入（可以是对象或列表）；取到的值为空（null）时去掉这个键。</span>
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">

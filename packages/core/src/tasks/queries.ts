@@ -66,10 +66,6 @@ export async function getTaskByKey(db: Db, actor: Actor, key: string, opts: { to
 
 const byPlanStart = [sql`${tasks.planStart} asc nulls last`, asc(tasks.createdAt)] as const;
 
-/**
- * 迭代里指定产品的任务（重点在前、其余按开始日期）与迭代概览。甘特页与推送的概览卡片共用，
- * 保证两处的整体进度同一口径。actor 为空（后台推送）时任务的 canEdit 为 false。
- */
 /** 任务 → 概览的输入：有需求时行标题为「编号 标题」。 */
 export const overviewTaskOf = (v: TaskView): OverviewTask => ({
   status: v.status,
@@ -84,6 +80,10 @@ export const overviewTaskOf = (v: TaskView): OverviewTask => ({
   assigneeName: v.assignee?.displayName ?? null,
 });
 
+/**
+ * 迭代里指定产品的任务（重点在前、其余按开始日期）与迭代概览。甘特页与推送的概览卡片共用，
+ * 保证两处的整体进度同一口径。actor 为空（后台推送）时任务的 canEdit 为 false。
+ */
 export async function iterationTasksOverviewTx(
   tx: Tx,
   actor: Actor | null,
