@@ -93,6 +93,21 @@ describe('推送配置迁移', () => {
   });
 });
 
+describe('推送日志脱敏', () => {
+  it('日志内容与错误信息里的 webhook key 只保留末 4 位', () => {
+    const data = withPushConfig();
+    data.push.pushLogs[0]!.content = '发送到 https://qyapi.example.com/cgi-bin/webhook/send?key=abcd-1234-efgh-5678 完成';
+    data.push.pushLogs[1]!.status = 'error';
+    data.push.pushLogs[1]!.error = 'POST https://qyapi.example.com/cgi-bin/webhook/send?debug=1&key=zzzz-9999-wxyz 超时';
+    const plan = buildImportPlan(data, reviewedMapping(), OPTS);
+    const [a, b] = plan.rows.notificationDeliveries;
+    expect(JSON.stringify(plan.rows.notificationDeliveries)).not.toMatch(/abcd-1234|zzzz-9999/);
+    expect(a!.payload).toEqual({ type: 'legacy', content: '发送到 https://qyapi.example.com/cgi-bin/webhook/send?key=****5678 完成' });
+    expect(b!.response).toBe('POST https://qyapi.example.com/cgi-bin/webhook/send?debug=1&key=****wxyz 超时');
+    expect(b!.status).toBe('dead');
+  });
+});
+
 describe('推送配置迁移：内网或本机地址', () => {
   afterEach(() => vi.unstubAllEnvs());
 

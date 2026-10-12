@@ -8,6 +8,11 @@ const PLANE_DEFAULT_DIGEST = ['09:00', '12:00', '18:00'];
 /** 时间表为空（已停用）时给定时推送的占位 cron；推送本身是停用的。 */
 const DISABLED_DIGEST_CRON = '0 18 * * *';
 
+/** 旧推送日志里出现的 webhook 地址只保留 key 末 4 位，与通道的脱敏提示一致。 */
+export function maskWebhookKeys(text: string): string {
+  return text.replace(/([?&]key=)([^&\s"'<>]+)/gi, (_m, prefix: string, key: string) => `${prefix}****${key.slice(-4)}`);
+}
+
 /** 时间表里的一项是否为有效的 H:MM / HH:MM 时间。 */
 function isDigestTime(t: string): boolean {
   const m = t.match(/^(\d{1,2}):(\d{2})$/);
@@ -148,10 +153,10 @@ export function buildNotifications(ctx: PlanContext): void {
       kind: 'schedule',
       scheduleId,
       channelId,
-      payload: { type: 'legacy', content: l.content },
+      payload: { type: 'legacy', content: maskWebhookKeys(l.content) },
       status: sent ? 'sent' : 'dead',
       attempts: 1,
-      response: l.error,
+      response: l.error === null ? null : maskWebhookKeys(l.error),
       sentAt: sent ? at : null,
       createdAt: at,
       legacyKey: `push_logs:${l.id}`,
