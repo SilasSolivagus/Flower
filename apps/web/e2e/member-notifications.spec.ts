@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { createProduct, createRequirement, expectNoPageOverflow, login, memberRequest, ok, setupInstance, tick } from './helpers';
+import { createDocument, createProduct, createRequirement, expectNoPageOverflow, json, login, memberRequest, ok, OWNER, setupInstance, tick } from './helpers';
 
 const mention = (id: string, name: string) => `[@${name}](member:${id})`;
 
@@ -70,5 +70,37 @@ test('通知页：加载更多；按类型与已读状态筛选；点击跳转�
   await page.getByRole('button', { name: /^通知，/ }).click();
   await expect(page.getByRole('dialog', { name: '通知' })).toBeVisible();
   await expectNoPageOverflow(page);
+  await zhang.ctx.dispose();
+});
+
+test('关注按钮：手动关注后收到别人的评论；打开详情时通知标为已读；取消关注后不再收到；PRD 详情也有关注按钮', async ({ page, request }) => {
+  await resetDatabase();
+  await setupInstance(request);
+  const productId = await createProduct(request);
+  const req = await createRequirement(request, productId, '登录页改版');
+  const doc = await createDocument(request, productId, { title: '登录 PRD' });
+  const zhang = await memberRequest(request, { email: 'zhang@example.com', name: '张三' });
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/requirements/${req.displayKey}`);
+  await page.getByRole('button', { name: '关注', exact: true }).click();
+  await expect(page.getByRole('button', { name: '已关注' })).toHaveAttribute('title', '你手动关注了');
+
+  await ok(zhang.ctx.post(`/api/v1/orgs/acme/requirements/${req.id}/comments`, { data: { body: '我来看看' } }));
+  await tick(request);
+  const mine = () => json<{ notifications: Array<{ body: string; readAt: string | null }> }>(request.get('/api/v1/orgs/acme/notifications'));
+  expect((await mine()).notifications.map((n) => n.body)).toEqual(['发表了评论：我来看看']);
+  await page.reload();
+  await expect(page.getByRole('button', { name: '已关注' })).toBeVisible();
+  await expect.poll(async () => (await mine()).notifications[0]!.readAt).not.toBeNull();
+
+  await page.getByRole('button', { name: '已关注' }).click();
+  await expect(page.getByRole('button', { name: '关注', exact: true })).toBeVisible();
+  await ok(zhang.ctx.post(`/api/v1/orgs/acme/requirements/${req.id}/comments`, { data: { body: '第二条' } }));
+  await tick(request);
+  expect((await mine()).notifications).toHaveLength(1);
+
+  await page.goto(`/acme/documents/${doc.displayKey}`);
+  await page.getByRole('button', { name: '关注', exact: true }).click();
+  await expect(page.getByRole('button', { name: '已关注' })).toBeVisible();
   await zhang.ctx.dispose();
 });

@@ -4,10 +4,12 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import { Suspense, useRef, useState } from 'react';
 import { Backlinks } from '@/components/backlinks';
 import { EditableTitle } from '@/components/editable-title';
+import { FollowButton } from '@/components/follow-button';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { moduleDocsHref } from '@/features/documents/model';
+import { useMarkNotificationsRead } from '@/features/member-notifications/use-mark-read';
 import { api } from '@/lib/api';
 import { documentKeys, useApiMutation, useDocument } from '@/lib/queries';
 import type { DocumentDetail } from '@/lib/types';
@@ -26,6 +28,7 @@ function DocumentPage() {
   const searchParams = useSearchParams();
   const q = useDocument(org, decodeURIComponent(key));
   const d = q.data;
+  useMarkNotificationsRead(org, 'document', d?.id);
   const editor = useRef<EditorPaneHandle>(null);
   const [converting, setConverting] = useState(false);
   // 正文被外部替换（冲突后重新加载、恢复版本、导入）时加一，让编辑器按最新正文重新挂载
@@ -67,6 +70,7 @@ function DocumentPage() {
       <PageHeader
         crumbs={[{ label: '文档', href: d.kind === 'module' ? moduleDocsHref(org, d.productKey, d.node?.id) : `/${org}/documents?product=${d.productKey}` }, { label: d.displayKey }]}
         title={<EditableTitle displayKey={d.displayKey} title={d.title} canEdit={canEdit} onSubmit={(title, close) => patch.mutate({ title }, { onSuccess: close })} />}
+        actions={<FollowButton org={org} type="document" id={d.id} />}
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-w-0 flex-col gap-4">
