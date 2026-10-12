@@ -50,6 +50,18 @@ ATT_URL="$(curl -fs -b "$JAR" -F "file=@$PNG;filename=smoke.png" "$BASE/orgs/smo
 rm -f "$PNG"
 curl -fs -b "$JAR" -o /dev/null "http://localhost:3900$ATT_URL"
 
+echo "4d. 看板图片：字体与 satori、resvg（原生模块 musl 版）在镜像内可用"
+# Next 把 serverExternalPackages 以带哈希的别名放在 .next/node_modules 下，按前缀查找
+docker compose exec -T flower node -e "
+const fs = require('fs');
+const dir = '/app/apps/web/.next/node_modules/';
+const { Resvg } = require(dir + '@resvg/' + fs.readdirSync(dir + '@resvg').find((n) => n.startsWith('resvg-js')));
+const satori = require(dir + fs.readdirSync(dir).find((n) => n.startsWith('satori'))).default;
+const font = (f, weight) => ({ name: 'Noto Sans SC', data: fs.readFileSync(process.env.FLOWER_FONT_DIR + '/' + f), weight, style: 'normal' });
+satori({ type: 'div', props: { style: { display: 'flex', fontSize: 32 }, children: '看板图片 100%' } }, { width: 400, height: 80, fonts: [font('NotoSansSC-Regular.otf', 400), font('NotoSansSC-Bold.otf', 700)] })
+  .then((svg) => { if (new Resvg(svg).render().asPng().length < 100) process.exit(1); });
+"
+
 echo "5. 重启后数据仍在，迁移可重复执行"
 docker compose up -d --force-recreate --wait flower >/dev/null
 curl -fs "$BASE/setup/status" | grep -q '"initialized":true'

@@ -8,5 +8,7 @@ export default defineConfig({
     globalSetup: ['../../packages/core/test/global-setup.ts'],
     testTimeout: 20_000,
     hookTimeout: 60_000,
+    // 推送通道测试用 127.0.0.1 假接收端，跳过真实网址的内网检查（packages/core/test/notify-helpers.ts 同样处理）。
+    env: { FLOWER_NOTIFY_ALLOW_PRIVATE: '1' },
   },
 });

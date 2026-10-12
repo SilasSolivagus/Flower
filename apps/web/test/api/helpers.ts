@@ -1,14 +1,22 @@
 import { mkdtempSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createLocalStorage } from '@flower/core';
+import { createLocalStorage, defaultTransport, type Transport } from '@flower/core';
 import { createTestDb } from '@flower/core/testing';
 import { type App, createApi } from '@/server/api';
 
-export async function makeApp(): Promise<{ app: App; cleanup: () => Promise<void> }> {
+/** 接口测试用的应用。推送默认用真实发送器，测试里的通道地址一律指向本机假接收端（test/fake-webhook.ts）。 */
+export async function makeApp(opts: { transport?: Transport; tickApi?: boolean } = {}): Promise<{ app: App; cleanup: () => Promise<void> }> {
   const t = await createTestDb();
   const storage = createLocalStorage(mkdtempSync(path.join(os.tmpdir(), 'flower-api-storage-')));
-  const app = createApi({ db: t.db, secureCookies: false, publicUrl: 'http://localhost:3000', storage });
+  const app = createApi({
+    db: t.db,
+    secureCookies: false,
+    publicUrl: 'http://localhost:3000',
+    storage,
+    notify: { secretKey: 'api-test-secret-api-test-secret-0001', publicUrl: 'http://localhost:3000', transport: opts.transport ?? defaultTransport },
+    tickApi: opts.tickApi ?? false,
+  });
   return { app, cleanup: t.cleanup };
 }
 

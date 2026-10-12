@@ -8,6 +8,7 @@ import type {
   AffectedNodes,
   BacklinkGroup,
   BacklinkTargetType,
+  ChannelOption,
   DocumentComment,
   DocumentDetail,
   DocumentListItem,
@@ -30,8 +31,13 @@ import type {
   MemberTasks,
   MergePlan,
   MergeRecord,
+  MessageTemplate,
   ModuleDocumentTree,
   MyOrg,
+  NotificationChannel,
+  NotificationDelivery,
+  NotificationRule,
+  NotificationSchedule,
   Org,
   OrgMe,
   Product,
@@ -95,6 +101,12 @@ export const qk = {
   documentLinks: (o: string, id: string) => ['org', o, 'links', 'document', id] as const,
   linkSearch: (o: string, productId: string, q: string) => ['org', o, 'links', 'search', productId, q] as const,
   task: (o: string, key: string) => ['org', o, 'tasks', 'detail', key] as const,
+  notificationChannels: (o: string) => ['org', o, 'notify', 'channels'] as const,
+  productChannels: (o: string, productId: string) => ['org', o, 'notify', 'product-channels', productId] as const,
+  messageTemplates: (o: string) => ['org', o, 'notify', 'templates'] as const,
+  notificationRules: (o: string, productId: string) => ['org', o, 'notify', 'rules', productId] as const,
+  notificationSchedules: (o: string, productId: string) => ['org', o, 'notify', 'schedules', productId] as const,
+  notificationDeliveries: (o: string, query: string) => ['org', o, 'notify', 'deliveries', query] as const,
 };
 
 export const useSetupStatus = () => useQuery({ queryKey: qk.setup, queryFn: () => api<InstanceStatus>('/setup/status') });
@@ -323,6 +335,40 @@ export const useLinkSearch = (o: string, productId: string, q: string, enabled: 
   });
 export const useTask = (o: string, key: string) =>
   useQuery({ queryKey: qk.task(o, key), queryFn: () => api<{ task: TaskDetail }>(`/orgs/${o}/tasks/${encodeURIComponent(key)}`), select: (d) => d.task });
+
+/** 推送相关查询的公共前缀：通道、模板、规则、定时推送或发送记录变化后统一失效。 */
+export const notifyKeys = (o: string) => ['org', o, 'notify'] as const;
+
+export const useNotificationChannels = (o: string) =>
+  useQuery({ queryKey: qk.notificationChannels(o), queryFn: () => api<{ channels: NotificationChannel[] }>(`/orgs/${o}/notification-channels`), select: (d) => d.channels });
+export const useProductChannels = (o: string, productId: string) =>
+  useQuery({
+    queryKey: qk.productChannels(o, productId),
+    queryFn: () => api<{ channels: ChannelOption[] }>(`/orgs/${o}/products/${productId}/notification-channels`),
+    select: (d) => d.channels,
+    enabled: !!productId,
+  });
+export const useMessageTemplates = (o: string) =>
+  useQuery({ queryKey: qk.messageTemplates(o), queryFn: () => api<{ templates: MessageTemplate[] }>(`/orgs/${o}/message-templates`), select: (d) => d.templates });
+export const useNotificationRules = (o: string, productId: string) =>
+  useQuery({
+    queryKey: qk.notificationRules(o, productId),
+    queryFn: () => api<{ rules: NotificationRule[] }>(`/orgs/${o}/products/${productId}/notification-rules`),
+    select: (d) => d.rules,
+  });
+/** productId 为空时列出全部（组织管理员）。 */
+export const useNotificationSchedules = (o: string, productId?: string) =>
+  useQuery({
+    queryKey: qk.notificationSchedules(o, productId ?? ''),
+    queryFn: () => api<{ schedules: NotificationSchedule[] }>(`/orgs/${o}/notification-schedules${productId ? `?product=${productId}` : ''}`),
+    select: (d) => d.schedules,
+  });
+export const useNotificationDeliveries = (o: string, query: string) =>
+  useQuery({
+    queryKey: qk.notificationDeliveries(o, query),
+    queryFn: () => api<{ deliveries: NotificationDelivery[]; nextCursor: string | null }>(`/orgs/${o}/notification-deliveries${query ? `?${query}` : ''}`),
+    placeholderData: keepPreviousData,
+  });
 
 type MutationOptions<TData, TVars> = {
   invalidate?: ReadonlyArray<readonly unknown[]>;

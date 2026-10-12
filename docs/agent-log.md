@@ -20,6 +20,29 @@
 
 ## 记录
 
+### 2026-10-12 · 云端 · PR #15 审查：发送时按解析出的 IP 拦截内网地址
+- 分支 / PR：`feat/p3a-notifications`，PR #15
+- 做了什么：审查 P3-A（租户隔离、密钥、SSRF、权限、发送管道、迁移、页面导入、字体脚本）。阻塞问题一个：内网地址检查只看字面量，公网域名解析到内网（或 Docker 内的 `postgres`、`flower` 这类单段主机名）可以绕过，测试消息还会把响应体返回给组织管理员。改为 `defaultTransport` 用 http(s).request + 自定义 lookup，解析后逐个地址检查、直连检查过的 IP，不跟随重定向，响应体最多读 64 KB；SMTP 先解析检查再直连该 IP，TLS 用原主机名（servername）校验证书。新增 `packages/core/test/notify-sender.test.ts`。`docs/handoff.md` 把「只发一次」改为「至少一次投递」的准确说法。
+- 怎么验证的：新测试在原代码上失败（请求照常发往解析到本机的地址），修改后通过；`pnpm typecheck`、web lint、`pnpm test` 通过。
+- 留给对方：非阻塞项见 PR #15 的审查汇总（「新需求」时间窗可能漏掉提交较晚的需求、无可用通道不计入连续失败告警、字体下载地址未固定到提交、迁移来的推送日志 response 未脱敏等），是否处理由用户决定。
+
+### 2026-10-12 · 本地 · P3-A 推送（通道、事件规则、定时推送、模板与发送记录、迁移）
+- 分支 / PR：`feat/p3a-notifications`
+- 做了什么：
+  - 数据模型：notification_channels、message_templates、notification_schedules、notification_rules、notification_digest_items、notification_deliveries（均开 RLS）。
+  - 通道配置 AES-256-GCM 加密（密钥由 FLOWER_SECRET_KEY 经 HKDF 派生，v1 密文），接口只返回脱敏提示；保存与发送前都检查内网与本机地址（FLOWER_NOTIFY_ALLOW_PRIVATE=1 时放行，只用于测试与内网自部署）。
+  - 事件规则在领域事件写入的同一事务内匹配（子事务隔离，出错只记警告），写待发记录或摘要条目；定时推送按 5 段 cron 与时区执行（cron-parser 5.10.2），内容来源概览卡片、新需求、变更摘要。
+  - 后台循环随应用启动（FLOWER_NOTIFY_WORKER=off 关闭）：SKIP LOCKED 与按写入时钟计算的租约保证同一条只发一次，按通道限流，30 秒 / 2 分钟 / 10 分钟 / 1 小时重试，执行结果与告警；测试与端到端用 tick 接口驱动（FLOWER_NOTIFY_TICK_API=1）。
+  - 设计 §9：按企微能力重新设计预置版式，新增 markdown_v2 格式；概览卡片可附带看板图片（satori + resvg 服务端生成，思源黑体由 `scripts/fetch-fonts.sh` 下载，不入库）。
+  - 页面：组织设置「推送」（通道、定时推送、消息模板、发送记录），产品设置「推送」页签（事件规则、本产品定时推送）。
+  - 迁移：push 群 / 推送计划 / 推送日志与 123plane 企微地址、摘要时间表、SMTP；通道全部停用。
+  - CLAUDE.md：withSystem 增加「推送后台循环查出有待办的组织 id」；后台与系统写入不记事件；浏览器安全引用增加 `@flower/core/notifications`。`.dockerignore` 排除 `.local-data` 与 `.superpowers`。
+- 怎么验证的：
+  - `pnpm test`：core 507、web 189、migrate 122，全部通过；typecheck 通过；web lint 0 错误 0 警告；全量 e2e 133 通过、1 跳过（`editor-perf.spec.ts`）；`./scripts/smoke.sh` 通过（含镜像内生成看板图片）。
+  - pan123 用 `--replace` 重导（用户同意）：通道 5 个全部停用、定时推送 4 个、发送记录 115 条、配置全部加密。
+  - 1440px 与 760px 界面复验与测试群联调四次发送（每次经用户确认，均 errcode 0），详见 `docs/p3a-validation.md`。
+- 留给对方：无
+
 ### 2026-10-10 · 本地 · P2-B2 模块文档、影响声明与人工合入
 - 分支 / PR：`feat/p2b2-module-docs`，PR #14
 - 做了什么：

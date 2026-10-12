@@ -1,6 +1,6 @@
 # Flower 交接文档
 
-更新：2026-10-09。新会话接手时先读这份，再读下面列出的 spec 和计划。最近谁做了什么，看 `docs/agent-log.md`。
+更新：2026-10-12。新会话接手时先读这份，再读下面列出的 spec 和计划。最近谁做了什么，看 `docs/agent-log.md`。
 
 ## 项目是什么
 
@@ -34,6 +34,9 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
 | `docs/superpowers/specs/2026-10-09-flower-p2b2-module-docs-design.md` | P2-B2 设计（模块文档、影响声明与人工合入，已确认） |
 | `docs/superpowers/plans/2026-10-09-flower-p2b2-module-docs.md` | P2-B2 计划 |
 | `docs/p2b2-validation.md` | P2-B2 真实数据验证记录与人工验收清单 |
+| `docs/superpowers/specs/2026-10-10-flower-p3a-notifications-design.md` | P3-A 设计（推送，已确认；§9 为企微消息版式与看板图片补充） |
+| `docs/superpowers/plans/2026-10-10-flower-p3a-notifications.md` | P3-A 计划（Task 1–18；§9 的实现在计划之外按控制方简报完成） |
+| `docs/p3a-validation.md` | P3-A 真实数据验证、测试群联调记录与人工验收清单 |
 | `docs/story-map/flower-story-map.html` | 用户故事地图（在线版：https://claude.ai/artifact/TsrYHNpBZ2TLc6uq6suadu） |
 | 视觉样稿 | https://claude.ai/artifact/DgxTagCVRUGsKbvZSm9XPL （最上面一行"定稿"：A 配色 + C 密度） |
 | `docs/diagrams/` | 服务器现状图、目标架构草案 |
@@ -76,20 +79,32 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
   - 补号迁移（只读核对，未重导）：任务 377 个，编号 1..377 连续不重复，顺序与 `(created_at, id)` 排序 0 处不符，`task_seq` 377；常规迭代 11 个互不重名。详见 `docs/p2b1-validation.md`。
   - 迁移 0011 建「同一产品内迭代名称唯一」索引前，会把同一产品内未删除的常规迭代中重名的按 `(created_at, id)` 排序，第 2 个起改名为「名称（N）」（N 从 2 起取未被占用的最小值）；已删除的迭代和专项迭代不动。
 
-- **P2-B2 模块文档、影响声明与人工合入：已完成，待合并**（分支 `feat/p2b2-module-docs`）。
+- **P2-B2 模块文档、影响声明与人工合入：已完成，已合并（PR #14）**。
   - 模块文档（每个模块最多一份、按功能点分节的 markdown，与变更 PRD 共用编辑器、修订、链接与评论；归档只读、可恢复）。
   - 影响声明（PRD 侧栏「影响的功能点」，来源小节与失效提示，声明时产品编辑可当场新建模块与功能点；PRD 开始合入后锁定）。
   - 合入页（按模块分组逐个应用 / 跳过 / 撤销，版本冲突提示刷新；全部处理完 PRD 变为已合入并同步需求上的「PRD」检查项）。
   - 修订带合入来源、模块文档有合入记录；功能点改名同步模块文档小节标题；`[[ ]]` 节点链接指向模块文档（功能点带小节）。
   - 迁移核对结果（Task 14，只读）：迁移前深度 1 节点（业务域）23 个、文档 204 份（node_id 均未设置）；迁移后 `document_affected_nodes` RLS 已开启（0 行）、`documents_module_node` 唯一索引与 `documents_kind_node` 检查约束已建立，pan123 文档数仍为 204。详见 `docs/p2b2-validation.md`。
 
+- **P3-A 推送：已完成，待合并**（分支 `feat/p3a-notifications`）。
+  - 通道：企微机器人、Webhook（HMAC 签名）、邮件；配置 AES-256-GCM 加密，界面与接口只返回脱敏提示；保存与发送前都检查内网地址，发送时对解析出的 IP 再检查并直连该 IP（防止公网域名解析到内网）。
+  - 消息模板：四个预置模板（事件推送、新需求、变更摘要、概览卡片），按企微能力重新设计版式；自建模板支持 text、markdown、markdown_v2、模板卡片、邮件。
+  - 事件规则：领域事件写入的同一事务内匹配，即时推送或并入变更摘要，可按状态、优先级、节点、文档状态、字段过滤；匹配出错不影响业务写入。
+  - 定时推送：5 段 cron 与时区；概览卡片（可附带服务端生成的看板图片）、新需求、变更摘要；立即执行；连续失败告警。
+  - 发送：进程内后台循环（FLOWER_NOTIFY_WORKER=off 关闭），SKIP LOCKED 与租约保证同一条不会被两个实例同时发送（发送超过租约或进程中途退出时可能重发一次，属于至少一次投递），按通道限流，30 秒 / 2 分钟 / 10 分钟 / 1 小时重试；发送记录页筛选、重发、分页。
+  - 迁移：push 群、定时任务、推送日志与 123plane 企微地址、摘要时间表、SMTP；通道全部停用。
+  - 测试群联调四次发送全部成功（测试卡片、新需求、看板图片 + 概览卡片、事件推送），见 `docs/p3a-validation.md`。
+  - 看板图片需要思源黑体：开发环境先执行 `./scripts/fetch-fonts.sh`；镜像构建时自动下载。
+
 ## 下一步
 
-1. 合并 P2-B2（分支 `feat/p2b2-module-docs`）。
-2. 用户按 `docs/p2b2-validation.md` 第 4 节在本地 pan123 上验收（可用控制方留下的复验数据：业务域「P2-B2 复验」、测试 PRD PAN-PRD-205、模块文档 PAN-PRD-206）。
-3. 规划 P3：通知中心（先接测试群 webhook 联调，正式环境切换另行安排）与基础数据看板（设计 §6.6 中已可计算的指标）。
-4. 用户按 `docs/p1b-validation.md`「P1-B2」第 3、4 节与「P1-C」第 2 节在本地 pan123 上验收和试用，问题记在对应位置；用户按 `docs/p2a-validation.md` 第 5 节、`docs/p2b1-validation.md` 第 4 节在本地 pan123 上验收。
+1. 合并 P3-A（分支 `feat/p3a-notifications`）。
+2. 用户按 `docs/p3a-validation.md` 第 5 节验收，并决定第 6 节的正式切换事项。
+3. 规划 P3-B：站内通知与个人通知偏好、基础数据看板。
+4. 用户按 `docs/p2b2-validation.md` 第 4 节、`docs/p2b1-validation.md` 第 4 节、`docs/p2a-validation.md` 第 5 节、`docs/p1b-validation.md`「P1-B2」第 3、4 节与「P1-C」第 2 节在本地 pan123 上验收。注意：2026-10-12 为 P3-A 重导过 pan123，之前复验留下的 PAN-PRD-205、PAN-PRD-206 与业务域「P2-B2 复验」已不在；P3-A 联调留下测试需求 PAN-765。
 5. 下次 `--replace` 重导前先跑 `--dry-run`：真实数据如果出现同名的不同人，会报「多人共用这个写法」，需要先在 `people.json` 里区分；重导后执行一次 `legacy rejoin`。
+
+P3-A 验证中记下的留观项（非阻塞）：看板图片在定时推送的事务与锁内生成（约 1 秒），定时推送明显增多后改为事务外生成；「测试中」按状态键或名称识别（test、testing、qa、测试、验收），自定义状态名不符时计入开发中；燃尽小图没有历史数据；markdown_v2 的大表格中间没有空行时超长会截断而不是分条；推送内容中的字段值没有做 markdown 转义；概览卡片标题日期按定时推送时区、发版剩余天数按组织时区，两者不同时可能差一天；渠道与模板列表的引用计数会扫描整个组织的规则与定时推送。
 
 P2-B2 验证中记下的留观项（非阻塞）：并发的嵌套子树移动可能死锁（属于已有的一类问题，Postgres 会中止其中一个事务）；归档切换过程中如果正在输入，可能丢失最后一次编辑；「是否已归档」的判断在 web 侧写了两处；结构树层级标签加载中会显示「第 N 层」；合入页在后台重新取数失败时会静默显示旧数据，「删除」类声明的文案在两种情况下不准确；归档的模块文档仍允许上传图片附件；`loadTree` 与声明相关查询在每次写操作里重复执行，`featureCount` 统计把已废弃的功能点算在内。
 

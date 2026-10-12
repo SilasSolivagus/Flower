@@ -7,3 +7,4 @@ dist/
 test-results/
 playwright-report/
 .flower-storage/
+packages/core/assets/fonts/

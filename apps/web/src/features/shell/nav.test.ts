@@ -20,6 +20,7 @@ describe('buildNav', () => {
       '/acme/settings/fields',
       '/acme/settings/templates',
       '/acme/settings/agents',
+      '/acme/settings/notifications',
       '/acme/settings/general',
     ]);
   });
@@ -46,5 +47,6 @@ describe('buildNav', () => {
     expect(activeNavKey('/acme/overview', 'acme')).toBe('overview');
     expect(activeNavKey('/acme/documents', 'acme')).toBe('documents');
     expect(activeNavKey('/acme/documents/PAN-PRD-1', 'acme')).toBe('documents');
+    expect(activeNavKey('/acme/settings/notifications', 'acme')).toBe('notifications');
   });
 });

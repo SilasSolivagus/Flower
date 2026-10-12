@@ -13,6 +13,8 @@ export type ImportOptions = {
   owner: { accountId: string; email: string; name: string } | null;
   /** prd_uploads 导出目录；给了时读取旧附件文件按内容校验，缺失或不合格的不导入。没给时为 undefined（报告里不统计缺失）。 */
   uploadsDir?: string;
+  /** 实例密钥 FLOWER_SECRET_KEY：加密推送通道配置。有通道要迁移而没有密钥时计划报问题。 */
+  secretKey?: string;
 };
 
 type Ins<T extends { $inferInsert: unknown }> = Array<T['$inferInsert']>;
@@ -48,6 +50,9 @@ export type ImportRows = {
   commentReads: Ins<typeof core.commentReads>;
   entityAliases: Ins<typeof core.entityAliases>;
   domainEvents: Ins<typeof core.domainEvents>;
+  notificationChannels: Ins<typeof core.notificationChannels>;
+  notificationSchedules: Ins<typeof core.notificationSchedules>;
+  notificationDeliveries: Ins<typeof core.notificationDeliveries>;
 };
 
 export const INSERT_ORDER: Array<keyof ImportRows> = [
@@ -56,6 +61,7 @@ export const INSERT_ORDER: Array<keyof ImportRows> = [
   'documentTemplates', 'documents', 'documentRevisions', 'attachments', 'requirements', 'fieldValues',
   'requirementAssignments', 'requirementRelations', 'stateTransitions', 'blockers', 'checkItemResults', 'checkItemSignoffs',
   'requirementReleases', 'tasks', 'comments', 'commentReads', 'entityAliases', 'domainEvents',
+  'notificationChannels', 'notificationSchedules', 'notificationDeliveries',
 ];
 
 export type ReconReport = {
@@ -111,6 +117,12 @@ export type ReconReport = {
       mergedOnly: number;
     };
     prdCheckChanges: Array<{ displayKey: string; document: string; from: string; to: string }>;
+  };
+  notifications: {
+    channels: Array<{ source: string; name: string; kind: string; enabled: boolean }>;
+    schedules: Array<{ source: string; name: string; kind: string; cron: string; enabled: boolean; channels: number }>;
+    deliveries: number;
+    skipped: Array<{ what: string; reason: string }>;
   };
   problems: string[];
 };
@@ -178,6 +190,7 @@ export class PlanContext {
         external: { docs: 0, requirements: 0, shared: 0, statusCounts: {}, nonUrl: [], mismatches: [], skippedNative: [], mergedOnly: 0 },
         prdCheckChanges: [],
       },
+      notifications: { channels: [], schedules: [], deliveries: 0, skipped: [] },
       problems: [],
     };
   }

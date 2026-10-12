@@ -129,6 +129,7 @@ async function main(): Promise<void> {
     asOf: v['as-of']!,
     owner,
     uploadsDir: v.uploads && existsSync(v.uploads) ? v.uploads : undefined,
+    secretKey: process.env.FLOWER_SECRET_KEY,
   });
   const out = need('out');
   mkdirSync(out, { recursive: true });
@@ -153,7 +154,9 @@ async function main(): Promise<void> {
   } finally {
     await close();
   }
-  console.log(`已写入组织 ${plan.rows.organizations[0]!.slug}：需求 ${plan.rows.requirements.length} 条。`);
+  console.log(
+    `已写入组织 ${plan.rows.organizations[0]!.slug}：需求 ${plan.rows.requirements.length} 条；推送通道 ${plan.rows.notificationChannels.length} 个（全部停用）、定时推送 ${plan.rows.notificationSchedules.length} 个、发送记录 ${plan.rows.notificationDeliveries.length} 条。`,
+  );
 }
 
 main().catch((e: unknown) => {

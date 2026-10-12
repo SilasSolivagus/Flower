@@ -1,6 +1,6 @@
 import type { OrgRole } from '@/lib/types';
 
-export type NavIcon = 'home' | 'grid' | 'list' | 'cycle' | 'review' | 'doc' | 'users' | 'tag' | 'box' | 'flow' | 'sliders' | 'bot' | 'building';
+export type NavIcon = 'home' | 'grid' | 'list' | 'cycle' | 'review' | 'doc' | 'users' | 'tag' | 'box' | 'flow' | 'sliders' | 'bot' | 'building' | 'bell';
 export type NavItem = { key: string; label: string; href?: string; icon: NavIcon };
 
 export const isOrgAdminRole = (role: OrgRole): boolean => role === 'owner' || role === 'admin';
@@ -13,6 +13,7 @@ const SETTINGS: Array<[string, string, NavIcon]> = [
   ['fields', '字段字典', 'sliders'],
   ['templates', '文档模板', 'doc'],
   ['agents', 'Agent 与 Token', 'bot'],
+  ['notifications', '推送', 'bell'],
   ['general', '组织信息', 'building'],
 ];
 

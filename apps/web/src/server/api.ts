@@ -1,4 +1,4 @@
-import type { AccountView, Actor, Db, FileStorage } from '@flower/core';
+import type { AccountView, Actor, Db, FileStorage, NotifyDeps } from '@flower/core';
 import { Hono } from 'hono';
 import { authenticate, orgActor } from './auth-middleware';
 import { errorHandler } from './http';
@@ -15,6 +15,7 @@ import { registerDocumentRoutes } from './routes/documents';
 import { registerIterationRoutes } from './routes/iterations';
 import { registerLinkRoutes } from './routes/links';
 import { registerModuleDocRoutes } from './routes/module-docs';
+import { registerNotificationRoutes } from './routes/notifications';
 import { registerReleaseRoutes } from './routes/releases';
 import { registerRequirementRoutes } from './routes/requirements';
 import { registerReviewRoutes } from './routes/reviews';
@@ -23,7 +24,8 @@ import { registerTaskRoutes } from './routes/tasks';
 import { registerTemplateRoutes } from './routes/templates';
 import { registerWorkbenchRoutes } from './routes/workbench';
 
-export type ApiDeps = { db: Db; secureCookies: boolean; publicUrl: string; storage: FileStorage };
+/** notify：推送的密钥、对外网址与发送器；tickApi：是否开放手动驱动后台发送的接口（FLOWER_NOTIFY_TICK_API=1）。 */
+export type ApiDeps = { db: Db; secureCookies: boolean; publicUrl: string; storage: FileStorage; notify: NotifyDeps; tickApi: boolean };
 export type ApiEnv = {
   Variables: {
     account: AccountView | null;
@@ -61,5 +63,6 @@ export function createApi(deps: ApiDeps): App {
   registerTemplateRoutes(app, deps);
   registerLinkRoutes(app, deps);
   registerModuleDocRoutes(app, deps);
+  registerNotificationRoutes(app, deps);
   return app;
 }

@@ -2,14 +2,14 @@ import { and, asc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { atLeast, productRoleOf, visibleProductIds } from '../access/permissions';
 import type { Db } from '../db/client';
 import { iterations, members, products, tasks } from '../db/schema';
-import { withOrg } from '../db/tx';
+import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { type IterationStatus, loadVisibleIteration } from '../iterations/iterations';
 import { parseTaskKey } from '../links/syntax';
 import { loadRequirement } from '../requirements/context';
 import type { MemberRef } from '../requirements/requirements';
-import { type IterationOverview, iterationOverview, workdaysBetween } from './schedule';
+import { type IterationOverview, iterationOverview, type OverviewTask, workdaysBetween } from './schedule';
 import { hydrateTasks, orgToday, type TaskView } from './tasks';
 
 export type IterationGantt = {
@@ -66,21 +66,51 @@ export async function getTaskByKey(db: Db, actor: Actor, key: string, opts: { to
 
 const byPlanStart = [sql`${tasks.planStart} asc nulls last`, asc(tasks.createdAt)] as const;
 
+/** 任务 → 概览的输入：有需求时行标题为「编号 标题」。 */
+export const overviewTaskOf = (v: TaskView): OverviewTask => ({
+  status: v.status,
+  planStart: v.planStart,
+  planDays: v.planDays,
+  delayDays: v.delayDays,
+  progressOverride: v.progressOverride,
+  requirementId: v.requirement?.id ?? null,
+  title: v.requirement ? `${v.requirement.displayKey} ${v.requirement.title}` : v.title,
+  flag: v.flag,
+  note: v.note,
+  assigneeName: v.assignee?.displayName ?? null,
+});
+
+/**
+ * 迭代里指定产品的任务（重点在前、其余按开始日期）与迭代概览。甘特页与推送的概览卡片共用，
+ * 保证两处的整体进度同一口径。actor 为空（后台推送）时任务的 canEdit 为 false。
+ */
+export async function iterationTasksOverviewTx(
+  tx: Tx,
+  actor: Actor | null,
+  it: { id: string; startDate: string; endDate: string },
+  productIds: string[],
+  today: string,
+): Promise<{ tasks: TaskView[]; overview: IterationOverview }> {
+  const rows =
+    productIds.length > 0
+      ? await tx
+          .select()
+          .from(tasks)
+          .where(and(eq(tasks.iterationId, it.id), inArray(tasks.productId, productIds)))
+          .orderBy(...byPlanStart)
+      : [];
+  // 重点任务排在前面；sort 是稳定排序，其余保持开始日期顺序
+  const views = (await hydrateTasks(tx, actor, rows, today)).sort((a, b) => Number(b.starred) - Number(a.starred));
+  const overview = iterationOverview(views.map(overviewTaskOf), it, today);
+  return { tasks: views, overview };
+}
+
 export async function getIterationGantt(db: Db, actor: Actor, iterationId: string, opts: { today?: string } = {}): Promise<IterationGantt> {
   return withOrg(db, actor.orgId, async (tx) => {
     const visible = await visibleProductIds(tx, actor);
     const it = await loadVisibleIteration(tx, iterationId, visible);
     const today = opts.today ?? (await orgToday(tx, actor.orgId));
-    const rows =
-      visible.size > 0
-        ? await tx
-            .select()
-            .from(tasks)
-            .where(and(eq(tasks.iterationId, iterationId), inArray(tasks.productId, [...visible])))
-            .orderBy(...byPlanStart)
-        : [];
-    // 重点任务排在前面；sort 是稳定排序，其余保持开始日期顺序
-    const views = (await hydrateTasks(tx, actor, rows, today)).sort((a, b) => Number(b.starred) - Number(a.starred));
+    const { tasks: views, overview } = await iterationTasksOverviewTx(tx, actor, it, [...visible], today);
     const [product] = it.productId
       ? await tx.select({ id: products.id, key: products.key, name: products.name }).from(products).where(eq(products.id, it.productId))
       : [];
@@ -91,22 +121,6 @@ export async function getIterationGantt(db: Db, actor: Actor, iterationId: strin
         if (atLeast(await productRoleOf(tx, actor, pid), 'editor')) editableProductIds.push(pid);
       }
     }
-    const overview = iterationOverview(
-      views.map((v) => ({
-        status: v.status,
-        planStart: v.planStart,
-        planDays: v.planDays,
-        delayDays: v.delayDays,
-        progressOverride: v.progressOverride,
-        requirementId: v.requirement?.id ?? null,
-        title: v.requirement ? `${v.requirement.displayKey} ${v.requirement.title}` : v.title,
-        flag: v.flag,
-        note: v.note,
-        assigneeName: v.assignee?.displayName ?? null,
-      })),
-      it,
-      today,
-    );
     return {
       iteration: { id: it.id, name: it.name, type: it.type, product: product ?? null, startDate: it.startDate, endDate: it.endDate, status: it.status },
       today,

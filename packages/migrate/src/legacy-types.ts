@@ -22,6 +22,8 @@ export type PlaneData = {
   blockers: Array<{ id: string; requirement_id: string; description: string; status: S; created_at: S; created_by: S; resolved_at: S; resolved_by: S }>;
   requirementUpdates: Array<{ id: string; requirement_id: string; content: string; created_by: S; created_at: S }>;
   iterationLogs: Array<{ id: string; iteration_id: S; type: S; content: string; requirement_id: S; created_by: S; created_at: S }>;
+  /** settings 表里推送需要的键（PLANE_NOTIFY_KEYS），其余键不读。 */
+  notifySettings: Partial<Record<PlaneNotifyKey, string>>;
   counts: { briefs: number; settings: number; notificationQueue: number; syncInbox: number; syncOutbox: number; rolePermissions: number; userPermissionOverrides: number; prdLinks: number };
 };
 export type PushRequirement = {
@@ -43,6 +45,10 @@ export type PushData = {
   designSignoffs: Array<{ id: number; requirement_id: number; role: string; state: S; by: S; opinion: S; at: S }>;
   changeLog: Array<{ id: number; entity_type: S; entity_id: S; field: S; old_value: S; new_value: S; edited_by: S; edited_at: S }>;
   autoReviews: Array<{ id: number; requirement_id: number; round: number; issue_count: number; blocking_count: number; issues: S; reviewed_by: S; reviewed_at: S }>;
+  groups: PushGroup[];
+  tasks: PushTask[];
+  taskTargets: Array<{ task_id: number; group_id: number }>;
+  pushLogs: PushLog[];
   counts: { groups: number; tasks: number; taskTargets: number; pushLogs: number; settings: number; reviewObjections: number; prdUrls: number };
 };
 export type PrdUser = { id: string; email: string; name: S };
@@ -70,3 +76,21 @@ export type PrdData = {
   counts: { pages: number; pageVersions: number; attachments: number; comments: number };
 };
 export type LegacyData = { plane: PlaneData; push: PushData; prd: PrdData };
+
+export const PLANE_NOTIFY_KEYS = [
+  'wecom_requirement_webhook_url',
+  'wecom_daily_webhook_url',
+  'wecom_digest_schedule',
+  'smtp_host',
+  'smtp_port',
+  'smtp_user',
+  'smtp_pass',
+  'email_recipients',
+] as const;
+export type PlaneNotifyKey = (typeof PLANE_NOTIFY_KEYS)[number];
+export type PushGroup = { id: number; name: string; webhook_url: string; enabled: number; created_at: S };
+export type PushTask = {
+  id: number; name: string; enabled: number; trigger_type: string; cron_expr: S; timezone: string; source_type: string; source_config: string;
+  format: string; next_run: S; last_run: S; last_success: S; alert_state: S; consecutive_failures: number; fail_threshold: number;
+};
+export type PushLog = { id: number; task_id: number | null; group_id: number | null; content: string; status: string; error: S; sent_at: string };
