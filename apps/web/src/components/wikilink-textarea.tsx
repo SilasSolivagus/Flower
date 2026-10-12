@@ -3,14 +3,15 @@
 import { type ComponentProps, type KeyboardEvent, useEffect, useId, useRef, useState } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { activeWikiQuery, applyCompletion, SUGGESTION_KIND_LABEL } from '@/features/links/model';
-import { useLinkSearch } from '@/lib/queries';
+import { activeMentionQuery, applyMention, filterMentionMembers, MENTION_NO_ACCESS } from '@/features/mentions/model';
+import { useLinkSearch, useMentionMembers } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
 const DEBOUNCE_MS = 150;
 
 type Props = Omit<ComponentProps<typeof Textarea>, 'value' | 'onChange'> & {
   org: string;
-  /** 来源所在产品：补全按它决定本产品优先与是否带产品前缀。 */
+  /** 来源所在产品：[[ 补全按它决定本产品优先与是否带产品前缀；@ 补全按它标出看不到该产品的成员。 */
   productId: string;
   value: string;
   onValueChange: (value: string) => void;
@@ -18,25 +19,33 @@ type Props = Omit<ComponentProps<typeof Textarea>, 'value' | 'onChange'> & {
   onOpenChange?: (open: boolean) => void;
 };
 
-/** 纯文本输入框加 [[ 补全：按编号前缀或标题搜索（防抖 150ms），上下键选择、回车插入、Esc 关闭；输入法组字时回车不插入。 */
+/** 一个补全项：[[ 链接或 @ 成员。 */
+type Option = { key: string; kind: string; main: string; mono: boolean; title: string; hint: string | null; apply: () => { value: string; caret: number } };
+
+/**
+ * 纯文本输入框加补全：[[ 按编号前缀或标题搜索（防抖 150ms）；@ 按姓名或邮箱在本组织成员里筛选。
+ * 上下键选择、回车插入、Esc 关闭；输入法组字时回车不插入。
+ */
 export function WikilinkTextarea({ org, productId, value, onValueChange, onOpenChange, onKeyDown, onBlur, className, ...rest }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const listId = useId();
   const [caret, setCaret] = useState(0);
   const [dismissed, setDismissed] = useState<number | null>(null);
   const [active, setActive] = useState(0);
-  const q = activeWikiQuery(value, caret);
-  const open = q !== null && dismissed !== q.start;
+  const wiki = activeWikiQuery(value, caret);
+  const mention = wiki ? null : activeMentionQuery(value, caret);
+  const start = wiki?.start ?? mention?.start ?? null;
+  const open = start !== null && dismissed !== start;
   // 查询变化时回到第一项（渲染期间调整）
-  const queryKey = q ? `${q.start}:${q.query}` : null;
+  const queryKey = wiki ? `w${wiki.start}:${wiki.query}` : mention ? `m${mention.start}:${mention.query}` : null;
   const [seenQuery, setSeenQuery] = useState<string | null>(null);
   if (queryKey !== seenQuery) {
     setSeenQuery(queryKey);
     setActive(0);
   }
 
-  // 防抖查询：至少 150ms 不再变化才传给 useLinkSearch；keepPreviousData 让列表在等待期间不闪烁
-  const query = q?.query ?? null;
+  // [[ 的防抖查询：至少 150ms 不再变化才传给 useLinkSearch；keepPreviousData 让列表在等待期间不闪烁
+  const query = wiki?.query ?? null;
   const [debouncedQuery, setDebouncedQuery] = useState(query ?? '');
   useEffect(() => {
     if (query === null) return;
@@ -44,20 +53,44 @@ export function WikilinkTextarea({ org, productId, value, onValueChange, onOpenC
     return () => clearTimeout(timer);
   }, [query]);
 
-  const search = useLinkSearch(org, productId, debouncedQuery, open);
-  const items = open ? (search.data ?? []) : [];
-  const index = Math.min(active, Math.max(items.length - 1, 0));
-  // 结果是否对应当前输入：防抖未落定或正在用上一次查询的结果占位时都算未结算，回车不应采用
-  const settled = q !== null && debouncedQuery.trim() === q.query.trim() && !search.isPlaceholderData;
+  const search = useLinkSearch(org, productId, debouncedQuery, open && wiki !== null);
+  const members = useMentionMembers(org, productId);
+  const options: Option[] = !open
+    ? []
+    : wiki
+      ? (search.data ?? []).map((s) => ({
+          key: `${s.kind}:${s.insert}`,
+          kind: SUGGESTION_KIND_LABEL[s.kind],
+          main: s.displayKey,
+          mono: true,
+          title: s.title,
+          hint: s.hint,
+          apply: () => applyCompletion(value, wiki, caret, s),
+        }))
+      : mention
+        ? filterMentionMembers(members.data ?? [], mention.query).map((m) => ({
+            key: m.id,
+            kind: '成员',
+            main: m.displayName,
+            mono: false,
+            title: m.email ?? '',
+            hint: m.canSeeProduct ? null : MENTION_NO_ACCESS,
+            apply: () => applyMention(value, mention, caret, m),
+          }))
+        : [];
+  const index = Math.min(active, Math.max(options.length - 1, 0));
+  // 结果是否对应当前输入：[[ 防抖未落定或正在用上一次查询的结果占位时都算未结算，回车不应采用；@ 在本地筛选，成员加载完即结算
+  const settled = wiki ? debouncedQuery.trim() === wiki.query.trim() && !search.isPlaceholderData : mention !== null && members.data !== undefined;
+  const shown = open && options.length > 0;
 
   useEffect(() => {
-    onOpenChange?.(open && items.length > 0);
-  }, [open, items.length, onOpenChange]);
+    onOpenChange?.(shown);
+  }, [shown, onOpenChange]);
 
   const pick = (i: number) => {
-    const s = items[i];
-    if (!s || !q) return;
-    const next = applyCompletion(value, q, caret, s);
+    const o = options[i];
+    if (!o) return;
+    const next = o.apply();
     onValueChange(next.value);
     setCaret(next.caret);
     requestAnimationFrame(() => {
@@ -68,18 +101,18 @@ export function WikilinkTextarea({ org, productId, value, onValueChange, onOpenC
 
   const keyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     // Safari 下确认输入法组字的 Enter：isComposing 已为 false，但 keyCode 仍是 229
-    if (open && q && !e.nativeEvent.isComposing && e.keyCode !== 229) {
-      if (items.length > 0 && e.key === 'ArrowDown') {
+    if (open && start !== null && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+      if (options.length > 0 && e.key === 'ArrowDown') {
         e.preventDefault();
-        setActive((index + 1) % items.length);
+        setActive((index + 1) % options.length);
         return;
       }
-      if (items.length > 0 && e.key === 'ArrowUp') {
+      if (options.length > 0 && e.key === 'ArrowUp') {
         e.preventDefault();
-        setActive((index - 1 + items.length) % items.length);
+        setActive((index - 1 + options.length) % options.length);
         return;
       }
-      if (items.length > 0 && e.key === 'Enter') {
+      if (options.length > 0 && e.key === 'Enter') {
         // 列表还没落定到当前输入时，回车不采用上一次查询留下的结果；继续显示旧列表，不吞掉这次按键之外的副作用
         e.preventDefault();
         if (settled) pick(index);
@@ -87,7 +120,7 @@ export function WikilinkTextarea({ org, productId, value, onValueChange, onOpenC
       }
       if (e.key === 'Escape') {
         e.preventDefault();
-        setDismissed(q.start);
+        setDismissed(start);
         return;
       }
     }
@@ -101,7 +134,7 @@ export function WikilinkTextarea({ org, productId, value, onValueChange, onOpenC
         {...rest}
         className={className}
         value={value}
-        aria-controls={open && items.length > 0 ? listId : undefined}
+        aria-controls={shown ? listId : undefined}
         onChange={(e) => {
           onValueChange(e.target.value);
           setCaret(e.target.selectionStart);
@@ -109,21 +142,21 @@ export function WikilinkTextarea({ org, productId, value, onValueChange, onOpenC
         onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
         onKeyDown={keyDown}
         onBlur={(e) => {
-          if (q) setDismissed(q.start);
+          if (start !== null) setDismissed(start);
           onBlur?.(e);
         }}
       />
-      {open && items.length > 0 && (
+      {shown && (
         <ul
           id={listId}
           role="listbox"
-          aria-label="链接补全"
+          aria-label={wiki ? '链接补全' : '成员补全'}
           aria-busy={!settled}
           className="absolute inset-x-0 top-full z-20 mt-1 max-h-64 overflow-y-auto rounded-md border bg-popover p-1 text-[13px] shadow-md"
         >
-          {items.map((s, i) => (
+          {options.map((o, i) => (
             <li
-              key={`${s.kind}:${s.insert}`}
+              key={o.key}
               role="option"
               aria-selected={i === index}
               className={cn('flex min-w-0 cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5', i === index && 'bg-accent')}
@@ -131,10 +164,10 @@ export function WikilinkTextarea({ org, productId, value, onValueChange, onOpenC
               onMouseEnter={() => setActive(i)}
               onClick={() => pick(i)}
             >
-              <span className="w-12 shrink-0 text-[11px] text-muted-foreground">{SUGGESTION_KIND_LABEL[s.kind]}</span>
-              <span className="shrink-0 font-mono">{s.displayKey}</span>
-              <span className="min-w-0 truncate">{s.title}</span>
-              {s.hint && <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{s.hint}</span>}
+              <span className="w-12 shrink-0 text-[11px] text-muted-foreground">{o.kind}</span>
+              <span className={cn('shrink-0', o.mono ? 'font-mono' : 'font-medium')}>{o.main}</span>
+              <span className={cn('min-w-0 truncate', !o.mono && 'text-muted-foreground')}>{o.title}</span>
+              {o.hint && <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{o.hint}</span>}
             </li>
           ))}
         </ul>

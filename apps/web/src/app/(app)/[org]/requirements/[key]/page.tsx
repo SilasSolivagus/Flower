@@ -93,7 +93,7 @@ export default function RequirementPage() {
                 </div>
               </form>
             ) : r.description ? (
-              <WikiText org={org} text={r.description} cards={r.links} productKey={r.productKey} className="text-[13px] leading-6" />
+              <WikiText org={org} text={r.description} cards={r.links} productKey={r.productKey} productId={r.productId} className="text-[13px] leading-6" />
             ) : (
               <p className="text-[13px] leading-6 text-muted-foreground">暂无描述</p>
             )}

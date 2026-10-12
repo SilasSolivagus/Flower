@@ -38,7 +38,7 @@ export function Comments({ org, requirementId, productId, productKey }: { org: s
               <span>{formatDateTime(c.createdAt)}</span>
               {c.kind === 'update' && <Badge variant="outline">进展</Badge>}
             </div>
-            <WikiText org={org} text={c.body} cards={c.links} productKey={productKey} className="text-[13px] leading-6" />
+            <WikiText org={org} text={c.body} cards={c.links} productKey={productKey} productId={productId} className="text-[13px] leading-6" />
           </li>
         ))}
       </ul>
