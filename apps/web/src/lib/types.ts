@@ -32,7 +32,9 @@ import type {
   LinkSuggestion as CoreLinkSuggestion,
   MemberTask as CoreMemberTask,
   MemberTasks as CoreMemberTasks,
+  MemberNotificationView,
   MemberView,
+  MentionMember as CoreMentionMember,
   MergePlan as CoreMergePlan,
   MergeRecord as CoreMergeRecord,
   MergeResult as CoreMergeResult,
@@ -40,8 +42,10 @@ import type {
   MessageTemplateView,
   ModuleDocumentTree as CoreModuleDocumentTree,
   MyOrg as CoreMyOrg,
+  NotificationSettings as CoreNotificationSettings,
   OrgRole as CoreOrgRole,
   OrgView,
+  PersonalChannelSetting as CorePersonalChannelSetting,
   ProductMemberRole as CoreProductMemberRole,
   ProductRole as CoreProductRole,
   ProductView,
@@ -58,6 +62,7 @@ import type {
   RunResult as CoreRunResult,
   ScheduleView,
   StructureNodeView,
+  SubscriptionView,
   TaskDetail as CoreTaskDetail,
   TaskView,
   TemplateSection as CoreTemplateSection,
@@ -65,6 +70,8 @@ import type {
   TokenScope as CoreTokenScope,
   TokenView,
   Workbench as CoreWorkbench,
+  WecomAppSettings as CoreWecomAppSettings,
+  WecomImportResult as CoreWecomImportResult,
   WorkflowBody as CoreWorkflowBody,
   WorkflowDefinitionView,
   WorkflowVersionView,
@@ -154,3 +161,12 @@ export type NotificationRule = Jsonify<RuleView>;
 export type NotificationSchedule = Jsonify<ScheduleView>;
 export type NotificationDelivery = Jsonify<DeliveryView>;
 export type RunResult = CoreRunResult;
+
+export type MemberNotification = Jsonify<MemberNotificationView>;
+export type MentionMember = CoreMentionMember;
+export type NotificationSettings = CoreNotificationSettings;
+export type Subscription = SubscriptionView;
+export type WecomAppSettings = Jsonify<CoreWecomAppSettings>;
+export type WecomImportResult = CoreWecomImportResult;
+export type WecomImportRow = WecomImportResult['rows'][number];
+export type PersonalChannelSetting = CorePersonalChannelSetting;

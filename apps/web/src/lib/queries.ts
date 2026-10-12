@@ -1,6 +1,6 @@
 'use client';
 
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { ApiError, api } from './api';
 import type {
@@ -28,7 +28,9 @@ import type {
   LinkCard,
   LinkSuggestion,
   Member,
+  MemberNotification,
   MemberTasks,
+  MentionMember,
   MergePlan,
   MergeRecord,
   MessageTemplate,
@@ -38,8 +40,10 @@ import type {
   NotificationDelivery,
   NotificationRule,
   NotificationSchedule,
+  NotificationSettings,
   Org,
   OrgMe,
+  PersonalChannelSetting,
   Product,
   ProductMemberRole,
   Release,
@@ -49,8 +53,10 @@ import type {
   RevisionDiff,
   ReviewQueue,
   StructureNode,
+  Subscription,
   TaskDetail,
   Token,
+  WecomAppSettings,
   Workbench,
   WorkflowDefinition,
   WorkflowVersion,
@@ -107,6 +113,14 @@ export const qk = {
   notificationRules: (o: string, productId: string) => ['org', o, 'notify', 'rules', productId] as const,
   notificationSchedules: (o: string, productId: string) => ['org', o, 'notify', 'schedules', productId] as const,
   notificationDeliveries: (o: string, query: string) => ['org', o, 'notify', 'deliveries', query] as const,
+  unreadCount: (o: string) => ['org', o, 'inbox', 'unread'] as const,
+  notifications: (o: string, query: string) => ['org', o, 'inbox', 'list', query] as const,
+  subscription: (o: string, type: string, id: string) => ['org', o, 'inbox', 'subscription', type, id] as const,
+  notificationSettings: (o: string) => ['org', o, 'inbox', 'settings'] as const,
+  mentionMembers: (o: string, productId: string) => ['org', o, 'mention-members', productId] as const,
+  wecomApp: (o: string) => ['org', o, 'notify', 'wecom-app'] as const,
+  personalChannel: (o: string, productId: string) => ['org', o, 'notify', 'personal-channel', productId] as const,
+  personalEmailChannel: (o: string) => ['org', o, 'notify', 'personal-email-channel'] as const,
 };
 
 export const useSetupStatus = () => useQuery({ queryKey: qk.setup, queryFn: () => api<InstanceStatus>('/setup/status') });
@@ -392,3 +406,48 @@ export function useApiMutation<TVars, TData = unknown>(fn: (vars: TVars) => Prom
     },
   });
 }
+
+/** 站内通知相关查询的公共前缀：标已读、关注、偏好变化后统一失效。 */
+export const inboxKeys = (o: string) => ['org', o, 'inbox'] as const;
+
+export const useUnreadCount = (o: string) =>
+  useQuery({ queryKey: qk.unreadCount(o), queryFn: () => api<{ count: number }>(`/orgs/${o}/notifications/unread-count`), select: (d) => d.count, refetchInterval: 30_000 });
+export const useNotifications = (o: string, query: string, enabled = true) =>
+  useQuery({
+    queryKey: qk.notifications(o, query),
+    queryFn: () => api<{ notifications: MemberNotification[]; nextCursor: string | null }>(`/orgs/${o}/notifications?${query}`),
+    select: (d) => d.notifications,
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+/** 通知页：按游标逐页加载。 */
+export const useNotificationPages = (o: string, query: string) =>
+  useInfiniteQuery({
+    queryKey: [...qk.notifications(o, query), 'pages'],
+    queryFn: ({ pageParam }) =>
+      api<{ notifications: MemberNotification[]; nextCursor: string | null }>(`/orgs/${o}/notifications?${query}${pageParam ? `&before=${encodeURIComponent(pageParam)}` : ''}`),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+  });
+export const useSubscription = (o: string, type: 'requirement' | 'document', id: string | undefined) =>
+  useQuery({
+    queryKey: qk.subscription(o, type, id ?? ''),
+    queryFn: () => api<{ subscription: Subscription }>(`/orgs/${o}/subscriptions/${type}/${id}`),
+    select: (d) => d.subscription,
+    enabled: !!id,
+  });
+export const useNotificationSettings = (o: string) =>
+  useQuery({ queryKey: qk.notificationSettings(o), queryFn: () => api<{ settings: NotificationSettings }>(`/orgs/${o}/me/notification-settings`), select: (d) => d.settings });
+/** @ 补全与成员标签用的成员列表；productId 为空时不请求。 */
+export const useMentionMembers = (o: string, productId: string | undefined) =>
+  useQuery({
+    queryKey: qk.mentionMembers(o, productId ?? ''),
+    queryFn: () => api<{ members: MentionMember[] }>(`/orgs/${o}/products/${productId}/mention-members`),
+    select: (d) => d.members,
+    enabled: !!productId,
+    staleTime: 60_000,
+  });
+export const useWecomApp = (o: string) => useQuery({ queryKey: qk.wecomApp(o), queryFn: () => api<{ settings: WecomAppSettings }>(`/orgs/${o}/wecom-app`), select: (d) => d.settings });
+export const usePersonalChannel = (o: string, productId: string) =>
+  useQuery({ queryKey: qk.personalChannel(o, productId), queryFn: () => api<PersonalChannelSetting>(`/orgs/${o}/products/${productId}/personal-channel`), enabled: !!productId });
+export const usePersonalEmailChannel = (o: string) => useQuery({ queryKey: qk.personalEmailChannel(o), queryFn: () => api<PersonalChannelSetting>(`/orgs/${o}/personal-email-channel`) });
