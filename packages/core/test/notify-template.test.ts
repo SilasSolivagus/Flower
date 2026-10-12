@@ -6,6 +6,11 @@ describe('模板渲染', () => {
     expect(renderTemplate('{{a.b}}-{{missing}}-{{n}}-{{flag}}-{{obj}}-{{nil}}', { a: { b: '值' }, n: 3, flag: true, obj: { x: 1 }, nil: null })).toBe('值--3-true--');
   });
 
+  it('只读自身属性：constructor、__proto__ 等原型链上的名字渲染为空', () => {
+    const tpl = '[{{constructor}}|{{__proto__}}|{{a.constructor.name}}|{{toString}}]{{#__proto__}}原型{{/__proto__}}{{#constructor}}构造{{/constructor}}{{^hasOwnProperty}}空{{/hasOwnProperty}}';
+    expect(renderTemplate(tpl, { a: { b: 1 } })).toBe('[|||]空');
+  });
+
   it('列表重复：项内先查项再查外层；非空值渲染一次；反向区块在值为空时渲染', () => {
     const tpl = '{{#items}}[{{name}}@{{group}}]{{/items}}{{#note}}<{{note}}>{{/note}}{{^items}}无{{/items}}';
     expect(renderTemplate(tpl, { group: 'G', items: [{ name: 'a' }, { name: 'b', group: 'H' }], note: '备注' })).toBe('[a@G][b@H]<备注>');

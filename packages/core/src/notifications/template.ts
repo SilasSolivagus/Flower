@@ -37,14 +37,14 @@ function parseTemplate(body: string): Node[] {
   return root;
 }
 
-/** 从内到外查找路径的第一段，找到所在的上下文后按点号取值。 */
+/** 从内到外查找路径的第一段，找到所在的上下文后按点号取值。只读自身属性，不沿原型链（`{{constructor}}` 等为空）。 */
 function lookup(stack: unknown[], path: string): unknown {
   const parts = path.split('.');
   for (let i = stack.length - 1; i >= 0; i--) {
     const ctx = stack[i];
-    if (ctx !== null && typeof ctx === 'object' && !Array.isArray(ctx) && parts[0]! in ctx) {
+    if (ctx !== null && typeof ctx === 'object' && !Array.isArray(ctx) && Object.hasOwn(ctx, parts[0]!)) {
       let v: unknown = ctx;
-      for (const p of parts) v = v !== null && typeof v === 'object' ? (v as Record<string, unknown>)[p] : undefined;
+      for (const p of parts) v = v !== null && typeof v === 'object' && Object.hasOwn(v, p) ? (v as Record<string, unknown>)[p] : undefined;
       return v;
     }
   }
