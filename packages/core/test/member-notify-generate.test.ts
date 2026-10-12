@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { domainEvents, memberNotifications, notificationCursors, requirements, subscriptions } from '../src/db/schema';
 import type { AccountView } from '../src/auth/accounts';
@@ -11,6 +11,7 @@ import { recordEvent } from '../src/events';
 import { createIteration } from '../src/iterations/iterations';
 import { setRequirementIteration } from '../src/iterations/membership';
 import { mentionMarkup } from '../src/links/syntax';
+import { generateMemberNotifications } from '../src/member-notifications/generate';
 import { setNotificationPref } from '../src/member-notifications/prefs';
 import { setSubscription } from '../src/member-notifications/subscriptions';
 import { runNotificationTick } from '../src/notifications/worker';
@@ -266,5 +267,40 @@ describe('站内通知生成', () => {
       expect((await cursorOf(o.orgId))!.lastEventId).toBe(latest!.id);
     }
     expect((await tick()).orgs).toBe(0);
+  });
+
+  it('开启超过上限的事务不再挡住生成，并记录带 pid 与时长的警告', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started!: (pid: number) => void;
+    const begun = new Promise<number>((resolve) => {
+      started = resolve;
+    });
+    const stuck = t.db.transaction(async (tx) => {
+      const [row] = (await tx.execute(sql`select pg_backend_pid() as pid`)) as unknown as [{ pid: number }];
+      started(row.pid);
+      await hold;
+    });
+    const pid = await begun;
+    await new Promise((r) => setTimeout(r, 300));
+    await addRequirementComment(t.db, owner, reqId, { body: `${mentionMarkup(b.memberId, '李四')} 长事务未结束` });
+    const latest = async () => (await inbox(b.memberId)).at(-1)?.body;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await generateMemberNotifications(t.db, owner.orgId, { ...TEST_DEPS }, new Date());
+      expect(await latest()).not.toBe('在评论中 @ 了你');
+      expect(warn).not.toHaveBeenCalled();
+      await generateMemberNotifications(t.db, owner.orgId, { ...TEST_DEPS, staleTransactionMs: 200 }, new Date());
+      expect(await latest()).toBe('在评论中 @ 了你');
+      const msgs = warn.mock.calls.map(([m]) => String(m)).filter((m) => m.includes('站内通知生成不再等待'));
+      expect(msgs.some((m) => m.includes(`pid=${pid}`))).toBe(true);
+      expect(msgs.join('\n')).not.toMatch(/select/i);
+    } finally {
+      warn.mockRestore();
+      release();
+      await stuck;
+    }
   });
 });

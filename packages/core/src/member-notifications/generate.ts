@@ -12,6 +12,8 @@ export type GenerateSummary = { events: number; notifications: number; skipped: 
 export const EVENT_BATCH = 500;
 /** 同一条事件连续失败这么多次后跳过。 */
 export const MAX_EVENT_FAILURES = 3;
+/** 开启超过这么久的事务不再挡住通知生成（泄漏的 idle in transaction 连接或长时间维护事务），只记警告。 */
+export const STALE_TRANSACTION_MS = 10 * 60 * 1000;
 
 const E = domainEvents;
 const C = notificationCursors;
@@ -23,15 +25,35 @@ function causeMessage(e: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+type StaleTransaction = { pid: number; ageSeconds: number };
+
 /**
- * 游标之后、且早于本库其他会话里最早的事务开始时间的事件。领域事件的 occurred_at 是写入事务的开始时间：
- * 未提交事务里的事件提交前看不到，若不加这个上限，游标会越过它。比较全部在 SQL 里做（occurred_at 为微秒精度）。
+ * 本批事件的时间上限：本库其他会话里最早的事务开始时间（不晚于本事务的 now()）。领域事件的 occurred_at 是写入事务的开始时间，
+ * 未提交事务里的事件提交前看不到，若不加这个上限，游标会越过它。开启超过 staleMs 的事务不计入，另行返回以便告警。
+ * 上限以文本返回，再以 timestamptz 参数传给事件查询，保留微秒精度。
+ * pg_stat_activity 在事务内首次访问时拍快照，之后不变，所以先 pg_stat_clear_snapshot() 再读，每批只读一次。
  */
-const pendingEvents = (orgId: string) =>
+async function eventBoundTx(tx: Tx, staleMs: number): Promise<{ bound: string; stale: StaleTransaction[] }> {
+  await tx.execute(sql`select pg_stat_clear_snapshot()`);
+  const limit = sql`now() - ${staleMs} * interval '1 millisecond'`;
+  const [row] = (await tx.execute(sql`
+    with a as (
+      select pid, xact_start from pg_stat_activity
+      where datname = current_database() and pid <> pg_backend_pid() and xact_start is not null
+    )
+    select
+      (select least(now(), coalesce(min(xact_start), now())) from a where xact_start > ${limit})::text as bound,
+      coalesce((select json_agg(json_build_object('pid', pid, 'ageSeconds', floor(extract(epoch from now() - xact_start))::int)) from a where xact_start <= ${limit}), '[]'::json) as stale
+  `)) as unknown as [{ bound: string; stale: StaleTransaction[] }];
+  return row;
+}
+
+/** 游标之后、且早于上限的事件。比较全部在 SQL 里做（occurred_at 为微秒精度）。 */
+const pendingEvents = (orgId: string, bound: string) =>
   and(
     eq(E.orgId, orgId),
     sql`not exists (select 1 from ${C} c where c.org_id = ${E.orgId} and c.last_event_id is not null and (${E.occurredAt}, ${E.id}) <= (c.last_occurred_at, c.last_event_id))`,
-    sql`${E.occurredAt} < (select least(now(), coalesce(min(a.xact_start), now())) from pg_stat_activity a where a.datname = current_database() and a.pid <> pg_backend_pid() and a.xact_start is not null)`,
+    sql`${E.occurredAt} < ${bound}::timestamptz`,
   );
 
 /** 处理一条事件：算收件人、按偏好写站内通知（同一人同一事件同一类只一条）、补自动关注。返回新写的通知数。 */
@@ -75,14 +97,23 @@ async function processEventTx(tx: Tx, ev: EventRow, slug: string): Promise<numbe
  * 每条事件在 savepoint 里处理，成功后前移游标；失败时记下事件与次数并结束本轮，同一条连续失败 MAX_EVENT_FAILURES 次后跳过。
  * legacy.* 事件不处理，只前移游标。后台写入，不记领域事件。
  */
-export async function generateMemberNotifications(db: Db, orgId: string, deps: { publicUrl: string }, now: Date): Promise<GenerateSummary> {
+export async function generateMemberNotifications(
+  db: Db,
+  orgId: string,
+  deps: { publicUrl: string; staleTransactionMs?: number },
+  now: Date,
+): Promise<GenerateSummary> {
   return withOrg(db, orgId, async (tx) => {
     const summary: GenerateSummary = { events: 0, notifications: 0, skipped: 0 };
     await tx.insert(C).values({ orgId }).onConflictDoNothing();
     const [cursor] = await tx.select().from(C).where(eq(C.orgId, orgId)).for('update', { skipLocked: true });
     if (!cursor) return summary;
     const [org] = await tx.select({ slug: organizations.slug }).from(organizations).where(eq(organizations.id, orgId));
-    const events = await tx.select().from(E).where(pendingEvents(orgId)).orderBy(asc(E.occurredAt), asc(E.id)).limit(EVENT_BATCH);
+    // 上限必须在事件查询之前单独取：事件查询的快照要晚于读上限的时刻。若放在同一条语句里，
+    // 某个事务恰好在语句快照之后、读 pg_stat_activity 之前提交，它的事件不在快照里，它也不再计入上限，游标会越过它。
+    const { bound, stale } = await eventBoundTx(tx, deps.staleTransactionMs ?? STALE_TRANSACTION_MS);
+    for (const s of stale) console.warn(`[notify] 有事务已开启 ${s.ageSeconds} 秒，站内通知生成不再等待它：pid=${s.pid}`);
+    const events = await tx.select().from(E).where(pendingEvents(orgId, bound)).orderBy(asc(E.occurredAt), asc(E.id)).limit(EVENT_BATCH);
     let last: string | null = null;
     let failing: { eventId: string; failures: number } | null = null;
     for (const ev of events) {
