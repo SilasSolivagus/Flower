@@ -179,8 +179,8 @@ function isUnsafeIpv6(bracketed: string): boolean | undefined {
 }
 
 /**
- * 只做主机名/字面量检查，不做 DNS 解析：公网域名即便实际解析到内网地址也不会被拦住。
- * 真正杜绝 DNS rebinding 需要在发送时对已解析的 IP 再次校验，本函数只覆盖保存与发送前的静态检查。
+ * 只做主机名/字面量检查，不做 DNS 解析。公网域名解析到内网地址（含 DNS rebinding）由发送器拦截：
+ * `sender.ts` 的 defaultTransport 在连接时解析域名、对每个地址再调用本函数，并直连检查过的地址。
  *
  * hostname 既接受 URL 的 `hostname`（IPv6 带中括号，如 `[::1]`），也接受裸主机名（如 SMTP 的 `host`，
  * IPv6 字面量不带中括号，如 `::1`）——按是否已带中括号自行判断。

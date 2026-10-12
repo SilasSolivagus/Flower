@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-12 · 云端 · PR #15 审查：发送时按解析出的 IP 拦截内网地址
+- 分支 / PR：`feat/p3a-notifications`，PR #15
+- 做了什么：审查 P3-A（租户隔离、密钥、SSRF、权限、发送管道、迁移、页面导入、字体脚本）。阻塞问题一个：内网地址检查只看字面量，公网域名解析到内网（或 Docker 内的 `postgres`、`flower` 这类单段主机名）可以绕过，测试消息还会把响应体返回给组织管理员。改为 `defaultTransport` 用 http(s).request + 自定义 lookup，解析后逐个地址检查、直连检查过的 IP，不跟随重定向，响应体最多读 64 KB；SMTP 先解析检查再直连该 IP，TLS 用原主机名（servername）校验证书。新增 `packages/core/test/notify-sender.test.ts`。`docs/handoff.md` 把「只发一次」改为「至少一次投递」的准确说法。
+- 怎么验证的：新测试在原代码上失败（请求照常发往解析到本机的地址），修改后通过；`pnpm typecheck`、web lint、`pnpm test` 通过。
+- 留给对方：非阻塞项见 PR #15 的审查汇总（「新需求」时间窗可能漏掉提交较晚的需求、无可用通道不计入连续失败告警、字体下载地址未固定到提交、迁移来的推送日志 response 未脱敏等），是否处理由用户决定。
+
 ### 2026-10-12 · 本地 · P3-A 推送（通道、事件规则、定时推送、模板与发送记录、迁移）
 - 分支 / PR：`feat/p3a-notifications`
 - 做了什么：

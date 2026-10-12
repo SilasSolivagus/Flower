@@ -1,4 +1,8 @@
 import { createHmac } from 'node:crypto';
+import dns, { type LookupAddress } from 'node:dns';
+import http from 'node:http';
+import https from 'node:https';
+import type { LookupFunction } from 'node:net';
 import nodemailer from 'nodemailer';
 import { assertSafeOutboundHost, assertSafeOutboundUrl, type ChannelConfig, type EmailConfig, type WebhookConfig, type WecomConfig } from './channel-config';
 import { type ChannelKind, type ChannelPayload, MAX_ATTEMPTS, RESPONSE_MAX_CHARS, RETRY_DELAYS_SECONDS } from './constants';
@@ -11,20 +15,73 @@ export type Transport = {
 /** 后台发送与测试消息需要的依赖：实例密钥（解密配置）、对外网址（消息里的链接）、发送器。 */
 export type NotifyDeps = { secretKey: string; publicUrl: string; transport: Transport };
 
-export const defaultTransport: Transport = {
-  async postJson(url, body, headers) {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...headers },
-      body,
-      redirect: 'error',
-      signal: AbortSignal.timeout(10_000),
+/** 响应体最多读取的字节数：只用于记录（截到 RESPONSE_MAX_CHARS）和解析企微 errcode。 */
+const MAX_RESPONSE_BYTES = 64 * 1024;
+
+/** 解析主机名并检查全部地址：保存时只做了字面量检查，公网域名可能解析到内网地址（含 DNS rebinding）。 */
+function lookupSafe(hostname: string, message: string): Promise<LookupAddress[]> {
+  return new Promise((resolve, reject) => {
+    dns.lookup(hostname, { all: true }, (err, addresses) => {
+      if (err) return reject(err);
+      try {
+        for (const a of addresses) assertSafeOutboundHost(a.address, message);
+      } catch (e) {
+        return reject(e);
+      }
+      resolve(addresses);
     });
-    return { status: res.status, text: await res.text() };
+  });
+}
+
+/** 给 http(s).request 用的 lookup：连接用的就是检查过的地址，不会在检查与连接之间被换掉。 */
+const safeLookup: LookupFunction = (hostname, options, callback) => {
+  lookupSafe(hostname, '网址不能指向本机或内网地址').then(
+    (addresses) => {
+      if (options.all) return (callback as (err: null, addresses: LookupAddress[]) => void)(null, addresses);
+      const first = addresses.find((a) => !options.family || a.family === options.family) ?? addresses[0];
+      if (!first) return callback(Object.assign(new Error(`无法解析 ${hostname}`), { code: 'ENOTFOUND' }), '', 0);
+      callback(null, first.address, first.family);
+    },
+    (e: NodeJS.ErrnoException) => callback(e, '', 0),
+  );
+};
+
+export const defaultTransport: Transport = {
+  postJson(url, body, headers) {
+    const u = new URL(url);
+    const request = u.protocol === 'https:' ? https.request : http.request;
+    return new Promise<HttpResult>((resolve, reject) => {
+      // 不跟随重定向（http.request 本身不跟随），3xx 按失败处理
+      const req = request(
+        u,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body), ...headers },
+          lookup: safeLookup,
+          signal: AbortSignal.timeout(10_000),
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          let size = 0;
+          res.on('data', (c: Buffer) => {
+            if (size >= MAX_RESPONSE_BYTES) return;
+            chunks.push(c);
+            size += c.length;
+          });
+          res.on('end', () => resolve({ status: res.statusCode ?? 0, text: Buffer.concat(chunks).subarray(0, MAX_RESPONSE_BYTES).toString('utf8') }));
+          res.on('error', reject);
+        },
+      );
+      req.on('error', reject);
+      req.end(body);
+    });
   },
   async sendMail(cfg, msg) {
+    // 先解析并检查 SMTP 服务器地址，再直连检查过的 IP；TLS 仍按原主机名校验证书
+    const [addr] = await lookupSafe(cfg.host, 'SMTP 服务器不能是本机或内网地址');
     const transporter = nodemailer.createTransport({
-      host: cfg.host,
+      host: addr!.address,
+      servername: cfg.host,
       port: cfg.port,
       secure: cfg.secure,
       auth: { user: cfg.user, pass: cfg.pass },
@@ -64,8 +121,11 @@ export function signWebhook(secret: string, timestamp: string, body: string): st
 }
 
 const errorText = (e: unknown): string => {
-  const cause = e instanceof Error ? (e.cause as { code?: string } | undefined)?.code : undefined;
-  return [e instanceof Error ? e.message : String(e), cause].filter(Boolean).join('：').slice(0, RESPONSE_MAX_CHARS);
+  // 系统错误码（ECONNREFUSED 等）可能在错误本身（http 模块），也可能在 cause 上（fetch）；AppError 的 code 不是系统错误码
+  const own = (e as NodeJS.ErrnoException | undefined)?.code;
+  const code = e instanceof Error ? (typeof own === 'string' && /^E[A-Z_]+$/.test(own) ? own : (e.cause as { code?: string } | undefined)?.code) : undefined;
+  const message = e instanceof Error ? e.message : String(e);
+  return (code && !message.includes(code) ? `${message}：${code}` : message).slice(0, RESPONSE_MAX_CHARS);
 };
 
 /**
