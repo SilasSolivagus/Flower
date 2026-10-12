@@ -421,9 +421,9 @@ describe('新需求', () => {
       /^# 📋 文档 新增需求 · \d{2}-\d{2} 周[日一二三四五六]\n> 新增 <font color="warning">1<\/font> 条 · 线上转需求 <font color="warning">1<\/font> 条 · P0\/P1 <font color="warning">1<\/font> 条\n\n\*\*🆕 新增需求\*\*\n\n/,
     );
     expect(content).toContain(
-      `**1.** [${a.displayKey} 协同编辑](http://flower.example.com/acme/requirements/${a.displayKey}) <font color="warning">P0</font>\n<font color="comment">客户甲 · —</font> · [PRD](https://docs.example.com/prd-a)\n\n`,
+      `**1.** [${a.displayKey} 协同编辑](http://flower.example.com/acme/requirements/${a.displayKey}) <font color="warning">P0</font>\n<font color="comment">客户甲</font> · [PRD](https://docs.example.com/prd-a)\n\n`,
     );
-    expect(content).toContain(`**🔧 线上转需求**\n\n**2.** [${b.displayKey} 导出失败](http://flower.example.com/acme/requirements/${b.displayKey}) <font color="comment">P2</font>\n<font color="comment">— · —</font>\n\n`);
+    expect(content).toContain(`**🔧 线上转需求**\n\n**2.** [${b.displayKey} 导出失败](http://flower.example.com/acme/requirements/${b.displayKey}) <font color="comment">P2</font>\n<font color="comment">未填写提出人与业务线</font>\n\n`);
     expect(content).toContain('> 👉 [到 Flower 认领 / 分配 ↗](http://flower.example.com/acme/requirements?product=DOC)');
 
     await t.adminDb.update(notificationSchedules).set({ lastSuccessAt: now }).where(eq(notificationSchedules.id, s.id));

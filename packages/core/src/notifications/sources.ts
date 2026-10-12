@@ -521,7 +521,9 @@ export async function newRequirementsDataTx(tx: Tx, s: ScheduleRow, ctx: OrgCont
       priority: pr?.label ?? '—',
       urgent: !!pr && (pr.key === 'p0' || pr.key === 'p1'),
       priorityColor: pr && (pr.key === 'p0' || pr.key === 'p1') ? 'warning' : 'comment',
-      meta: [people.find((p) => p.id === r.requesterMemberId)?.name ?? '—', opts(r.id, 'line')[0]?.label ?? '—', ...(platforms.length ? [platforms.join('/')] : [])].join(' · '),
+      meta:
+        [people.find((p) => p.id === r.requesterMemberId)?.name, opts(r.id, 'line')[0]?.label, platforms.join('/')].filter((x): x is string => !!x).join(' · ') ||
+        '未填写提出人与业务线',
       brief: briefOf(r.description),
       prdUrl: doc ? (doc.source === 'external' ? (doc.externalUrl ?? '') : `${ctx.base}/documents/${documentDisplayKey(product.key, doc.number)}`) : '',
     };
