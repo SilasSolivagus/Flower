@@ -1,8 +1,8 @@
-import { asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { requireOrgAdmin, requireProductRole } from '../access/permissions';
 import type { Db } from '../db/client';
-import { notificationChannels, notificationDeliveries, notificationRules, notificationSchedules, products } from '../db/schema';
+import { notificationChannels, notificationDeliveries, notificationDigestItems, notificationRules, notificationSchedules, products } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
@@ -252,6 +252,8 @@ export async function deleteSchedule(db: Db, actor: Actor, id: string): Promise<
     if (delivery) throw new AppError('conflict', '已有发送记录的定时推送只能停用');
     const [rule] = await tx.select({ id: notificationRules.id }).from(notificationRules).where(eq(notificationRules.digestScheduleId, id)).limit(1);
     if (rule) throw new AppError('conflict', '有摘要规则使用该定时推送，先修改或删除这些规则');
+    // 规则改用其他定时推送后，这里可能还留有未发送的摘要条目，随定时推送一起删除
+    await tx.delete(notificationDigestItems).where(and(eq(notificationDigestItems.scheduleId, id), isNull(notificationDigestItems.consumedAt)));
     await tx.delete(notificationSchedules).where(eq(notificationSchedules.id, id));
     await recordEvent(tx, {
       orgId: actor.orgId,

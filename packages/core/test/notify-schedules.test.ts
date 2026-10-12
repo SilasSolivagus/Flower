@@ -1,9 +1,11 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { domainEvents, notificationDeliveries, notificationRules } from '../src/db/schema';
+import { domainEvents, notificationDeliveries, notificationDigestItems, notificationRules } from '../src/db/schema';
 import type { Actor } from '../src/domain-types';
 import { updateChannel } from '../src/notifications/channels';
+import { createRule, updateRule } from '../src/notifications/rules';
 import { createSchedule, deleteSchedule, getSchedule, listSchedules, updateSchedule } from '../src/notifications/schedules';
+import { createRequirement } from '../src/requirements/requirements';
 import { createProduct, setProductRole } from '../src/tenancy/products';
 import { createTestDb } from './db';
 import { asMember, readOnlyToken, seedInstance } from './factories';
@@ -108,5 +110,20 @@ describe('定时推送', () => {
     const digest = await createSchedule(t.db, pa, overview({ name: '摘要', source: 'digest', cron: '0 18 * * *' }), { now: NOW });
     await t.adminDb.insert(notificationRules).values({ orgId: owner.orgId, productId, name: '并入摘要', eventTypes: ['requirement.created'], mode: 'digest', digestScheduleId: digest.id });
     await expect(deleteSchedule(t.db, pa, digest.id)).rejects.toThrow('有摘要规则使用该定时推送');
+  });
+
+  it('删除：规则已改用其他定时推送时，一并删除留下的未发送摘要条目', async () => {
+    const a = await createSchedule(t.db, pa, overview({ name: '旧摘要', source: 'digest', cron: '0 18 * * *' }), { now: NOW });
+    const b = await createSchedule(t.db, pa, overview({ name: '新摘要', source: 'digest', cron: '0 18 * * *' }), { now: NOW });
+    const rule = await createRule(t.db, pa, productId, { name: '改投摘要', eventTypes: ['requirement.created'], mode: 'digest', digestScheduleId: a.id });
+    await createRequirement(t.db, owner, productId, { title: '进入旧摘要' });
+    const itemsOf = (scheduleId: string) => t.adminDb.select().from(notificationDigestItems).where(eq(notificationDigestItems.scheduleId, scheduleId));
+    expect(await itemsOf(a.id)).toHaveLength(1);
+    await updateRule(t.db, pa, rule.id, { digestScheduleId: b.id });
+    await deleteSchedule(t.db, pa, a.id);
+    await expect(getSchedule(t.db, pa, a.id)).rejects.toThrow('定时推送不存在');
+    expect(await itemsOf(a.id)).toHaveLength(0);
+    const events = await t.adminDb.select().from(domainEvents).where(eq(domainEvents.subjectId, a.id));
+    expect(events.map((e) => e.type)).toContain('notification_schedule.deleted');
   });
 });
