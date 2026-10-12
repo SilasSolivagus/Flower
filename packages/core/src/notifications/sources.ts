@@ -303,14 +303,17 @@ export function releaseHeadline(endDate: string, today: string): string {
 }
 
 /**
- * 需求的流程状态 → 看板的状态统计：completed 为已完成；started 中 key 含 test 或名称含「测试」的为测试中，
- * 其余 started 为开发中；backlog、unstarted 为待开发；canceled 不统计（返回 null）。
+ * 需求的流程状态 → 看板的状态统计：completed 为已完成；started 中 key 按非字母数字、下划线分词后含 test / testing / qa，
+ * 或名称含「测试」「验收」的为测试中（不做子串匹配，避免 latest、attest 误中），其余 started 为开发中；backlog、unstarted 为待开发；canceled 不统计（返回 null）。
  */
 export function dashboardStatusOf(state: { key: string; label: string; category: string } | undefined): DashboardStatus | null {
   if (!state) return 'todo';
   if (state.category === 'canceled') return null;
   if (state.category === 'completed') return 'done';
-  if (state.category === 'started') return /test/i.test(state.key) || state.label.includes('测试') ? 'testing' : 'doing';
+  if (state.category === 'started') {
+    const tokens = state.key.toLowerCase().split(/[^a-z0-9]+|_/);
+    return tokens.some((t) => t === 'test' || t === 'testing' || t === 'qa') || /测试|验收/.test(state.label) ? 'testing' : 'doing';
+  }
   return 'todo';
 }
 
@@ -318,7 +321,7 @@ const isDeferred = (r: OverviewRow) => r.attention && r.progress < 100;
 
 /**
  * 看板图片的数据，与概览卡片、甘特页同一口径（同一批任务与概览）。
- * - 状态统计：本迭代本产品的需求按流程状态归类（见 dashboardStatusOf）；遗留下期的行计入「延期」，对应的需求不再计入其他类。
+ * - 状态统计：本迭代本产品的需求按流程状态归类（见 dashboardStatusOf）；遗留下期的需求计入「延期」（按需求计数，不含没有关联需求的任务行），不再计入其他类。
  * - 重点需求：概览的行（任务按需求聚合），落后（未完成且低于理论进度，或遗留下期）的在前，再按优先级（选项顺序），最多 8 行；
  *   P0 / P1 标星。行状态：遗留下期为延期；有需求的按需求状态；没有需求的按进度（100 已完成、大于 0 开发中、否则待开发）。
  * - 燃尽：不保存历史进度，只给迭代的工作日数、今天的位置与剩余百分比（100 − 整体进度）。
@@ -351,7 +354,7 @@ async function dashboardDataTx(
   const prioOf = (id: string | null) => (id ? prios.filter((p) => p.entityId === id).sort((a, b) => a.sort - b.sort)[0] : undefined);
 
   const deferredReqs = new Set(rows.filter(isDeferred).map((r) => r.requirementId).filter((x): x is string => !!x));
-  const counts: Record<DashboardStatus, number> = { todo: 0, doing: 0, testing: 0, done: 0, deferred: rows.filter(isDeferred).length };
+  const counts: Record<DashboardStatus, number> = { todo: 0, doing: 0, testing: 0, done: 0, deferred: deferredReqs.size };
   for (const r of inIteration) {
     if (deferredReqs.has(r.id)) continue;
     const st = statusOfReq(r.id);

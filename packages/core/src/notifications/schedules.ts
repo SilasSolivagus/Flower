@@ -210,7 +210,7 @@ export async function updateSchedule(db: Db, actor: Actor, id: string, patch: No
       name: patch.name === undefined ? cur.name : assertName(patch.name),
       cron: patch.cron === undefined ? cur.cron : assertCron(patch.cron),
       timezone: patch.timezone === undefined ? cur.timezone : assertTimezone(patch.timezone),
-      sourceConfig: patch.sourceConfig === undefined ? cur.sourceConfig : parseSourceConfig(cur.source, patch.sourceConfig),
+      sourceConfig: patch.sourceConfig === undefined ? cur.sourceConfig : parseSourceConfig(cur.source, { ...cur.sourceConfig, ...patch.sourceConfig }),
       // 只在提交了通道时校验：迁移来的停用通道不妨碍修改其他字段
       channelIds: patch.channelIds === undefined ? cur.channelIds : await assertUsableChannelsTx(tx, patch.channelIds, cur.productId, { min: 1 }),
       templateId: patch.templateId === undefined ? cur.templateId : await assertTemplateIdTx(tx, patch.templateId),

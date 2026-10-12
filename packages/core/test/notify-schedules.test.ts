@@ -100,6 +100,13 @@ describe('定时推送', () => {
     expect((await getSchedule(t.db, pa, s.id)).cron).toBe('30 9 * * *');
   });
 
+  it('修改内容来源设置：未提交的键保持原值', async () => {
+    const s = await createSchedule(t.db, pa, overview({ name: '合并设置', sourceConfig: { image: false } }), { now: NOW });
+    expect(s.sourceConfig).toEqual({ image: false });
+    const next = await updateSchedule(t.db, pa, s.id, { sourceConfig: { titlePrefix: '研发' } });
+    expect(next.sourceConfig).toEqual({ titlePrefix: '研发', image: false });
+  });
+
   it('删除：有发送记录或被摘要规则引用时只能停用', async () => {
     const free = await createSchedule(t.db, pa, overview({ name: '可删' }), { now: NOW });
     await deleteSchedule(t.db, pa, free.id);

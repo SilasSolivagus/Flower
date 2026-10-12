@@ -126,7 +126,7 @@ export async function runScheduleNow(db: Db, actor: Actor, id: string, deps: { p
       subjectType: 'notification_schedule',
       subjectId: id,
       actor,
-      payload: { manual: true, deliveries: result.deliveries, skipped: result.skipped },
+      payload: { manual: true, deliveries: result.deliveries, skipped: result.skipped, imageSkipped: result.imageSkipped },
     });
     return result;
   });

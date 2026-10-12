@@ -307,13 +307,33 @@ describe('看板图片', () => {
 
   it('状态归类与发版标题', () => {
     expect(dashboardStatusOf({ key: 'testing', label: '测试中', category: 'started' })).toBe('testing');
-    expect(dashboardStatusOf({ key: 'qa', label: '提测验证', category: 'started' })).toBe('doing');
+    expect(dashboardStatusOf({ key: 'qa', label: '提测验证', category: 'started' })).toBe('testing');
+    expect(dashboardStatusOf({ key: 'in_test', label: '处理中', category: 'started' })).toBe('testing');
+    expect(dashboardStatusOf({ key: 'doing', label: '验收中', category: 'started' })).toBe('testing');
+    expect(dashboardStatusOf({ key: 'latest', label: '最新', category: 'started' })).toBe('doing');
+    expect(dashboardStatusOf({ key: 'attest', label: '认证', category: 'started' })).toBe('doing');
     expect(dashboardStatusOf({ key: 'to_develop', label: '待开发', category: 'unstarted' })).toBe('todo');
     expect(dashboardStatusOf({ key: 'collect', label: '收集', category: 'backlog' })).toBe('todo');
     expect(dashboardStatusOf({ key: 'launched', label: '已上线', category: 'completed' })).toBe('done');
     expect(dashboardStatusOf({ key: 'shelved', label: '已搁置', category: 'canceled' })).toBeNull();
     expect(releaseHeadline('2026-10-16', '2026-10-16')).toBe('10/16 今天发版');
     expect(releaseHeadline('2026-10-16', '2026-10-19')).toBe('10/16 发版 · 已过发版日');
+  });
+
+  it('延期按需求计数：同一需求的多个关注任务只算一次，没有关联需求的任务行不计入', async () => {
+    const pid = (await createProduct(t.db, owner, { name: '延期统计', key: 'DEF' })).id;
+    const it = await createIteration(t.db, owner, { type: 'regular', productId: pid, name: '迭代1016', startDate: '2026-10-01', endDate: '2026-10-16' });
+    await setIterationStatus(t.db, owner, it.id, 'active');
+    const r = await createRequirement(t.db, owner, pid, { title: '重构' });
+    await setRequirementIteration(t.db, owner, r.id, { iterationId: it.id });
+    await createTask(t.db, owner, { productId: pid, iterationId: it.id, requirementId: r.id, title: '前端', progress: 10, flag: 'attention' });
+    await createTask(t.db, owner, { productId: pid, iterationId: it.id, requirementId: r.id, title: '后端', progress: 20, flag: 'attention' });
+    await createTask(t.db, owner, { productId: pid, iterationId: it.id, title: '独立事项', progress: 0, flag: 'attention' });
+    const s = await createSchedule(t.db, owner, { productId: pid, name: '延期统计日报', cron: '0 19 * * 1-5', source: 'overview_card', channelIds: [webhookId] }, { now: NOW });
+    const { dashboard } = await withOrg(t.db, owner.orgId, async (tx) =>
+      overviewDataTx(tx, (await tx.select().from(notificationSchedules).where(eq(notificationSchedules.id, s.id)))[0]!, await orgContextTx(tx, owner.orgId, TEST_DEPS.publicUrl), NOW, { dashboard: true }),
+    );
+    expect(dashboard!.counts).toEqual({ todo: 0, doing: 0, testing: 0, done: 0, deferred: 1 });
   });
 
   it.skipIf(!hasFonts)('执行：企微通道先写图片再写卡片（同一 run_id，按 created_at、id 排在前面），Webhook 只有卡片；预览只显示大小', async () => {
@@ -448,9 +468,11 @@ describe('立即执行', () => {
     const editor = await asMember(t.db, owner, '编辑戊');
     await expect(runScheduleNow(t.db, editor, s.id, TEST_DEPS)).rejects.toThrow('权限不足');
     await expect(runScheduleNow(t.db, readOnlyToken(owner), s.id, TEST_DEPS)).rejects.toThrow('权限不足');
-    expect(await runScheduleNow(t.db, pa, s.id, TEST_DEPS, { now: NOW })).toMatchObject({ deliveries: 1, skipped: null });
+    const ran = await runScheduleNow(t.db, pa, s.id, TEST_DEPS, { now: NOW });
+    expect(ran).toMatchObject({ deliveries: 1, skipped: null });
     const events = await t.adminDb.select().from(domainEvents).where(and(eq(domainEvents.subjectId, s.id), eq(domainEvents.type, 'notification_schedule.run')));
     expect(events[0]!.payload).toMatchObject({ manual: true, deliveries: 1, skipped: null });
+    expect(events[0]!.payload).toHaveProperty('imageSkipped', ran.imageSkipped);
     expect((await scheduleRow(s.id)).nextRunAt!.toISOString()).toBe('2026-10-12T11:00:00.000Z');
   });
 });
