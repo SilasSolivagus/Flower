@@ -1,7 +1,9 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { startFakeWebhook } from '../test/fake-webhook';
 import { resetDatabase } from './db';
-import { createProduct, createRequirement, createWecomChannel, expectNoPageOverflow, login, ok, OWNER, setupInstance, tick } from './helpers';
+import { createIteration, createProduct, createRequirement, createTask, createWecomChannel, expectNoPageOverflow, login, ok, OWNER, setupInstance, tick } from './helpers';
 
 let hook: Awaited<ReturnType<typeof startFakeWebhook>>;
 test.beforeAll(async () => {
@@ -71,6 +73,40 @@ test('定时推送：产品设置里新建「新需求」并立即执行；组�
   await expect(page.getByText('已生成 1 条待发记录，几秒内发送')).toBeVisible();
   await tick(request);
   expect(hook.received.at(-1)!.body).toMatchObject({ msgtype: 'template_card', template_card: { card_type: 'text_notice', source: { desc: 'Flower · 研发日报' } } });
+
+  // 「附带看板图片」默认开启，可以关闭
+  await daily.getByRole('button', { name: '修改' }).click();
+  const image = page.getByRole('checkbox', { name: '附带看板图片' });
+  await expect(image).toBeChecked();
+  await image.click();
+  await page.getByRole('button', { name: '保存' }).click();
+  await expect(page.getByText('定时推送已保存')).toBeVisible();
+  const schedules = (await (await request.get('/api/v1/orgs/acme/notification-schedules')).json()).schedules as Array<{ name: string; sourceConfig: unknown }>;
+  expect(schedules.find((x) => x.name === '研发日报')!.sourceConfig).toEqual({ image: false });
+});
+
+const FONT_DIR = process.env.FLOWER_FONT_DIR ?? path.join(process.cwd(), '../../packages/core/assets/fonts');
+const HAS_FONTS = ['NotoSansSC-Regular.otf', 'NotoSansSC-Bold.otf'].every((f) => existsSync(path.join(FONT_DIR, f)));
+
+test('概览卡片附带看板图片：立即执行后假接收端先收到图片、再收到卡片；发送记录只显示图片大小', async ({ page, request }) => {
+  test.skip(!HAS_FONTS, `${FONT_DIR} 下没有看板图片字体，先执行 ./scripts/fetch-fonts.sh`);
+  await resetDatabase();
+  await setupInstance(request);
+  await login(page, OWNER.email, OWNER.password);
+  const productId = await createProduct(request);
+  const channelId = await createWecomChannel(request, '研发群', hook.url('image-0001'));
+  const iterationId = await createIteration(request, productId, '迭代1016', '2026-10-01', '2026-10-16');
+  await createTask(request, { iterationId, title: '前端开发', planStart: '2026-10-05', planDays: 5 });
+  await ok(request.post('/api/v1/orgs/acme/notification-schedules', { data: { productId, name: '研发日报', cron: '0 19 * * 1-5', source: 'overview_card', channelIds: [channelId] } }));
+  await page.goto('/acme/settings/notifications?tab=schedules');
+  await page.getByRole('row', { name: /研发日报/ }).getByRole('button', { name: '立即执行' }).click();
+  await page.getByRole('button', { name: '执行', exact: true }).click();
+  await expect(page.getByText('已生成 2 条待发记录，几秒内发送')).toBeVisible();
+  const before = hook.received.length;
+  await tick(request);
+  expect(hook.received.slice(before).map((r) => r.body.msgtype)).toEqual(['image', 'template_card']);
+  await page.goto('/acme/settings/notifications?tab=deliveries');
+  await expect(page.getByText(/^图片 · \d+ KB$/)).toBeVisible();
 });
 
 test('产品「推送」页签与组织「定时推送」页签在 1440 与 760 宽度下不横向滚动', async ({ page, request }) => {

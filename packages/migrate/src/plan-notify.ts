@@ -116,7 +116,7 @@ export function buildNotifications(ctx: PlanContext): void {
       cron,
       timezone: t.timezone || 'Asia/Shanghai',
       source,
-      sourceConfig: source === 'new_requirements' ? { emptyBehavior: 'skip', onlineSourceKeys: ['online_issue'] } : {},
+      sourceConfig: source === 'new_requirements' ? { emptyBehavior: 'skip', onlineSourceKeys: ['online_issue'] } : { image: true },
       channelIds,
       enabled: t.enabled === 1,
       nextRunAt: null,

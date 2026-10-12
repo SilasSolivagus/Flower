@@ -1,3 +1,6 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { fontDir } from '@flower/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { App } from '@/server/api';
 import { startFakeWebhook } from '../fake-webhook';
@@ -193,5 +196,30 @@ describe('推送接口', () => {
     expect((await call(app, 'POST', '/orgs/acme/notification-channels/not-a-uuid/test', { session })).status).toBe(400);
     expect((await call(app, 'POST', '/orgs/acme/notification-schedules/not-a-uuid/run', { session })).status).toBe(400);
     expect((await call(app, 'GET', '/orgs/acme/notification-schedules?product=not-a-uuid', { session })).status).toBe(400);
+  });
+
+  const hasFonts = ['NotoSansSC-Regular.otf', 'NotoSansSC-Bold.otf'].every((f) => existsSync(path.join(fontDir(), f)));
+  it.skipIf(!hasFonts)('概览卡片附带看板图片：企微通道先收到图片再收到卡片，Webhook 只收到卡片；发送记录不含图片内容', async () => {
+    const pid = (await call(app, 'POST', '/orgs/acme/products', { session, body: { name: '相册', key: 'PIC' } })).body.product.id;
+    const iterationId = (await call(app, 'POST', '/orgs/acme/iterations', { session, body: { type: 'regular', productId: pid, name: '迭代1016', startDate: '2026-10-01', endDate: '2026-10-16' } })).body.iteration.id;
+    await call(app, 'POST', '/orgs/acme/tasks', { session, body: { iterationId, title: '前端开发', planStart: '2026-10-05', planDays: 5 } });
+    const wecom = (await call(app, 'POST', '/orgs/acme/notification-channels', { session, body: { kind: 'wecom_robot', name: '相册群', config: { url: hook.url('api-image-0001') } } })).body.channel.id;
+    const webhook = (await call(app, 'POST', '/orgs/acme/notification-channels', { session, body: { kind: 'webhook', name: '相册 Webhook', config: { url: hook.url('api-image-hook') } } })).body.channel.id;
+    const created = await call(app, 'POST', '/orgs/acme/notification-schedules', { session, body: { productId: pid, name: '相册日报', cron: '0 19 * * 1-5', source: 'overview_card', channelIds: [wecom, webhook] } });
+    expect(created.body.schedule.sourceConfig).toEqual({ image: true });
+    const run = await call(app, 'POST', `/orgs/acme/notification-schedules/${created.body.schedule.id}/run`, { session });
+    expect(run.body.result).toMatchObject({ deliveries: 3, skipped: null, imageSkipped: null });
+    const before = hook.received.length;
+    // 前面用例留下的待发记录（重发等）也会在这一轮发出，这里只看本次两个通道收到的请求
+    await call(app, 'POST', '/instance/notifications/tick', { session, body: {} });
+    const got = hook.received.slice(before);
+    const toWecom = got.filter((r) => r.path.endsWith('api-image-0001'));
+    expect(toWecom.map((r) => r.body.msgtype)).toEqual(['image', 'template_card']);
+    const image = toWecom[0]!.body.image as { base64: string; md5: string };
+    expect(image.md5).toMatch(/^[0-9a-f]{32}$/);
+    expect(got.filter((r) => r.path.endsWith('api-image-hook')).map((r) => r.body.format)).toEqual(['template_card']);
+    const list = await call(app, 'GET', `/orgs/acme/notification-deliveries?channel=${wecom}`, { session });
+    expect(list.body.deliveries.map((d: { preview: string }) => d.preview)).toEqual([expect.stringContaining('相册 研发日报'), expect.stringMatching(/^图片 · \d+ KB$/)]);
+    expect(JSON.stringify(list.body)).not.toContain(image.base64.slice(0, 64));
   });
 });

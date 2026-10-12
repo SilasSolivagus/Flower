@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: path.join(process.cwd(), '../..'),
   transpilePackages: ['@flower/core'],
-  serverExternalPackages: ['@node-rs/argon2', 'nodemailer'],
+  serverExternalPackages: ['@node-rs/argon2', 'nodemailer', 'satori', '@resvg/resvg-js'],
 };
 
 export default nextConfig;

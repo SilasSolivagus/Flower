@@ -1,5 +1,8 @@
-import { and, eq } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { and, asc, eq } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { domainEvents, notificationDeliveries, notificationDigestItems, notificationSchedules } from '../src/db/schema';
 import { withOrg } from '../src/db/tx';
 import { addFieldOption, listFields } from '../src/definitions/fields';
@@ -8,10 +11,13 @@ import type { Actor } from '../src/domain-types';
 import { createIteration, setIterationStatus } from '../src/iterations/iterations';
 import { setRequirementIteration } from '../src/iterations/membership';
 import { createChannel } from '../src/notifications/channels';
+import { DASHBOARD_IMAGE_MAX_BYTES, FONT_MISSING, fontDir, wecomImagePayload } from '../src/notifications/dashboard-image';
+import { listDeliveries } from '../src/notifications/deliveries';
 import { createRule } from '../src/notifications/rules';
 import { generateScheduleRunTx, runScheduleNow } from '../src/notifications/run';
 import { createSchedule, updateSchedule } from '../src/notifications/schedules';
-import { CARD_LIMITS, clip, eventMessageDataTx, eventTone, orgContextTx, releaseText } from '../src/notifications/sources';
+import { CARD_LIMITS, clip, dashboardStatusOf, eventMessageDataTx, eventTone, orgContextTx, overviewDataTx, releaseHeadline, releaseText } from '../src/notifications/sources';
+import { payloadPreview } from '../src/notifications/template';
 import { createRequirement, setRequirementField } from '../src/requirements/requirements';
 import { transitionRequirement } from '../src/requirements/transitions';
 import { createTask } from '../src/tasks/tasks';
@@ -112,7 +118,7 @@ describe('概览卡片', () => {
     await createTask(t.db, owner, { productId, iterationId: it.id, title: '前端开发', status: 'done' });
     await createTask(t.db, owner, { productId, iterationId: it.id, title: '接口联调', progress: 50 });
     await createTask(t.db, owner, { productId, iterationId: it.id, title: '灰度发布', progress: 20, flag: 'attention', note: '等运维排期', assigneeMemberId: ops.id });
-    const s = await createSchedule(t.db, owner, { productId, name: '日报', cron: '0 19 * * 1-5', source: 'overview_card', channelIds: [wecomId, emailId] }, { now: NOW });
+    const s = await createSchedule(t.db, owner, { productId, name: '日报', cron: '0 19 * * 1-5', source: 'overview_card', channelIds: [wecomId, emailId], sourceConfig: { image: false } }, { now: NOW });
     const result = await generate(s.id, NOW);
     expect(result).toMatchObject({ deliveries: 2, skipped: null });
     const rows = await deliveriesOf(s.id);
@@ -169,7 +175,7 @@ describe('概览卡片', () => {
     const s = await createSchedule(
       t.db,
       owner,
-      { productId, name: '长日报', cron: '0 19 * * 1-5', source: 'overview_card', channelIds: [wecomId], sourceConfig: { titlePrefix: '一个非常非常非常非常长的自定义日报标题前缀' } },
+      { productId, name: '长日报', cron: '0 19 * * 1-5', source: 'overview_card', channelIds: [wecomId], sourceConfig: { titlePrefix: '一个非常非常非常非常长的自定义日报标题前缀', image: false } },
       { now: NOW },
     );
     await generate(s.id, NOW);
@@ -213,6 +219,155 @@ describe('概览卡片', () => {
     await t.adminDb.update(notificationSchedules).set({ channelIds: [] }).where(eq(notificationSchedules.id, s.id));
     expect(await generate(s.id, NOW)).toMatchObject({ deliveries: 0, skipped: '没有可用的通道（通道已停用、已删除或不允许本产品使用）' });
     expect((await scheduleRow(s.id)).lastError).toBe('没有可用的通道（通道已停用、已删除或不允许本产品使用）');
+  });
+});
+
+describe('看板图片', () => {
+  const hasFonts = ['NotoSansSC-Regular.otf', 'NotoSansSC-Bold.otf'].every((f) => existsSync(path.join(fontDir(), f)));
+  if (!hasFonts) console.warn(`[notify-run] 跳过需要字体的看板图片用例：${fontDir()} 下没有字体，先执行 ./scripts/fetch-fonts.sh`);
+  let productId: string;
+  let iterationId: string;
+  let webhookId: string;
+
+  beforeAll(async () => {
+    productId = (await createProduct(t.db, owner, { name: '图库', key: 'IMG' })).id;
+    const it = await createIteration(t.db, owner, { type: 'regular', productId, name: '迭代1016', startDate: '2026-10-01', endDate: '2026-10-16' });
+    iterationId = it.id;
+    await setIterationStatus(t.db, owner, it.id, 'active');
+    const priority = (await listFields(t.db, owner, { productId })).find((f) => f.key === 'priority')!;
+    const opt = (k: string) => [priority.options.find((o) => o.key === k)!.id];
+    const ops = await createPlaceholderMember(t.db, owner, { displayName: '周岚' });
+    const req = async (title: string, state: string, prio?: string) => {
+      const r = await createRequirement(t.db, owner, productId, { title, ...(prio ? { fields: { priority: opt(prio) } } : {}) });
+      await setRequirementIteration(t.db, owner, r.id, { iterationId: it.id });
+      if (state !== 'backlog') await transitionRequirement(t.db, owner, r.id, { to: state });
+      return r.id;
+    };
+    const a = await req('上传提速', 'doing', 'p0');
+    const b = await req('分享改版', 'done', 'p2');
+    const c = await req('回收站', 'todo', 'p1');
+    const d = await req('灰度', 'doing');
+    await req('离线包', 'canceled');
+    await req('新首页', 'backlog');
+    await createTask(t.db, owner, { productId, iterationId: it.id, requirementId: a, title: '开发', progress: 20, assigneeMemberId: ops.id });
+    await createTask(t.db, owner, { productId, iterationId: it.id, requirementId: b, title: '开发', status: 'done' });
+    await createTask(t.db, owner, { productId, iterationId: it.id, requirementId: c, title: '开发', progress: 80 });
+    await createTask(t.db, owner, {
+      productId,
+      iterationId: it.id,
+      requirementId: d,
+      title: '开发',
+      progress: 30,
+      flag: 'attention',
+      note: '等运维排期，灰度节点需要和另外两个团队一起确认，预计要到下周三之后才能开始',
+    });
+    await createTask(t.db, owner, { productId, iterationId: it.id, title: '运维排期' });
+    webhookId = (await createChannel(t.db, owner, { kind: 'webhook', name: '图库 Webhook', config: { url: 'http://127.0.0.1:9/hook' } }, TEST_DEPS)).id;
+  });
+
+  const schedule = (extra: Record<string, unknown> = {}) =>
+    createSchedule(t.db, owner, { productId, name: `图库日报 ${Math.random()}`, cron: '0 19 * * 1-5', source: 'overview_card', channelIds: [wecomId, webhookId], ...extra }, { now: NOW });
+  const ordered = (scheduleId: string) =>
+    t.adminDb.select().from(notificationDeliveries).where(eq(notificationDeliveries.scheduleId, scheduleId)).orderBy(asc(notificationDeliveries.createdAt), asc(notificationDeliveries.id));
+  const bodyOf = (r: { payload: unknown }) => (r.payload as { body: Record<string, unknown> }).body;
+
+  it('数据：状态统计按流程状态归类，遗留下期计入延期；重点需求落后在前、再按优先级，P0/P1 标星；燃尽只有今天一个点', async () => {
+    const s = await schedule();
+    const { dashboard, card } = await withOrg(t.db, owner.orgId, async (tx) =>
+      overviewDataTx(tx, (await tx.select().from(notificationSchedules).where(eq(notificationSchedules.id, s.id)))[0]!, await orgContextTx(tx, owner.orgId, TEST_DEPS.publicUrl), NOW, { dashboard: true }),
+    );
+    // 10-10（周六）：理论 55%；计入的四行 20、100、80、0，整体 50%
+    expect(dashboard).toMatchObject({
+      headline: '10/16 发版，还剩 5 个工作日',
+      subtitle: '图库 研发日报 · 迭代1016',
+      overall: 50,
+      expected: 55,
+      burndown: { days: 11, today: 6, remaining: 50 },
+      counts: { todo: 2, doing: 1, testing: 0, done: 1, deferred: 1 },
+      rowTotal: 5,
+    });
+    expect(dashboard!.rows.map((r) => [r.title, r.status, r.progress, r.behind, r.starred, r.people])).toEqual([
+      ['IMG-1 上传提速', 'doing', 20, true, true, '周岚'],
+      ['IMG-4 灰度', 'deferred', 30, true, false, '未分配'],
+      ['运维排期', 'todo', 0, true, false, '未分配'],
+      ['IMG-3 回收站', 'todo', 80, false, true, '未分配'],
+      ['IMG-2 分享改版', 'done', 100, false, false, '未分配'],
+    ]);
+    expect(dashboard!.attention[0]).toContain('等运维排期');
+    // 卡片引用区每行按 40 字截断
+    const quote = (card.quote as { quote_text: string }).quote_text;
+    expect([...quote].length).toBe(CARD_LIMITS.quoteLine);
+    expect(quote.endsWith('…')).toBe(true);
+    // 关闭图片时不取看板数据
+    const off = await withOrg(t.db, owner.orgId, async (tx) =>
+      overviewDataTx(tx, (await tx.select().from(notificationSchedules).where(eq(notificationSchedules.id, s.id)))[0]!, await orgContextTx(tx, owner.orgId, TEST_DEPS.publicUrl), NOW, { dashboard: false }),
+    );
+    expect(off.dashboard).toBeNull();
+  });
+
+  it('状态归类与发版标题', () => {
+    expect(dashboardStatusOf({ key: 'testing', label: '测试中', category: 'started' })).toBe('testing');
+    expect(dashboardStatusOf({ key: 'qa', label: '提测验证', category: 'started' })).toBe('doing');
+    expect(dashboardStatusOf({ key: 'to_develop', label: '待开发', category: 'unstarted' })).toBe('todo');
+    expect(dashboardStatusOf({ key: 'collect', label: '收集', category: 'backlog' })).toBe('todo');
+    expect(dashboardStatusOf({ key: 'launched', label: '已上线', category: 'completed' })).toBe('done');
+    expect(dashboardStatusOf({ key: 'shelved', label: '已搁置', category: 'canceled' })).toBeNull();
+    expect(releaseHeadline('2026-10-16', '2026-10-16')).toBe('10/16 今天发版');
+    expect(releaseHeadline('2026-10-16', '2026-10-19')).toBe('10/16 发版 · 已过发版日');
+  });
+
+  it.skipIf(!hasFonts)('执行：企微通道先写图片再写卡片（同一 run_id，按 created_at、id 排在前面），Webhook 只有卡片；预览只显示大小', async () => {
+    const s = await schedule();
+    expect(s.sourceConfig).toEqual({ image: true });
+    const result = await generate(s.id, NOW);
+    expect(result).toMatchObject({ deliveries: 3, skipped: null, imageSkipped: null });
+    const all = await ordered(s.id);
+    expect(new Set(all.map((r) => r.runId))).toEqual(new Set([result.runId]));
+    const rows = all.filter((r) => r.channelId === wecomId);
+    expect(rows.map((r) => bodyOf(r).msgtype)).toEqual(['image', 'template_card']);
+    expect(all.filter((r) => r.channelId === webhookId).map((r) => bodyOf(r).format)).toEqual(['template_card']);
+    const image = bodyOf(rows[0]!).image as { base64: string; md5: string };
+    const png = Buffer.from(image.base64, 'base64');
+    expect(png.subarray(1, 4).toString()).toBe('PNG');
+    expect(png.length).toBeLessThan(DASHBOARD_IMAGE_MAX_BYTES);
+    expect(image.md5).toBe((await import('node:crypto')).createHash('md5').update(png).digest('hex'));
+    expect(payloadPreview(rows[0]!.payload)).toBe(`图片 · ${Math.round(png.length / 1024)} KB`);
+    const list = await listDeliveries(t.db, owner, { kind: 'schedule', channelId: wecomId });
+    expect(list.deliveries.find((d) => d.id === rows[0]!.id)!.preview).toMatch(/^图片 · \d+ KB$/);
+    expect(JSON.stringify(list)).not.toContain(image.base64.slice(0, 64));
+    expect((await scheduleRow(s.id)).lastError).toBeNull();
+  });
+
+  it('关闭「附带看板图片」时只发卡片；只有非企微通道时不生成图片', async () => {
+    const off = await schedule({ sourceConfig: { image: false } });
+    expect(await generate(off.id, NOW)).toMatchObject({ deliveries: 2, imageSkipped: null });
+    expect((await ordered(off.id)).map((r) => bodyOf(r).msgtype ?? bodyOf(r).format)).toEqual(['template_card', 'template_card']);
+    const hookOnly = await schedule({ channelIds: [webhookId] });
+    expect(await generate(hookOnly.id, NOW)).toMatchObject({ deliveries: 1, imageSkipped: null });
+  });
+
+  it('缺少键（迁移导入的旧数据）按开启处理；找不到字体时只发卡片，原因记入结果与 last_error', async () => {
+    const s = await schedule();
+    await t.adminDb.update(notificationSchedules).set({ sourceConfig: {} }).where(eq(notificationSchedules.id, s.id));
+    const empty = mkdtempSync(path.join(tmpdir(), 'flower-fonts-'));
+    vi.stubEnv('FLOWER_FONT_DIR', empty);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const result = await generate(s.id, NOW);
+      expect(result).toMatchObject({ deliveries: 2, skipped: null, imageSkipped: FONT_MISSING });
+      expect((await ordered(s.id)).map((r) => bodyOf(r).msgtype ?? bodyOf(r).format)).toEqual(['template_card', 'template_card']);
+      expect((await scheduleRow(s.id)).lastError).toBe(`看板图片未发送：${FONT_MISSING}`);
+      expect(warn).toHaveBeenCalledOnce();
+    } finally {
+      warn.mockRestore();
+      vi.unstubAllEnvs();
+      rmSync(empty, { recursive: true });
+    }
+  });
+
+  it('超过 2MB 的图片不发', () => {
+    expect(wecomImagePayload(Buffer.alloc(DASHBOARD_IMAGE_MAX_BYTES + 1))).toEqual({ skipped: '图片 2048 KB，超过企业微信 2MB 的上限' });
+    expect(wecomImagePayload(null)).toEqual({ skipped: FONT_MISSING });
   });
 });
 

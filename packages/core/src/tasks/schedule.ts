@@ -108,7 +108,7 @@ export type IterationOverview = {
   attention: Array<{ kind: 'attention' | 'notice'; title: string; assignees: string[]; note: string }>;
 };
 
-export type OverviewRow = { title: string; progress: number; attention: boolean; note: string; assignees: string[] };
+export type OverviewRow = { requirementId: string | null; title: string; progress: number; attention: boolean; note: string; assignees: string[] };
 
 /** 概览的行：任务按需求聚合（没有需求的按标题），行进度为各任务展示进度的平均。 */
 export function overviewRows(tasks: OverviewTask[], today: string): OverviewRow[] {
@@ -120,6 +120,7 @@ export function overviewRows(tasks: OverviewTask[], today: string): OverviewRow[
     groups.set(key, [...(groups.get(key) ?? []), t]);
   }
   return [...groups.values()].map((segs) => ({
+    requirementId: segs[0]!.requirementId,
     title: segs[0]!.title.trim(),
     progress: Math.round(segs.reduce((sum, s) => sum + displayProgress(s, today), 0) / segs.length),
     attention: segs.some((s) => s.flag === 'attention'),

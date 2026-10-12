@@ -78,6 +78,7 @@ export * from './notifications/schedules';
 export * from './notifications/match';
 export * from './notifications/rules';
 export * from './notifications/sources';
+export * from './notifications/dashboard-image';
 export * from './notifications/run';
 export * from './notifications/sender';
 export * from './notifications/deliveries';

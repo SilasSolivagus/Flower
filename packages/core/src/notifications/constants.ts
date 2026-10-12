@@ -70,7 +70,8 @@ export const RESPONSE_MAX_CHARS = 2000;
 /** 事件规则的过滤条件：条件之间为「且」，同一条件内多个值为「或」；不适用于该事件的条件视为通过。 */
 export type RuleFilter = { states?: string[]; priorities?: string[]; nodeIds?: string[]; documentStatuses?: string[]; fields?: string[] };
 export type NewRequirementsConfig = { emptyBehavior: 'skip' | 'notice'; onlineSourceKeys: string[] };
-export type OverviewCardConfig = { titlePrefix?: string };
+/** image：附带看板图片（只发企微通道）；缺少该键（迁移导入的旧数据）按开启处理。 */
+export type OverviewCardConfig = { titlePrefix?: string; image?: boolean };
 
 /** 一次发送的请求体：企微与 Webhook 为 JSON，邮件为主题与正文。 */
 export type ChannelPayload = { type: 'json'; body: Record<string, unknown> } | { type: 'email'; subject: string; text: string };

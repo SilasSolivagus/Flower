@@ -15,7 +15,7 @@ import { notifyKeys, useApiMutation, useFields, useMessageTemplates, useProductC
 import type { NotificationSchedule } from '@/lib/types';
 
 const DEFAULT_TEMPLATE = 'default';
-type SourceConfig = { titlePrefix?: string; emptyBehavior?: 'skip' | 'notice'; onlineSourceKeys?: string[] };
+type SourceConfig = { titlePrefix?: string; image?: boolean; emptyBehavior?: 'skip' | 'notice'; onlineSourceKeys?: string[] };
 
 /** 新建或修改定时推送。fixedProductId 给定时（产品设置页）不能选产品。初值只在挂载时读取。 */
 export function ScheduleDialog({ org, productId: fixedProductId, schedule, onClose }: { org: string; productId?: string; schedule: NotificationSchedule | null; onClose: () => void }) {
@@ -32,6 +32,8 @@ export function ScheduleDialog({ org, productId: fixedProductId, schedule, onClo
   const [enabled, setEnabled] = useState(schedule?.enabled ?? true);
   const [failThreshold, setFailThreshold] = useState(String(schedule?.failThreshold ?? 1));
   const [titlePrefix, setTitlePrefix] = useState(cfg.titlePrefix ?? '');
+  // 缺少该键（迁移导入的旧数据）按开启处理
+  const [image, setImage] = useState(cfg.image ?? true);
   const [emptyBehavior, setEmptyBehavior] = useState<'skip' | 'notice'>(cfg.emptyBehavior ?? 'skip');
   const [onlineKeys, setOnlineKeys] = useState<string[]>(cfg.onlineSourceKeys ?? []);
   const channels = useProductChannels(org, productId);
@@ -40,7 +42,11 @@ export function ScheduleDialog({ org, productId: fixedProductId, schedule, onClo
   // 本产品可用的通道，加上当前已选、但已停用的通道（迁移来的定时推送）
   const options = [...(channels.data ?? []), ...(schedule?.channels ?? []).filter((c) => !(channels.data ?? []).some((x) => x.id === c.id))];
   const sourceConfig =
-    source === 'overview_card' ? (titlePrefix.trim() ? { titlePrefix: titlePrefix.trim() } : {}) : source === 'new_requirements' ? { emptyBehavior, onlineSourceKeys: onlineKeys } : {};
+    source === 'overview_card'
+      ? { ...(titlePrefix.trim() ? { titlePrefix: titlePrefix.trim() } : {}), image }
+      : source === 'new_requirements'
+        ? { emptyBehavior, onlineSourceKeys: onlineKeys }
+        : {};
   // 通道没有改动时不提交，已停用的通道不妨碍修改其他字段
   const channelsChanged = !schedule || [...channelIds].sort().join() !== [...schedule.channelIds].sort().join();
   const body = {
@@ -139,10 +145,17 @@ export function ScheduleDialog({ org, productId: fixedProductId, schedule, onClo
             <p className="text-[13px] text-muted-foreground">先选择产品，再选择通道。</p>
           )}
           {source === 'overview_card' && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="sc-title">卡片标题前缀</Label>
-              <Input id="sc-title" placeholder="默认为「产品名 研发日报」" value={titlePrefix} onChange={(e) => setTitlePrefix(e.target.value)} />
-            </div>
+            <>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="sc-title">卡片标题前缀</Label>
+                <Input id="sc-title" placeholder="默认为「产品名 研发日报」" value={titlePrefix} onChange={(e) => setTitlePrefix(e.target.value)} />
+              </div>
+              <label className="flex items-center gap-2 text-[13px]">
+                <Checkbox aria-label="附带看板图片" checked={image} onCheckedChange={(v) => setImage(v === true)} />
+                附带看板图片
+                <span className="text-xs text-muted-foreground">只发企业微信通道，在卡片之前</span>
+              </label>
+            </>
           )}
           {source === 'new_requirements' && (
             <>

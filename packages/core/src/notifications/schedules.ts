@@ -62,7 +62,7 @@ export type NotificationSchedulePatch = {
 const NOT_FOUND = '定时推送不存在';
 
 const SOURCE_CONFIG = {
-  overview_card: z.object({ titlePrefix: z.string().trim().max(30).optional() }).strict(),
+  overview_card: z.object({ titlePrefix: z.string().trim().max(30).optional(), image: z.boolean().default(true) }).strict(),
   new_requirements: z
     .object({ emptyBehavior: z.enum(['skip', 'notice']).default('skip'), onlineSourceKeys: z.array(z.string().max(32)).max(20).default([]) })
     .strict(),

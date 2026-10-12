@@ -20,6 +20,7 @@ PR 会跑 GitHub Actions CI（`.github/workflows/ci.yml`）：类型检查 + web
 | web lint（CI 会跑，需零错误零警告） | `pnpm --filter @flower/web lint` |
 | 修改 schema 后生成迁移 | `pnpm --filter @flower/core db:generate` |
 | 镜像冒烟测试 | `./scripts/smoke.sh` |
+| 下载看板图片字体（存到已忽略的 packages/core/assets/fonts/） | `./scripts/fetch-fonts.sh` |
 | 端到端测试（需要 db:up；会占用 3100 端口，不要与 pnpm dev 同时运行） | `pnpm --filter @flower/web e2e` |
 | 生成旧数据对照表（只读副本放在 .local-data/） | `pnpm --filter @flower/migrate legacy suggest --plane "$PWD/.local-data/123plane.db" --push "$PWD/.local-data/push.db" --prd-url postgres://flower_admin:flower_admin@localhost:54329/prd_src --mapping "$PWD/.local-data/mapping"` |
 | 迁移旧数据（先加 --dry-run 看对账报告；--as-of 决定迭代与任务状态，重导沿用 docs/p1a-validation.md 记录的日期） | `pnpm --filter @flower/migrate legacy import …同上参数… --out "$PWD/.local-data/reports" --owner-email <你的账号邮箱> --uploads "$PWD/.local-data/prd_uploads" --storage "$PWD/apps/web/.flower-storage" --as-of YYYY-MM-DD [--replace] [--dry-run]` |

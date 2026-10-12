@@ -239,7 +239,7 @@ export function toChannelPayloads(kind: ChannelKind, msg: RenderedMessage): Chan
   return [{ type: 'json', body: { msgtype: 'text', text: { content: truncateBytes(msg.text, 2048) } } }];
 }
 
-/** 发送记录页的内容摘要（最多 200 字），不含任何通道配置。 */
+/** 发送记录页的内容摘要（最多 200 字），不含任何通道配置；图片只显示大小。 */
 export function payloadPreview(payload: DeliveryPayload | null): string {
   if (!payload) return '（发送前渲染）';
   let text: string;
@@ -247,6 +247,7 @@ export function payloadPreview(payload: DeliveryPayload | null): string {
   else if (payload.type === 'email') text = payload.subject;
   else {
     const b = payload.body;
+    if (b.msgtype === 'image') return `图片 · ${Math.round(Buffer.byteLength(toText(get(b, 'image.base64')), 'base64') / 1024)} KB`;
     const card = b.msgtype === 'template_card' ? b.template_card : b.format === 'template_card' ? b.content : null;
     if (card) text = [toText(get(card, 'main_title.title')), toText(get(card, 'main_title.desc'))].filter(Boolean).join(' · ');
     else text = toText(get(b, 'markdown.content')) || toText(get(b, 'markdown_v2.content')) || toText(get(b, 'text.content')) || toText(b.content);

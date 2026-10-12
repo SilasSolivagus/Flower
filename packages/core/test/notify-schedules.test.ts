@@ -40,7 +40,7 @@ describe('定时推送', () => {
       cron: '0 19 * * 1-5',
       timezone: 'Asia/Shanghai',
       source: 'overview_card',
-      sourceConfig: {},
+      sourceConfig: { image: true },
       enabled: true,
       failThreshold: 1,
       alertState: 'normal',

@@ -27,7 +27,7 @@ export function ScheduleList({ org, productId }: { org: string; productId?: stri
     invalidate: [notifyKeys(org)],
     onSuccess: ({ result }) => {
       if (result.skipped) toast.info(`没有生成消息：${result.skipped}`);
-      else toast.success(`已生成 ${result.deliveries} 条待发记录，几秒内发送`);
+      else toast.success(`已生成 ${result.deliveries} 条待发记录，几秒内发送${result.imageSkipped ? `；看板图片未发送：${result.imageSkipped}` : ''}`);
     },
   });
   const remove = useApiMutation((id: string) => api(`/orgs/${org}/notification-schedules/${id}`, { method: 'DELETE' }), { invalidate: [notifyKeys(org)], success: '定时推送已删除' });

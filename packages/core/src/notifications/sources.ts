@@ -21,9 +21,11 @@ import { productWorkflowBody } from '../requirements/context';
 import { CHECK_STATE_LABELS } from '../requirements/labels';
 import { displayKey } from '../requirements/requirements';
 import { iterationTasksOverviewTx, overviewTaskOf } from '../tasks/queries';
-import { countedRows, overviewRows, todayInZone, workdaysElapsed } from '../tasks/schedule';
+import { countedRows, type OverviewRow, overviewRows, todayInZone, workdaysElapsed } from '../tasks/schedule';
 import { orgToday } from '../tasks/tasks';
+import type { WorkflowBody } from '../definitions/workflow-schema';
 import { EVENT_TYPE_LABELS, isNotifiableEventType, type NewRequirementsConfig, type OverviewCardConfig, SCHEDULE_DEFAULT_TIMEZONE } from './constants';
+import { DASHBOARD_MAX_ROWS, type DashboardData, type DashboardRow, type DashboardStatus } from './dashboard-image';
 import { parseSourceConfig, type ScheduleRow } from './schedules';
 
 export type OrgContext = { orgId: string; slug: string; name: string; timeZone: string; base: string };
@@ -292,14 +294,125 @@ export function releaseText(endDate: string, today: string): string {
   return `${endDate.slice(5, 7)}/${endDate.slice(8, 10)} 发版 · 还剩 ${workdaysElapsed(today, endDate)} 个工作日`;
 }
 
+/** 看板图片的标题：「MM/DD 发版，还剩 N 个工作日」「MM/DD 今天发版」「MM/DD 发版 · 已过发版日」。 */
+export function releaseHeadline(endDate: string, today: string): string {
+  const md = `${endDate.slice(5, 7)}/${endDate.slice(8, 10)}`;
+  if (endDate === today) return `${md} 今天发版`;
+  if (endDate < today) return `${md} 发版 · 已过发版日`;
+  return `${md} 发版，还剩 ${workdaysElapsed(today, endDate)} 个工作日`;
+}
+
 /**
- * 概览卡片的数据。title、desc、button 供自建卡片模板沿用；预置模板另用 source、emphasis、stats、quote、jumps，
+ * 需求的流程状态 → 看板的状态统计：completed 为已完成；started 中 key 含 test 或名称含「测试」的为测试中，
+ * 其余 started 为开发中；backlog、unstarted 为待开发；canceled 不统计（返回 null）。
+ */
+export function dashboardStatusOf(state: { key: string; label: string; category: string } | undefined): DashboardStatus | null {
+  if (!state) return 'todo';
+  if (state.category === 'canceled') return null;
+  if (state.category === 'completed') return 'done';
+  if (state.category === 'started') return /test/i.test(state.key) || state.label.includes('测试') ? 'testing' : 'doing';
+  return 'todo';
+}
+
+const isDeferred = (r: OverviewRow) => r.attention && r.progress < 100;
+
+/**
+ * 看板图片的数据，与概览卡片、甘特页同一口径（同一批任务与概览）。
+ * - 状态统计：本迭代本产品的需求按流程状态归类（见 dashboardStatusOf）；遗留下期的行计入「延期」，对应的需求不再计入其他类。
+ * - 重点需求：概览的行（任务按需求聚合），落后（未完成且低于理论进度，或遗留下期）的在前，再按优先级（选项顺序），最多 8 行；
+ *   P0 / P1 标星。行状态：遗留下期为延期；有需求的按需求状态；没有需求的按进度（100 已完成、大于 0 开发中、否则待开发）。
+ * - 燃尽：不保存历史进度，只给迭代的工作日数、今天的位置与剩余百分比（100 − 整体进度）。
+ */
+async function dashboardDataTx(
+  tx: Tx,
+  productId: string,
+  it: { id: string; name: string; startDate: string; endDate: string },
+  rows: OverviewRow[],
+  overview: { overall: number; expected: number; attention: Array<{ title: string; assignees: string[]; note: string }> },
+  prefix: string,
+  today: string,
+): Promise<DashboardData> {
+  const inIteration = await tx
+    .select({ id: requirements.id })
+    .from(requirements)
+    .where(and(eq(requirements.iterationId, it.id), eq(requirements.productId, productId), isNull(requirements.deletedAt)));
+  const reqIds = [...new Set([...inIteration.map((r) => r.id), ...rows.map((r) => r.requirementId).filter((x): x is string => !!x)])];
+  const reqs = reqIds.length ? await tx.select({ id: requirements.id, stateKey: requirements.stateKey }).from(requirements).where(inArray(requirements.id, reqIds)) : [];
+  const prios = reqIds.length
+    ? await tx
+        .select({ entityId: fieldValues.entityId, key: fieldOptions.key, sort: fieldOptions.sort })
+        .from(fieldValues)
+        .innerJoin(fieldOptions, eq(fieldOptions.id, fieldValues.optionId))
+        .innerJoin(fieldDefinitions, eq(fieldDefinitions.id, fieldValues.fieldId))
+        .where(and(inArray(fieldValues.entityId, reqIds), eq(fieldDefinitions.key, 'priority')))
+    : [];
+  const body: WorkflowBody = await productWorkflowBody(tx, productId);
+  const statusOfReq = (id: string) => dashboardStatusOf(body.states.find((st) => st.key === reqs.find((r) => r.id === id)?.stateKey));
+  const prioOf = (id: string | null) => (id ? prios.filter((p) => p.entityId === id).sort((a, b) => a.sort - b.sort)[0] : undefined);
+
+  const deferredReqs = new Set(rows.filter(isDeferred).map((r) => r.requirementId).filter((x): x is string => !!x));
+  const counts: Record<DashboardStatus, number> = { todo: 0, doing: 0, testing: 0, done: 0, deferred: rows.filter(isDeferred).length };
+  for (const r of inIteration) {
+    if (deferredReqs.has(r.id)) continue;
+    const st = statusOfReq(r.id);
+    if (st) counts[st]++;
+  }
+
+  const keyRows = rows.map((r, index) => {
+    const prio = prioOf(r.requirementId);
+    const status: DashboardStatus = isDeferred(r)
+      ? 'deferred'
+      : r.requirementId
+        ? (statusOfReq(r.requirementId) ?? 'todo')
+        : r.progress >= 100
+          ? 'done'
+          : r.progress > 0
+            ? 'doing'
+            : 'todo';
+    const row: DashboardRow = {
+      title: r.title,
+      status,
+      people: r.assignees.join(' · ') || '未分配',
+      progress: r.progress,
+      behind: r.progress < 100 && (isDeferred(r) || r.progress < overview.expected),
+      starred: prio?.key === 'p0' || prio?.key === 'p1',
+    };
+    return { row, index, rank: prio?.sort ?? Number.MAX_SAFE_INTEGER };
+  });
+  keyRows.sort((a, b) => Number(b.row.behind) - Number(a.row.behind) || a.rank - b.rank || a.index - b.index);
+
+  const days = workdaysElapsed(it.startDate, it.endDate);
+  return {
+    brand: 'Flower · 研发日报',
+    headline: releaseHeadline(it.endDate, today),
+    subtitle: `${prefix} · ${it.name}`,
+    overall: overview.overall,
+    expected: overview.expected,
+    burndown: { days, today: Math.min(days, workdaysElapsed(it.startDate, today)), remaining: 100 - overview.overall },
+    counts,
+    rows: keyRows.slice(0, DASHBOARD_MAX_ROWS).map((k) => k.row),
+    rowTotal: keyRows.length,
+    attention: overview.attention.map((a) => [a.title, a.assignees.join('、'), a.note].filter(Boolean).join(' · ')),
+    footer: '完整需求与甘特：点下方卡片「查看甘特」',
+  };
+}
+
+/**
+ * 概览卡片的数据（card）与看板图片的数据（dashboard：opts.dashboard 为 false 或没有迭代时为 null）。
+ * card 的 title、desc、button 供自建卡片模板沿用；预置模板另用 source、emphasis、stats、quote、jumps，
  * 其中可选区块为现成对象或 null（null 时卡片去掉该键）。
  */
-export async function overviewCardDataTx(tx: Tx, s: ScheduleRow, ctx: OrgContext, now: Date): Promise<Record<string, unknown>> {
+export async function overviewDataTx(
+  tx: Tx,
+  s: ScheduleRow,
+  ctx: OrgContext,
+  now: Date,
+  opts: { dashboard: boolean },
+): Promise<{ card: Record<string, unknown>; dashboard: DashboardData | null }> {
   const product = await productOf(tx, s);
   const cfg = s.sourceConfig as OverviewCardConfig;
-  const title = cardTitle(cfg.titlePrefix || `${product.name} 研发日报`, todayInZone(s.timezone, now));
+  const prefix = cfg.titlePrefix || `${product.name} 研发日报`;
+  const title = cardTitle(prefix, todayInZone(s.timezone, now));
   const its = await tx
     .select()
     .from(iterations)
@@ -307,7 +420,7 @@ export async function overviewCardDataTx(tx: Tx, s: ScheduleRow, ctx: OrgContext
   const it = pickIteration(its);
   if (!it) {
     const url = `${ctx.base}/iterations`;
-    return {
+    const card = {
       title,
       desc: '当前没有迭代 · 点开查看迭代列表',
       button: { title: '查看迭代列表', url },
@@ -320,16 +433,18 @@ export async function overviewCardDataTx(tx: Tx, s: ScheduleRow, ctx: OrgContext
       iteration: null,
       overall: null,
     };
+    return { card, dashboard: null };
   }
   // 与甘特页同一口径：同一取数与计算，「今天」按组织时区
   const today = await orgToday(tx, ctx.orgId, now);
   const { tasks, overview } = await iterationTasksOverviewTx(tx, null, it, [product.id], today);
-  const behindRows = countedRows(overviewRows(tasks.map(overviewTaskOf), today)).filter((r) => r.progress < overview.expected).length;
+  const rows = overviewRows(tasks.map(overviewTaskOf), today);
+  const behindRows = countedRows(rows).filter((r) => r.progress < overview.expected).length;
   const release = releaseText(it.endDate, today);
   const desc = `${clip(it.name, CARD_LIMITS.desc - ` · ${release}`.length)} · ${release}`;
   const ganttUrl = `${ctx.base}/iterations/${it.id}?tab=gantt`;
   const attention = overview.attention.slice(0, 3).map((a) => clip([a.title, a.assignees.join('、'), a.note].filter(Boolean).join(' · '), CARD_LIMITS.quoteLine));
-  return {
+  const card = {
     title,
     desc,
     button: { title: '查看甘特', url: ganttUrl },
@@ -351,6 +466,7 @@ export async function overviewCardDataTx(tx: Tx, s: ScheduleRow, ctx: OrgContext
     expected: overview.expected,
     behindRows,
   };
+  return { card, dashboard: opts.dashboard ? await dashboardDataTx(tx, product.id, it, rows, overview, prefix, today) : null };
 }
 
 /** 需求说明：描述里第一行不是标题的文字，去掉开头的引用、列表标记，最多 80 字。 */

@@ -44,6 +44,7 @@ describe('推送配置迁移', () => {
       ['123plane 变更摘要', 'digest', '0 18 * * *', false, 1, null],
     ]);
     expect(schedules[0]!.lastSuccessAt).toEqual(new Date('2026-09-28T11:00:01.000Z'));
+    expect(schedules[0]!.sourceConfig).toEqual({ image: true });
     expect(schedules[2]!.sourceConfig).toEqual({ emptyBehavior: 'skip', onlineSourceKeys: ['online_issue'] });
     expect(schedules[3]!.channelIds).toEqual([channels[2]!.id]);
     expect(schedules.every((s) => s.productId === plan.rows.products[0]!.id)).toBe(true);
