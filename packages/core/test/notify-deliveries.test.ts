@@ -172,6 +172,43 @@ describe('后台发送', () => {
     expect((await ofRule(rule.id)).every((d) => d.status === 'sent' && d.attempts === 1)).toBe(true);
   });
 
+  it('租约按实际时钟计算：用较早的 now 领取的记录，在真实租约内不会被 now 更晚的另一个实例回收', async () => {
+    const productId = await newProduct();
+    const ch = await wecomChannel(t.db, owner, '实际时钟群', { url: url('wall-clock') });
+    const rule = await createRule(t.db, owner, productId, { name: '租约规则', eventTypes: ['requirement.created'], channelIds: [ch.id] });
+    await createRequirement(t.db, owner, productId, { title: '发送中的需求' });
+    const [d] = await ofRule(rule.id);
+    // 实例 A 本轮开始得早（now 比实际时间早 10 分钟），轮到这条时才领取
+    const stale = new Date(Date.now() - 10 * 60_000);
+    await t.adminDb.update(notificationDeliveries).set({ nextAttemptAt: stale }).where(eq(notificationDeliveries.id, d!.id));
+    let entered!: () => void;
+    const sending = new Promise<void>((r) => (entered = r));
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const slow: Transport = {
+      ...fake.transport,
+      async postJson(u, body, headers) {
+        entered();
+        await gate;
+        return fake.transport.postJson(u, body, headers);
+      },
+    };
+    const a = processDueDeliveries(t.db, owner.orgId, { ...deps, transport: slow }, stale);
+    await sending;
+    const claimed = await row(d!.id);
+    expect(claimed.status).toBe('sending');
+    expect(claimed.nextAttemptAt!.getTime()).toBeGreaterThan(Date.now());
+    // 实例 B 用当前时间处理：A 的租约按实际时钟仍未到期，不回收
+    await process(later());
+    expect(await row(d!.id)).toMatchObject({ status: 'sending', attempts: 0 });
+    release();
+    expect((await a).sent).toBe(1);
+    const done = await row(d!.id);
+    expect(done).toMatchObject({ status: 'sent', attempts: 1 });
+    expect(done.sentAt!.getTime()).toBeGreaterThan(stale.getTime() + 5 * 60_000);
+    expect(callsTo(url('wall-clock'))).toHaveLength(1);
+  });
+
   it('定时推送：同一次执行全部放弃时连续失败加一并告警；下一次成功清零并记 last_success_at', async () => {
     const productId = await newProduct();
     const ch = await wecomChannel(t.db, owner, '日报群', { url: url('schedule') });

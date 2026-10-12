@@ -98,15 +98,19 @@ async function runDueSchedules(db: Db, orgId: string, deps: NotifyDeps, now: Dat
   return ran;
 }
 
-/** 一轮：逐个组织执行到点的定时推送，再发送到期的记录。测试与端到端用它手动驱动。 */
-export async function runNotificationTick(db: Db, deps: NotifyDeps, now: Date = new Date()): Promise<TickSummary> {
+/**
+ * 一轮：逐个组织执行到点的定时推送，再发送到期的记录。测试与端到端传入 now 手动驱动；
+ * 不传时每个组织开始处理时取当前时间（前面的组织可能处理了几分钟，不能沿用本轮开始的时间）。
+ */
+export async function runNotificationTick(db: Db, deps: NotifyDeps, now?: Date): Promise<TickSummary> {
   const summary: TickSummary = { orgs: 0, schedulesRun: 0, sent: 0, failed: 0, dead: 0, rateLimited: 0 };
-  for (const orgId of await dueOrgIds(db, now)) {
+  for (const orgId of await dueOrgIds(db, now ?? new Date())) {
     summary.orgs++;
+    const orgNow = now ?? new Date();
     // 每个组织单独兜底：一个组织出错只跳过它本轮剩下的处理，不影响其他组织
     try {
-      summary.schedulesRun += await runDueSchedules(db, orgId, deps, now);
-      const r = await processDueDeliveries(db, orgId, deps, now);
+      summary.schedulesRun += await runDueSchedules(db, orgId, deps, orgNow);
+      const r = await processDueDeliveries(db, orgId, deps, orgNow);
       summary.sent += r.sent;
       summary.failed += r.failed;
       summary.dead += r.dead;

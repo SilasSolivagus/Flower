@@ -54,6 +54,12 @@ const errorText = (e: unknown): string => {
   return (cause instanceof Error ? cause.message : String(cause)).slice(0, RESPONSE_MAX_CHARS);
 };
 
+/**
+ * 写入时刻：当前时钟，但不早于调用方给的 now。租约、发送时间、重试与限流的下次时间都按写入时的实际时间算，
+ * 前面的记录发送耗时不会让后面的时间提前到期；测试传入未来的 now 模拟时间时结果仍可预期。
+ */
+const clockAfter = (now: Date): Date => new Date(Math.max(now.getTime(), Date.now()));
+
 async function tryChannelLockTx(tx: Tx, channelId: string): Promise<boolean> {
   const [row] = (await tx.execute(sql`select pg_try_advisory_xact_lock(hashtextextended(${`flower:notify-channel:${channelId}`}, 0)) as locked`)) as unknown as [{ locked: boolean }];
   return row!.locked;
@@ -147,6 +153,7 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
   };
   const D = notificationDeliveries;
   const claimed = await withOrg(db, orgId, async (tx) => {
+    const claimAt = clockAfter(now);
     if (!opts.onlyIds) {
       const expired = await tx
         .select()
@@ -154,7 +161,7 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
         .where(and(eq(D.status, 'sending'), lte(D.nextAttemptAt, now)))
         .limit(BATCH)
         .for('no key update', { skipLocked: true });
-      for (const d of expired) tally(await finalizeTx(tx, d, { result: 'failed', response: INTERRUPTED }, now, eq(D.id, d.id)));
+      for (const d of expired) tally(await finalizeTx(tx, d, { result: 'failed', response: INTERRUPTED }, claimAt, eq(D.id, d.id)));
     }
     const due = await tx
       .select()
@@ -173,7 +180,7 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
       const [channel] = await tx.select().from(notificationChannels).where(eq(notificationChannels.id, channelId));
       if (!channel || !channel.enabled) {
         for (const d of list) {
-          await markDeadTx(tx, d, '通道已停用，未发送', now);
+          await markDeadTx(tx, d, '通道已停用，未发送', claimAt);
           summary.dead++;
         }
         continue;
@@ -182,12 +189,12 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
       const [used] = await tx
         .select({ n: sql<number>`count(*)::int` })
         .from(D)
-        .where(and(eq(D.channelId, channelId), or(and(eq(D.status, 'sent'), gt(D.sentAt, new Date(now.getTime() - RATE_WINDOW_MS))), eq(D.status, 'sending'))));
+        .where(and(eq(D.channelId, channelId), or(and(eq(D.status, 'sent'), gt(D.sentAt, new Date(claimAt.getTime() - RATE_WINDOW_MS))), eq(D.status, 'sending'))));
       const quota = Math.max(0, channel.rateLimitPerMin - used!.n);
       // 超出每分钟上限的推到窗口之后，不占下一轮的取数名额，其他通道的记录不会被挤掉
       const over = list.slice(quota).map((d) => d.id);
       if (over.length) {
-        await tx.update(D).set({ nextAttemptAt: new Date(now.getTime() + RATE_WINDOW_MS) }).where(inArray(D.id, over));
+        await tx.update(D).set({ nextAttemptAt: new Date(claimAt.getTime() + RATE_WINDOW_MS) }).where(inArray(D.id, over));
         summary.rateLimited += over.length;
       }
       for (const d of list.slice(0, quota)) {
@@ -203,13 +210,13 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
             payload = await tx.transaction((sp) => renderRuleDeliveryTx(sp, d, channel, deps));
           } catch (e) {
             // 渲染错误是确定性的，重试也一样，直接放弃
-            await markDeadTx(tx, d, `渲染失败：${errorText(e)}`.slice(0, RESPONSE_MAX_CHARS), now);
+            await markDeadTx(tx, d, `渲染失败：${errorText(e)}`.slice(0, RESPONSE_MAX_CHARS), claimAt);
             summary.dead++;
             continue;
           }
         }
         allowanceMs += SEND_ALLOWANCE_MS[channel.kind];
-        const lease = new Date(now.getTime() + LEASE_BASE_MS + allowanceMs);
+        const lease = new Date(claimAt.getTime() + LEASE_BASE_MS + allowanceMs);
         await tx.update(D).set({ status: 'sending', payload, nextAttemptAt: lease }).where(eq(D.id, d.id));
         out.push({ d: { ...d, status: 'sending', payload, nextAttemptAt: lease }, channel });
       }
@@ -230,7 +237,7 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
       }
     }
     const mine = and(eq(D.id, d.id), eq(D.status, 'sending'), eq(D.nextAttemptAt, d.nextAttemptAt!));
-    tally(await withOrg(db, orgId, (tx) => finalizeTx(tx, d, outcome, now, mine)));
+    tally(await withOrg(db, orgId, (tx) => finalizeTx(tx, d, outcome, clockAfter(now), mine)));
   }
   return summary;
 }
