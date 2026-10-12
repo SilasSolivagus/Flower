@@ -59,7 +59,7 @@ async function recordGenerationFailure(db: Db, orgId: string, id: string, error:
       .update(S)
       .set({
         lastRunAt: now,
-        lastError: `生成内容失败：${error instanceof Error ? error.message : String(error)}`.slice(0, 500),
+        lastError: `生成内容失败：${causeMessage(error)}`.slice(0, 500),
         consecutiveFailures: failures,
         alertState: failures >= s.failThreshold ? 'alert' : s.alertState,
         nextRunAt: next,
