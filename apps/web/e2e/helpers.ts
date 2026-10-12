@@ -1,4 +1,4 @@
-import { type APIRequestContext, type APIResponse, expect, type Locator, type Page } from '@playwright/test';
+import { type APIRequestContext, type APIResponse, expect, type Locator, type Page, request as playwrightRequest } from '@playwright/test';
 
 export const OWNER = { email: 'owner@example.com', password: 'password123', name: '林澄' };
 
@@ -186,14 +186,29 @@ export async function launchDocument(request: APIRequestContext, documentId: str
   for (const to of ['review', 'approved', 'launched']) await ok(request.post(`/api/v1/orgs/acme/documents/${documentId}/transitions`, { data: { to } }));
 }
 
-/** 驱动一轮后台发送（端到端服务端设置了 FLOWER_NOTIFY_WORKER=off、FLOWER_NOTIFY_TICK_API=1）；now 用来模拟时间。 */
-export async function tick(request: APIRequestContext, now?: Date): Promise<{ orgs: number; schedulesRun: number; sent: number; failed: number; dead: number; rateLimited: number }> {
-  return (await json<{ summary: { orgs: number; schedulesRun: number; sent: number; failed: number; dead: number; rateLimited: number } }>(
-    request.post('/api/v1/instance/notifications/tick', { data: now ? { now: now.toISOString() } : {} }),
-  )).summary;
+type TickSummary = { orgs: number; schedulesRun: number; events: number; notified: number; sent: number; failed: number; dead: number; rateLimited: number };
+
+/** 驱动一轮后台循环（端到端服务端设置了 FLOWER_NOTIFY_WORKER=off、FLOWER_NOTIFY_TICK_API=1）：生成站内通知、执行定时推送、发送；now 用来模拟时间。 */
+export async function tick(request: APIRequestContext, now?: Date): Promise<TickSummary> {
+  return (await json<{ summary: TickSummary }>(request.post('/api/v1/instance/notifications/tick', { data: now ? { now: now.toISOString() } : {} }))).summary;
 }
 
 /** 登记企微通道（地址为本机假接收端），返回通道 id。 */
 export async function createWecomChannel(request: APIRequestContext, name: string, url: string, extra: Record<string, unknown> = {}): Promise<string> {
   return (await json<{ channel: { id: string } }>(request.post('/api/v1/orgs/acme/notification-channels', { data: { kind: 'wecom_robot', name, config: { url }, ...extra } }))).channel.id;
+}
+
+/**
+ * 以新成员的身份调用接口：发邀请，用独立的请求上下文接受（不影响 page 与 request 原来的登录状态），
+ * 返回该上下文与成员 id。用完调用 ctx.dispose()。
+ */
+export async function memberRequest(
+  request: APIRequestContext,
+  opts: { email: string; name: string; orgRole?: 'admin' | 'member' | 'guest'; password?: string },
+): Promise<{ ctx: APIRequestContext; memberId: string }> {
+  const { token } = await json<{ token: string }>(request.post('/api/v1/orgs/acme/invitations', { data: { email: opts.email, orgRole: opts.orgRole ?? 'member' } }));
+  const ctx = await playwrightRequest.newContext({ baseURL: 'http://localhost:3100' });
+  await ok(ctx.post(`/api/v1/invitations/${token}/accept`, { data: { name: opts.name, password: opts.password ?? 'password123' } }));
+  const memberId = (await json<{ me: { memberId: string } }>(ctx.get('/api/v1/orgs/acme'))).me.memberId;
+  return { ctx, memberId };
 }

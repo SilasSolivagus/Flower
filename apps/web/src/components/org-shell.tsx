@@ -25,6 +25,7 @@ import { useOrg } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { QueryError } from './load-error';
 import { Logo } from './logo';
+import { NotificationBell } from './notification-bell';
 import { OrgSwitcher } from './org-switcher';
 import { UserMenu } from './user-menu';
 
@@ -101,7 +102,8 @@ export function OrgShell({ children }: { children: ReactNode }) {
         )}
       </nav>
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-12 items-center justify-end border-b bg-card px-6">
+        <div className="flex h-12 items-center justify-end gap-1 border-b bg-card px-6">
+          <NotificationBell org={org} />
           <UserMenu />
         </div>
         <main className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col gap-5 px-8 py-6">{children}</main>
