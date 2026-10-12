@@ -77,3 +77,43 @@ export type OverviewCardConfig = { titlePrefix?: string; image?: boolean };
 export type ChannelPayload = { type: 'json'; body: Record<string, unknown> } | { type: 'email'; subject: string; text: string };
 /** 发送记录里的请求体；legacy 为迁移来的 push 推送日志原文。 */
 export type DeliveryPayload = ChannelPayload | { type: 'legacy'; content: string };
+
+// ---------- P3-B1：站内通知、关注、个人偏好 ----------
+
+/** 站内通知的五种类型。 */
+export const MEMBER_NOTIFICATION_KINDS = ['mentioned', 'assigned', 'followed_change', 'signoff_due', 'system_alert'] as const;
+export type MemberNotificationKind = (typeof MEMBER_NOTIFICATION_KINDS)[number];
+export const MEMBER_NOTIFICATION_KIND_LABELS: Record<MemberNotificationKind, string> = {
+  mentioned: '被 @',
+  assigned: '被指派',
+  followed_change: '关注对象变化',
+  signoff_due: '等我签字',
+  system_alert: '系统告警',
+};
+/** 同一事件同一人只发一条，取排名最高的一种；系统告警没有事件，不参与比较。 */
+export const MEMBER_NOTIFICATION_RANK: Record<MemberNotificationKind, number> = { mentioned: 4, assigned: 3, signoff_due: 2, followed_change: 1, system_alert: 0 };
+
+export const NOTIFICATION_SUBJECT_TYPES = ['requirement', 'document', 'task', 'schedule'] as const;
+export type NotificationSubjectType = (typeof NOTIFICATION_SUBJECT_TYPES)[number];
+/** 可以关注的对象。 */
+export const SUBSCRIPTION_SUBJECT_TYPES = ['requirement', 'document'] as const;
+export type SubscriptionSubjectType = (typeof SUBSCRIPTION_SUBJECT_TYPES)[number];
+export const SUBSCRIPTION_SOURCES = ['auto', 'manual'] as const;
+export type SubscriptionSource = (typeof SUBSCRIPTION_SOURCES)[number];
+
+export type NotificationPref = { inApp: boolean; wecom: boolean; email: boolean };
+export type NotificationPrefChannel = keyof NotificationPref;
+/** 没有个人设置时的默认值：站内全开；企微只开被 @、被指派、等我签字；邮件全关。 */
+export const DEFAULT_NOTIFICATION_PREFS: Record<MemberNotificationKind, NotificationPref> = {
+  mentioned: { inApp: true, wecom: true, email: false },
+  assigned: { inApp: true, wecom: true, email: false },
+  followed_change: { inApp: true, wecom: false, email: false },
+  signoff_due: { inApp: true, wecom: true, email: false },
+  system_alert: { inApp: true, wecom: false, email: false },
+};
+export const NOTIFICATION_PREF_CHANNEL_LABELS: Record<NotificationPrefChannel, string> = { inApp: '站内', wecom: '企业微信', email: '邮件' };
+
+/** 企业微信账号（userid）：1–64 位字母、数字与 _ . @ -。 */
+export const WECOM_USERID_RE = /^[A-Za-z0-9_.@-]{1,64}$/;
+/** 已读通知保留的天数，之后由后台循环删除。 */
+export const NOTIFICATION_RETENTION_DAYS = 90;

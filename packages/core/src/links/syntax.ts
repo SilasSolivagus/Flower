@@ -1,5 +1,5 @@
 /**
- * [[双链]] 的语法：解析、分类、规范写法、上下文与编辑器文本块定位。
+ * [[双链]] 与 @ 成员的语法：解析、分类、规范写法、上下文与编辑器文本块定位。
  * 浏览器与服务端共用（@flower/core/links），不导入其他模块。
  */
 
@@ -166,4 +166,73 @@ export function wikiRangesInBlock(parts: TextPart[]): Array<{ from: number; to: 
     text += p.code ? ' '.repeat(p.text.length) : p.text;
   }
   return parseWikilinks(text).map((l) => ({ from: posAt[l.start]!, to: posAt[l.end - 1]! + 1, target: l.target }));
+}
+
+// ---------- @ 成员 ----------
+
+/** 正文里的一处 @：`[@姓名](member:成员ID)`。name 为写入时的姓名，显示时按 memberId 取当前姓名。 */
+export type Mention = { memberId: string; name: string; raw: string; start: number; end: number };
+/** 显示用的片段：普通文字、[[ ]] 链接、@ 成员。 */
+export type RichSegment = WikiSegment | { kind: 'mention'; mention: Mention };
+
+const MENTION_RE = /\[@([^[\]\n]{1,50})\]\(member:([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})\)/g;
+
+/** 解析 @：围栏代码块、行内代码里的，以及前面有反斜杠转义的不算。成员 ID 统一小写。 */
+export function parseMentions(text: string): Mention[] {
+  const code = codeRanges(text);
+  const out: Mention[] = [];
+  for (const m of text.matchAll(MENTION_RE)) {
+    const start = m.index;
+    if (text[start - 1] === '\\' || code.some(([s, e]) => start >= s && start < e)) continue;
+    const name = m[1]!.trim();
+    if (!name) continue;
+    out.push({ memberId: m[2]!.toLowerCase(), name, raw: m[0], start, end: start + m[0].length });
+  }
+  return out;
+}
+
+/** 正文里被 @ 的成员（去重，按首次出现顺序）。 */
+export const mentionedMemberIds = (text: string): string[] => [...new Set(parseMentions(text).map((m) => m.memberId))];
+
+/** 本次保存相对上一版新出现的被 @ 成员（按首次出现顺序）。 */
+export function newMentionIds(previous: string, next: string): string[] {
+  const before = new Set(mentionedMemberIds(previous));
+  return mentionedMemberIds(next).filter((id) => !before.has(id));
+}
+
+/** @ 写法里的姓名：方括号与换行换成空格、合并空白，最多 50 字；为空时用「成员」。 */
+export function cleanMentionName(name: string): string {
+  return name.replace(/[[\]\r\n]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 50) || '成员';
+}
+
+/** 插入正文用的写法。 */
+export const mentionMarkup = (memberId: string, name: string): string => `[@${cleanMentionName(name)}](member:${memberId})`;
+
+/** 纯文字：@ 写法换成「@姓名」，用于通知摘要与企业微信消息。 */
+export function plainMentions(text: string): string {
+  let out = '';
+  let at = 0;
+  for (const m of parseMentions(text)) {
+    out += `${text.slice(at, m.start)}@${m.name}`;
+    at = m.end;
+  }
+  return out + text.slice(at);
+}
+
+/** 显示用：把文字拆成普通文字、[[ ]] 链接与 @ 三种片段（理论上不会重叠，重叠时取先出现的）。 */
+export function splitRichText(text: string): RichSegment[] {
+  const pieces: Array<{ start: number; end: number; seg: RichSegment }> = [
+    ...parseWikilinks(text).map((link) => ({ start: link.start, end: link.end, seg: { kind: 'link' as const, link } })),
+    ...parseMentions(text).map((mention) => ({ start: mention.start, end: mention.end, seg: { kind: 'mention' as const, mention } })),
+  ].sort((a, b) => a.start - b.start);
+  const out: RichSegment[] = [];
+  let at = 0;
+  for (const p of pieces) {
+    if (p.start < at) continue;
+    if (p.start > at) out.push({ kind: 'text', text: text.slice(at, p.start) });
+    out.push(p.seg);
+    at = p.end;
+  }
+  if (at < text.length) out.push({ kind: 'text', text: text.slice(at) });
+  return out;
 }
