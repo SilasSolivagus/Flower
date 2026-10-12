@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, isNotNull } from 'drizzle-orm';
-import { requireNonGuest, requireOrgAdmin } from '../access/permissions';
+import { productRoleOf, requireNonGuest, requireOrgAdmin } from '../access/permissions';
 import type { Db } from '../db/client';
-import { messageTemplates, notificationRules, notificationSchedules } from '../db/schema';
+import { messageTemplates, notificationRules, notificationSchedules, productMembers } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
@@ -66,9 +66,20 @@ async function viewsTx(tx: Tx, rows: TemplateRow[]): Promise<MessageTemplateView
   }));
 }
 
-export async function listMessageTemplates(db: Db, actor: Actor): Promise<MessageTemplateView[]> {
+/** 访客只有是某个产品的管理员时才能查看模板（新建、修改事件规则与定时推送时选择模板）。 */
+async function requireTemplateReaderTx(tx: Tx, actor: Actor): Promise<void> {
+  if (actor.orgRole !== 'guest') return;
+  const rows = await tx
+    .select({ productId: productMembers.productId })
+    .from(productMembers)
+    .where(and(eq(productMembers.memberId, actor.memberId), eq(productMembers.role, 'admin')));
+  for (const r of rows) if ((await productRoleOf(tx, actor, r.productId)) === 'admin') return;
   requireNonGuest(actor);
+}
+
+export async function listMessageTemplates(db: Db, actor: Actor): Promise<MessageTemplateView[]> {
   return withOrg(db, actor.orgId, async (tx) => {
+    await requireTemplateReaderTx(tx, actor);
     await ensureBuiltinsTx(tx, actor.orgId);
     const rows = await tx.select().from(messageTemplates).orderBy(desc(messageTemplates.builtin), asc(messageTemplates.name));
     return viewsTx(tx, rows);

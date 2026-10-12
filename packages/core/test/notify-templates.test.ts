@@ -6,7 +6,7 @@ import type { Actor } from '../src/domain-types';
 import { BUILTIN_TEMPLATES } from '../src/notifications/builtin';
 import { createMessageTemplate, deleteMessageTemplate, listMessageTemplates, resolveTemplateTx, updateMessageTemplate } from '../src/notifications/message-templates';
 import { renderMessage } from '../src/notifications/template';
-import { createProduct } from '../src/tenancy/products';
+import { createProduct, setProductRole } from '../src/tenancy/products';
 import { createTestDb } from './db';
 import { asMember, seedInstance } from './factories';
 
@@ -131,6 +131,17 @@ describe('消息模板', () => {
     await expect(createMessageTemplate(t.db, member, { name: '成员建', format: 'text', body: 'x' })).rejects.toThrow('需要组织管理员权限');
     const guest = await asMember(t.db, owner, '访客乙', 'guest');
     await expect(listMessageTemplates(t.db, guest)).rejects.toThrow('访客');
+  });
+
+  it('访客是某个产品的管理员时可以查看模板（规则与定时推送的表单要用），仍不能新建；只是成员的访客不能看', async () => {
+    const guestAdmin = await asMember(t.db, owner, '访客产品管理员', 'guest');
+    await setProductRole(t.db, owner, productId, guestAdmin.memberId, 'admin');
+    const list = await listMessageTemplates(t.db, guestAdmin);
+    expect(list.filter((x) => x.builtin)).toHaveLength(4);
+    await expect(createMessageTemplate(t.db, guestAdmin, { name: '访客建', format: 'text', body: 'x' })).rejects.toThrow('需要组织管理员权限');
+    const guestEditor = await asMember(t.db, owner, '访客编辑', 'guest');
+    await setProductRole(t.db, owner, productId, guestEditor.memberId, 'editor');
+    await expect(listMessageTemplates(t.db, guestEditor)).rejects.toThrow('访客');
   });
 
   it('解析模板：指定的模板 → 预置行（含修改）→ 代码默认值；被引用的模板不能删除', async () => {
