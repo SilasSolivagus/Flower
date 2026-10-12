@@ -77,6 +77,8 @@ describe('通道', () => {
       ]),
     );
     expect(JSON.stringify(event)).not.toContain('demo-key');
+    for (const bad of ['not-a-url', 'ftp://example.com/x'])
+      await expect(createChannel(t.db, owner, { kind: 'webhook', name: `坏网址 ${bad}`, config: { url: bad } }, { ...TEST_DEPS })).rejects.toThrow('通道配置有误');
     await expect(updateChannel(t.db, owner, ch.id, { rateLimitPerMin: 0 }, TEST_DEPS)).rejects.toThrow('1–600');
     await expect(updateChannel(t.db, owner, ch.id, { allowedProductIds: ['00000000-0000-7000-8000-000000000000'] }, TEST_DEPS)).rejects.toThrow('不存在的产品');
   });

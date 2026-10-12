@@ -29,8 +29,12 @@ const httpUrl = z
   .trim()
   .max(2000, '网址太长')
   .refine((v) => {
-    const u = URL.parse(v);
-    return !!u && (u.protocol === 'https:' || u.protocol === 'http:');
+    try {
+      const u = new URL(v);
+      return u.protocol === 'https:' || u.protocol === 'http:';
+    } catch {
+      return false;
+    }
   }, '网址应以 http:// 或 https:// 开头');
 const email = z.string().trim().max(255).regex(/^[^\s@]+@[^\s@]+$/, '邮箱地址格式不正确');
 
@@ -194,7 +198,12 @@ export function assertSafeOutboundHost(hostname: string, message = '网址不能
   // 先按 WHATWG URL 规范化：`2130706433`、`0x7f.1`、`0177.0.0.1`、`127.1` 这类 IPv4 写法
   // 系统解析器（getaddrinfo）同样接受，规范化成点分十进制后再检查；无法解析的保持原样
   const raw = lower.startsWith('[') || !lower.includes(':') ? lower : `[${lower}]`;
-  const normalized = URL.parse(`http://${raw}/`)?.hostname ?? raw;
+  let normalized = raw;
+  try {
+    normalized = new URL(`http://${raw}/`).hostname;
+  } catch {
+    // 无法解析的保持原样
+  }
   // 域名末尾的 `.`（如 `localhost.`）解析器会当作没有这个点，去掉后再比较
   const h = normalized.replace(/\.$/, '');
   const bracketed = h.startsWith('[') || !h.includes(':') ? h : `[${h}]`;
