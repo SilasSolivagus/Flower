@@ -6,3 +6,5 @@
 **/.env.local
 docs
 packages/core/assets/fonts
+.local-data
+.superpowers
