@@ -4,6 +4,7 @@ import { domainEvents, notificationDeliveries, notificationDigestItems, notifica
 import type { Actor } from '../src/domain-types';
 import { createChannel, updateChannel } from '../src/notifications/channels';
 import { listDeliveries, processDueDeliveries, resendDelivery, sendTestMessage } from '../src/notifications/deliveries';
+import { createMessageTemplate } from '../src/notifications/message-templates';
 import { createRule } from '../src/notifications/rules';
 import { runScheduleNow } from '../src/notifications/run';
 import { createSchedule } from '../src/notifications/schedules';
@@ -207,6 +208,36 @@ describe('后台发送', () => {
     expect(done).toMatchObject({ status: 'sent', attempts: 1 });
     expect(done.sentAt!.getTime()).toBeGreaterThan(stale.getTime() + 5 * 60_000);
     expect(callsTo(url('wall-clock'))).toHaveLength(1);
+  });
+
+  it('事件消息超过企微 markdown 单条上限：截断并注明，只发一条', async () => {
+    const productId = await newProduct();
+    const ch = await wecomChannel(t.db, owner, '长消息群', { url: url('long') });
+    const tpl = await createMessageTemplate(t.db, owner, { name: '很长的事件模板', format: 'markdown', body: `## {{subject.key}}\n\n${'很长的变更说明。'.repeat(400)}` });
+    const rule = await createRule(t.db, owner, productId, { name: '长消息规则', eventTypes: ['requirement.created'], channelIds: [ch.id], templateId: tpl.id });
+    await createRequirement(t.db, owner, productId, { title: '长消息需求' });
+    await process(later());
+    const calls = callsTo(url('long'));
+    expect(calls).toHaveLength(1);
+    const content = (calls[0]!.body.markdown as { content: string }).content;
+    expect(content.endsWith('…（内容过长，已截断）')).toBe(true);
+    expect(Buffer.byteLength(content, 'utf8')).toBeLessThanOrEqual(4096);
+    expect((await ofRule(rule.id))[0]).toMatchObject({ status: 'sent' });
+  });
+
+  it('通道收窄可用产品后：已排队的不再允许的产品记录放弃，不发送', async () => {
+    const productId = await newProduct();
+    const other = await newProduct();
+    const ch = await wecomChannel(t.db, owner, '收窄群', { url: url('narrowed'), allowedProductIds: [productId, other] });
+    const dropped = await createRule(t.db, owner, productId, { name: '被收窄的规则', eventTypes: ['requirement.created'], channelIds: [ch.id] });
+    const kept = await createRule(t.db, owner, other, { name: '仍允许的规则', eventTypes: ['requirement.created'], channelIds: [ch.id] });
+    await createRequirement(t.db, owner, productId, { title: '不再允许' });
+    await createRequirement(t.db, owner, other, { title: '仍然允许' });
+    await updateChannel(t.db, owner, ch.id, { allowedProductIds: [other] }, TEST_DEPS);
+    await process(later());
+    expect((await ofRule(dropped.id))[0]).toMatchObject({ status: 'dead', attempts: 0, nextAttemptAt: null, response: '通道不再允许本产品使用，未发送' });
+    expect((await ofRule(kept.id))[0]).toMatchObject({ status: 'sent' });
+    expect(callsTo(url('narrowed'))).toHaveLength(1);
   });
 
   it('定时推送：同一次执行全部放弃时连续失败加一并告警；下一次成功清零并记 last_success_at', async () => {

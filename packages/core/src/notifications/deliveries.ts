@@ -12,7 +12,7 @@ import { type ChannelKind, type ChannelPayload, type DeliveryKind, type Delivery
 import { resolveTemplateTx } from './message-templates';
 import { type NotifyDeps, retryDelayMs, type SendOutcome, sendPayload } from './sender';
 import { eventMessageDataTx, formatMinute, orgContextTx } from './sources';
-import { payloadPreview, renderMessage, toChannelPayloads } from './template';
+import { payloadPreview, renderMessage, TRUNCATED_MARK, toChannelPayloads, truncateBytes, WECOM_MARKDOWN_MAX_BYTES } from './template';
 
 export type DeliveryRow = typeof notificationDeliveries.$inferSelect;
 export type DeliveryView = {
@@ -129,13 +129,31 @@ async function finalizeTx(tx: Tx, d: DeliveryRow, outcome: SendOutcome, now: Dat
   return (await apply({ status: 'failed', attempts, nextAttemptAt: new Date(now.getTime() + delay) })) ? 'failed' : 'skipped';
 }
 
-/** 事件规则的记录：用规则的模板（或预置「事件推送」）渲染，取第一条请求体。 */
+/**
+ * 事件规则的记录：用规则的模板（或预置「事件推送」）渲染，只发一条。
+ * 企微 markdown 超过单条上限时截断并注明，不拆成多条。
+ */
 async function renderRuleDeliveryTx(tx: Tx, d: DeliveryRow, channel: ChannelRow, deps: { publicUrl: string }): Promise<ChannelPayload> {
   if (!d.eventId) throw new AppError('invalid', '记录缺少事件');
   const [rule] = d.ruleId ? await tx.select({ templateId: notificationRules.templateId }).from(notificationRules).where(eq(notificationRules.id, d.ruleId)) : [];
   const tpl = await resolveTemplateTx(tx, rule?.templateId ?? null, 'event');
   const data = await eventMessageDataTx(tx, d.eventId, await orgContextTx(tx, d.orgId, deps.publicUrl));
-  return toChannelPayloads(channel.kind, renderMessage(tpl.format, tpl.body, data))[0]!;
+  const msg = renderMessage(tpl.format, tpl.body, data);
+  if (channel.kind === 'wecom_robot' && msg.format === 'markdown') msg.text = truncateBytes(msg.text, WECOM_MARKDOWN_MAX_BYTES, TRUNCATED_MARK);
+  return toChannelPayloads(channel.kind, msg)[0]!;
+}
+
+/** 记录所属的产品：事件规则或定时推送的产品；都没有时为 null。 */
+async function deliveryProductIdTx(tx: Tx, d: DeliveryRow): Promise<string | null> {
+  if (d.ruleId) {
+    const [r] = await tx.select({ productId: notificationRules.productId }).from(notificationRules).where(eq(notificationRules.id, d.ruleId));
+    return r?.productId ?? null;
+  }
+  if (d.scheduleId) {
+    const [s] = await tx.select({ productId: notificationSchedules.productId }).from(notificationSchedules).where(eq(notificationSchedules.id, d.scheduleId));
+    return s?.productId ?? null;
+  }
+  return null;
 }
 
 /**
@@ -167,7 +185,7 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
       .select()
       .from(D)
       .where(and(inArray(D.status, ['pending', 'failed']), lte(D.nextAttemptAt, now), opts.onlyIds ? inArray(D.id, opts.onlyIds) : undefined))
-      .orderBy(asc(D.nextAttemptAt), asc(D.createdAt))
+      .orderBy(asc(D.nextAttemptAt), asc(D.createdAt), asc(D.id))
       .limit(BATCH)
       .for('no key update', { skipLocked: true });
     const byChannel = new Map<string, DeliveryRow[]>();
@@ -185,6 +203,17 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
         }
         continue;
       }
+      // 通道的可用产品可能在记录生成后收窄：不再允许的记录直接放弃（测试消息不属于产品，不受限制）
+      const sendable: DeliveryRow[] = [];
+      for (const d of list) {
+        const allowed =
+          d.kind === 'test' || channel.allowedProductIds.length === 0 || channel.allowedProductIds.includes((await deliveryProductIdTx(tx, d)) ?? '');
+        if (allowed) sendable.push(d);
+        else {
+          await markDeadTx(tx, d, '通道不再允许本产品使用，未发送', claimAt);
+          summary.dead++;
+        }
+      }
       if (!(await tryChannelLockTx(tx, channelId))) continue;
       const [used] = await tx
         .select({ n: sql<number>`count(*)::int` })
@@ -192,12 +221,12 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
         .where(and(eq(D.channelId, channelId), or(and(eq(D.status, 'sent'), gt(D.sentAt, new Date(claimAt.getTime() - RATE_WINDOW_MS))), eq(D.status, 'sending'))));
       const quota = Math.max(0, channel.rateLimitPerMin - used!.n);
       // 超出每分钟上限的推到窗口之后，不占下一轮的取数名额，其他通道的记录不会被挤掉
-      const over = list.slice(quota).map((d) => d.id);
+      const over = sendable.slice(quota).map((d) => d.id);
       if (over.length) {
         await tx.update(D).set({ nextAttemptAt: new Date(claimAt.getTime() + RATE_WINDOW_MS) }).where(inArray(D.id, over));
         summary.rateLimited += over.length;
       }
-      for (const d of list.slice(0, quota)) {
+      for (const d of sendable.slice(0, quota)) {
         // 余量用完就停止领取（跨通道）；未领取的行不改动，事务结束后释放行锁，下一轮再取
         if (out.length > 0 && allowanceMs + SEND_ALLOWANCE_MS[channel.kind] > MAX_ALLOWANCE_MS) {
           full = true;

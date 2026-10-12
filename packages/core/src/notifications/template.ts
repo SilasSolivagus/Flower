@@ -116,25 +116,30 @@ export function renderMessage(format: TemplateFormat, body: string, data: Record
 
 const bytes = (s: string): number => Buffer.byteLength(s, 'utf8');
 
-/** 按 UTF-8 字节截断，超出时以「…」结尾。 */
-export function truncateBytes(s: string, maxBytes: number): string {
+/** 企微 markdown 单条消息的字节上限。 */
+export const WECOM_MARKDOWN_MAX_BYTES = 4096;
+/** 只发一条的消息超出上限时，截断处的说明。 */
+export const TRUNCATED_MARK = '…（内容过长，已截断）';
+
+/** 按 UTF-8 字节截断，超出时以 mark（默认「…」）结尾，结果不超过 maxBytes。 */
+export function truncateBytes(s: string, maxBytes: number, mark = '…'): string {
   if (bytes(s) <= maxBytes) return s;
   let out = '';
   let n = 0;
   for (const ch of s) {
     const b = bytes(ch);
-    if (n + b > maxBytes - 3) break;
+    if (n + b > maxBytes - bytes(mark)) break;
     out += ch;
     n += b;
   }
-  return `${out}…`;
+  return `${out}${mark}`;
 }
 
 /**
  * 企微 markdown 每条最多 4096 字节：按空行分段装箱；第一行是标题（以 # 开头）时，
  * 第 2 条起标题加「（续n）」。单段过长时截断。
  */
-export function splitMarkdown(text: string, maxBytes = 4096): string[] {
+export function splitMarkdown(text: string, maxBytes = WECOM_MARKDOWN_MAX_BYTES): string[] {
   if (bytes(text) <= maxBytes) return [text];
   const firstNL = text.indexOf('\n');
   const firstLine = firstNL === -1 ? text : text.slice(0, firstNL);
