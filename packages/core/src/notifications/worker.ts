@@ -1,25 +1,39 @@
-import { and, eq, inArray, isNull, lte, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { notificationDeliveries, notificationSchedules } from '../db/schema';
+import { domainEvents, notificationCursors, notificationDeliveries, notificationSchedules, organizations } from '../db/schema';
 import { withOrg, withSystem } from '../db/tx';
+import { generateMemberNotifications } from '../member-notifications/generate';
 import { nextRunAt } from './cron';
 import { type ProcessSummary, processDueDeliveries } from './deliveries';
 import { generateScheduleRunTx, tryScheduleLockTx } from './run';
 import type { NotifyDeps } from './sender';
 
-export type TickSummary = ProcessSummary & { orgs: number; schedulesRun: number };
+export type TickSummary = ProcessSummary & { orgs: number; schedulesRun: number; events: number; notified: number };
 export type NotificationWorker = { start(): void; stop(): Promise<void> };
 
 const S = notificationSchedules;
 const D = notificationDeliveries;
 const dueSchedule = (now: Date) => and(eq(S.enabled, true), or(isNull(S.nextRunAt), lte(S.nextRunAt, now)));
 
-/** 后台循环唯一的跨组织查询：有到期（或租约到期）的发送记录、或有需要排期或到点的定时推送的组织。 */
+/**
+ * 后台循环唯一的跨组织查询：有到期（或租约到期）的发送记录、有需要排期或到点的定时推送、
+ * 或游标之后有新事件（没有游标行的组织从头处理）的组织。
+ */
 async function dueOrgIds(db: Db, now: Date): Promise<string[]> {
   return withSystem(db, async (tx) => {
     const a = await tx.selectDistinct({ orgId: D.orgId }).from(D).where(and(inArray(D.status, ['pending', 'failed', 'sending']), lte(D.nextAttemptAt, now)));
     const b = await tx.selectDistinct({ orgId: S.orgId }).from(S).where(dueSchedule(now));
-    return [...new Set([...a, ...b].map((r) => r.orgId))];
+    const c = await tx
+      .select({ orgId: organizations.id })
+      .from(organizations)
+      .where(
+        and(
+          isNull(organizations.deletedAt),
+          sql`exists (select 1 from ${domainEvents} e left join ${notificationCursors} c on c.org_id = e.org_id
+                      where e.org_id = ${organizations.id} and (c.last_event_id is null or (e.occurred_at, e.id) > (c.last_occurred_at, c.last_event_id)))`,
+        ),
+      );
+    return [...new Set([...a, ...b, ...c].map((r) => r.orgId))];
   });
 }
 
@@ -99,16 +113,19 @@ async function runDueSchedules(db: Db, orgId: string, deps: NotifyDeps, now: Dat
 }
 
 /**
- * 一轮：逐个组织执行到点的定时推送，再发送到期的记录。测试与端到端传入 now 手动驱动；
+ * 一轮：逐个组织先生成站内通知，再执行到点的定时推送，最后发送到期的记录。测试与端到端传入 now 手动驱动；
  * 不传时每个组织开始处理时取当前时间（前面的组织可能处理了几分钟，不能沿用本轮开始的时间）。
  */
 export async function runNotificationTick(db: Db, deps: NotifyDeps, now?: Date): Promise<TickSummary> {
-  const summary: TickSummary = { orgs: 0, schedulesRun: 0, sent: 0, failed: 0, dead: 0, rateLimited: 0 };
+  const summary: TickSummary = { orgs: 0, schedulesRun: 0, events: 0, notified: 0, sent: 0, failed: 0, dead: 0, rateLimited: 0 };
   for (const orgId of await dueOrgIds(db, now ?? new Date())) {
     summary.orgs++;
     const orgNow = now ?? new Date();
     // 每个组织单独兜底：一个组织出错只跳过它本轮剩下的处理，不影响其他组织
     try {
+      const g = await generateMemberNotifications(db, orgId, deps, orgNow);
+      summary.events += g.events;
+      summary.notified += g.notifications;
       summary.schedulesRun += await runDueSchedules(db, orgId, deps, orgNow);
       const r = await processDueDeliveries(db, orgId, deps, orgNow);
       summary.sent += r.sent;

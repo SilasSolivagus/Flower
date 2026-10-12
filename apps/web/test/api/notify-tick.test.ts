@@ -20,7 +20,8 @@ describe('手动驱动后台发送', () => {
     const session = await initAndLogin(app);
     const r = await call(app, 'POST', '/instance/notifications/tick', { session, body: { now: '2026-10-12T12:00:00Z' } });
     expect(r.status).toBe(200);
-    expect(r.body.summary).toEqual({ orgs: 0, schedulesRun: 0, sent: 0, failed: 0, dead: 0, rateLimited: 0 });
+    expect(r.body.summary).toMatchObject({ orgs: 1, schedulesRun: 0, notified: 0, sent: 0, failed: 0, dead: 0, rateLimited: 0 });
+    expect(r.body.summary.events).toBeGreaterThan(0);
     const inv = await call(app, 'POST', '/orgs/acme/invitations', { session, body: { email: 'member@example.com', orgRole: 'admin' } });
     const accept = await call(app, 'POST', `/invitations/${inv.body.token}/accept`, { body: { name: '组织管理员', password: 'password123' } });
     expect((await call(app, 'POST', '/instance/notifications/tick', { session: sessionFrom(accept.res), body: {} })).status).toBe(403);

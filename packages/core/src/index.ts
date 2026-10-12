@@ -88,3 +88,6 @@ export * from './member-notifications/prefs';
 export * from './wecom/accounts';
 export * from './wecom/app';
 export * from './wecom/oauth';
+export * from './member-notifications/recipients';
+export * from './member-notifications/content';
+export * from './member-notifications/generate';
