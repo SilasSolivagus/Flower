@@ -27,7 +27,7 @@ async function wecomGet<T extends WecomReply>(deps: WecomOAuthDeps, path: string
   url.search = new URLSearchParams(params).toString();
   let res: Response;
   try {
-    res = await (deps.fetch ?? fetch)(url, { signal: AbortSignal.timeout(10_000) });
+    res = await (deps.fetch ?? fetch)(url, { signal: AbortSignal.timeout(10_000), redirect: 'error' });
   } catch {
     throw new AppError('precondition_failed', '无法连接企业微信，请稍后重试');
   }

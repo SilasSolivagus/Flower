@@ -1,8 +1,10 @@
-import { and, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { domainEvents, notificationCursors, notificationDeliveries, notificationSchedules, organizations } from '../db/schema';
+import { domainEvents, memberNotifications, notificationCursors, notificationDeliveries, notificationSchedules, organizations, wecomBindStates } from '../db/schema';
 import { withOrg, withSystem } from '../db/tx';
+import { notifyScheduleAlertTx } from '../member-notifications/alerts';
 import { generateMemberNotifications } from '../member-notifications/generate';
+import { deleteExpiredNotifications, retentionCutoff } from '../member-notifications/inbox';
 import { nextRunAt } from './cron';
 import { type ProcessSummary, processDueDeliveries } from './deliveries';
 import { generateScheduleRunTx, tryScheduleLockTx } from './run';
@@ -13,11 +15,12 @@ export type NotificationWorker = { start(): void; stop(): Promise<void> };
 
 const S = notificationSchedules;
 const D = notificationDeliveries;
+const bindStateCutoff = (now: Date): Date => new Date(now.getTime() - 86_400_000);
 const dueSchedule = (now: Date) => and(eq(S.enabled, true), or(isNull(S.nextRunAt), lte(S.nextRunAt, now)));
 
 /**
  * 后台循环唯一的跨组织查询：有到期（或租约到期）的发送记录、有需要排期或到点的定时推送、
- * 或游标之后有新事件（没有游标行的组织从头处理）的组织。
+ * 游标之后有新事件（没有游标行的组织从头处理）、或有过期数据待清理的组织。
  */
 async function dueOrgIds(db: Db, now: Date): Promise<string[]> {
   return withSystem(db, async (tx) => {
@@ -33,7 +36,10 @@ async function dueOrgIds(db: Db, now: Date): Promise<string[]> {
                       where e.org_id = ${organizations.id} and (c.last_event_id is null or (e.occurred_at, e.id) > (c.last_occurred_at, c.last_event_id)))`,
         ),
       );
-    return [...new Set([...a, ...b, ...c].map((r) => r.orgId))];
+    // 有已读超过保留期的通知、或过期超过一天的扫码绑定 state 的组织
+    const d = await tx.selectDistinct({ orgId: memberNotifications.orgId }).from(memberNotifications).where(lt(memberNotifications.readAt, retentionCutoff(now)));
+    const e = await tx.selectDistinct({ orgId: wecomBindStates.orgId }).from(wecomBindStates).where(lt(wecomBindStates.expiresAt, bindStateCutoff(now)));
+    return [...new Set([...a, ...b, ...c, ...d, ...e].map((r) => r.orgId))];
   });
 }
 
@@ -43,7 +49,7 @@ function causeMessage(e: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
-async function recordGenerationFailure(db: Db, orgId: string, id: string, error: unknown, now: Date): Promise<void> {
+async function recordGenerationFailure(db: Db, orgId: string, id: string, error: unknown, now: Date, publicUrl: string): Promise<void> {
   await withOrg(db, orgId, async (tx) => {
     const [s] = await tx.select().from(S).where(eq(S.id, id)).for('update');
     if (!s) return;
@@ -66,20 +72,23 @@ async function recordGenerationFailure(db: Db, orgId: string, id: string, error:
           updatedAt: now,
         })
         .where(eq(S.id, id));
+      if (s.alertState !== 'alert') await notifyScheduleAlertTx(tx, s, '定时规则或时区无效，已停用并进入告警', publicUrl, now);
       console.warn(`[notify] 定时推送的定时规则或时区无效，已停用：org=${orgId} schedule=${id}：${reason}`);
       return;
     }
+    const alert = failures >= s.failThreshold;
     await tx
       .update(S)
       .set({
         lastRunAt: now,
         lastError: `生成内容失败：${causeMessage(error)}`.slice(0, 500),
         consecutiveFailures: failures,
-        alertState: failures >= s.failThreshold ? 'alert' : s.alertState,
+        alertState: alert ? 'alert' : s.alertState,
         nextRunAt: next,
         updatedAt: now,
       })
       .where(eq(S.id, id));
+    if (alert && s.alertState !== 'alert') await notifyScheduleAlertTx(tx, s, `连续失败 ${failures} 次，已进入告警`, publicUrl, now);
   });
 }
 
@@ -106,7 +115,7 @@ async function runDueSchedules(db: Db, orgId: string, deps: NotifyDeps, now: Dat
       });
       if (did) ran++;
     } catch (e) {
-      await recordGenerationFailure(db, orgId, id, e, now);
+      await recordGenerationFailure(db, orgId, id, e, now, deps.publicUrl);
     }
   }
   return ran;
@@ -127,6 +136,8 @@ export async function runNotificationTick(db: Db, deps: NotifyDeps, now?: Date):
       summary.events += g.events;
       summary.notified += g.notifications;
       summary.schedulesRun += await runDueSchedules(db, orgId, deps, orgNow);
+      await deleteExpiredNotifications(db, orgId, orgNow);
+      await withOrg(db, orgId, (tx) => tx.delete(wecomBindStates).where(lt(wecomBindStates.expiresAt, bindStateCutoff(orgNow))));
       const r = await processDueDeliveries(db, orgId, deps, orgNow);
       summary.sent += r.sent;
       summary.failed += r.failed;

@@ -93,3 +93,5 @@ export * from './member-notifications/content';
 export * from './member-notifications/generate';
 export * from './member-notifications/channels';
 export * from './member-notifications/dispatch';
+export * from './member-notifications/inbox';
+export * from './member-notifications/alerts';
