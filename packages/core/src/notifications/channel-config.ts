@@ -190,8 +190,13 @@ export function isPrivateTargetError(e: unknown): boolean {
 
 export function assertSafeOutboundHost(hostname: string, message = '网址不能指向本机或内网地址'): void {
   if (process.env.FLOWER_NOTIFY_ALLOW_PRIVATE === '1') return;
+  const lower = hostname.toLowerCase();
+  // 先按 WHATWG URL 规范化：`2130706433`、`0x7f.1`、`0177.0.0.1`、`127.1` 这类 IPv4 写法
+  // 系统解析器（getaddrinfo）同样接受，规范化成点分十进制后再检查；无法解析的保持原样
+  const raw = lower.startsWith('[') || !lower.includes(':') ? lower : `[${lower}]`;
+  const normalized = URL.parse(`http://${raw}/`)?.hostname ?? raw;
   // 域名末尾的 `.`（如 `localhost.`）解析器会当作没有这个点，去掉后再比较
-  const h = hostname.toLowerCase().replace(/\.$/, '');
+  const h = normalized.replace(/\.$/, '');
   const bracketed = h.startsWith('[') || !h.includes(':') ? h : `[${h}]`;
   if (h === 'localhost' || h.endsWith('.local') || isUnsafeIpv4(h) || isUnsafeIpv6(bracketed)) {
     throw new AppError('invalid', message, PRIVATE_TARGET_DETAILS);

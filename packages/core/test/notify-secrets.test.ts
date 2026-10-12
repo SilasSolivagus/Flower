@@ -152,6 +152,23 @@ describe('assertSafeOutboundHost（SMTP 服务器等裸主机名）', () => {
     expect(() => assertSafeOutboundHost('192.168.1.1')).toThrow();
   });
 
+  it('拒绝十进制整数、十六进制、八进制与省略写法的 IPv4（规范化后检查），错误带 private_target 标记', () => {
+    for (const host of ['2130706433', '0x7f.1', '0x7f000001', '0177.0.0.1', '127.1', '012.0.0.1', '0xa9.254.1.1', '3232235777']) {
+      expect(() => assertSafeOutboundHost(host), host).toThrow('网址不能指向本机或内网地址');
+      expect(() => assertSafeOutboundUrl(`http://${host}/x`), host).toThrow('网址不能指向本机或内网地址');
+    }
+    let caught: unknown;
+    try {
+      parseChannelConfig('email', { ...EMAIL, host: '2130706433' });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toMatchObject({ message: 'SMTP 服务器不能是本机或内网地址' });
+    expect(isPrivateTargetError(caught)).toBe(true);
+    expect(() => assertSafeOutboundHost('0x08.8.8.8')).not.toThrow();
+    expect(() => assertSafeOutboundHost('134744072')).not.toThrow();
+  });
+
   it('拒绝不带中括号的裸 IPv6 环回地址', () => {
     expect(() => assertSafeOutboundHost('::1')).toThrow();
     expect(() => assertSafeOutboundHost('fe80::1')).toThrow();
