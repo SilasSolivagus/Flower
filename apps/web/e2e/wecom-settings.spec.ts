@@ -46,6 +46,9 @@ test('成员页：企业微信账号列（修改、重复提示）与批量导�
   });
   await expect(imp.getByText('wecom.csv：可匹配 1、无变化 1、找不到成员 1、账号重复 0、格式不对 0')).toBeVisible();
   await expect(imp.getByRole('table', { name: '导入预览' })).toContainText('找不到该邮箱的在职成员');
+  await expect(imp.getByRole('table', { name: '导入预览' })).toBeVisible();
+  const lisi = (await json<{ members: { displayName: string; wecomUserid: string | null }[] }>(page.request.get('/api/v1/orgs/acme/members'))).members.find((m) => m.displayName === '李四');
+  expect(lisi?.wecomUserid ?? null).toBeNull();
   await imp.getByRole('button', { name: '确认导入' }).click();
   await expect(page.getByText('已写入 1 个成员的企业微信账号')).toBeVisible();
   await expect(page.getByRole('row', { name: /李四/ })).toContainText('lisi');
@@ -64,6 +67,14 @@ test('推送页：企业微信应用（密钥只显示提示、回调地址）�
       }),
     )
   ).channel.id;
+  const otherProductId = await createProduct(request, '其他产品', 'OTH');
+  await createWecomChannel(request, '停用群', hook.url('off-0001'), { enabled: false });
+  await createWecomChannel(request, '他产品群', hook.url('other-0001'), { allowedProductIds: [otherProductId] });
+  await ok(
+    request.post('/api/v1/orgs/acme/notification-channels', {
+      data: { kind: 'email', name: '停用邮件', enabled: false, config: { host: 'smtp.example.com', port: 465, secure: true, user: 'robot@example.com', pass: 'demo-pass', from: 'robot@example.com', to: ['pm@example.com'] } },
+    }),
+  );
   await login(page, OWNER.email, OWNER.password);
 
   await page.goto('/acme/settings/notifications?tab=wecom');
@@ -85,12 +96,16 @@ test('推送页：企业微信应用（密钥只显示提示、回调地址）�
 
   await page.goto('/acme/settings/notifications');
   await page.getByLabel('个人通知邮件通道').click();
+  await expect(page.getByRole('option', { name: '通知邮件' })).toBeVisible();
+  expect(await page.getByRole('option').allTextContents()).toEqual(['不发邮件', '通知邮件']);
   await page.getByRole('option', { name: '通知邮件' }).click();
   await expect.poll(async () => (await json<{ channelId: string | null }>(request.get('/api/v1/orgs/acme/personal-email-channel'))).channelId).toBe(mailId);
 
   await page.goto(`/acme/settings/products/${productId}`);
   await page.getByRole('tab', { name: '推送' }).click();
   await page.getByLabel('个人提醒通道').click();
+  await expect(page.getByRole('option', { name: '研发群' })).toBeVisible();
+  expect(await page.getByRole('option').allTextContents()).toEqual(['不发企业微信个人提醒', '研发群']);
   await page.getByRole('option', { name: '研发群' }).click();
   await expect.poll(async () => (await json<{ channelId: string | null }>(request.get(`/api/v1/orgs/acme/products/${productId}/personal-channel`))).channelId).toBe(channelId);
 
