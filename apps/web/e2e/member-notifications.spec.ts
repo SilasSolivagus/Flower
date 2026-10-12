@@ -84,12 +84,15 @@ test('关注按钮：手动关注后收到别人的评论；打开详情时通�
   await page.goto(`/acme/requirements/${req.displayKey}`);
   await page.getByRole('button', { name: '关注', exact: true }).click();
   await expect(page.getByRole('button', { name: '已关注' })).toHaveAttribute('title', '你手动关注了');
+  // 先离开详情，通知生成后确认是未读，再打开详情
+  await page.goto('/acme');
 
   await ok(zhang.ctx.post(`/api/v1/orgs/acme/requirements/${req.id}/comments`, { data: { body: '我来看看' } }));
   await tick(request);
   const mine = () => json<{ notifications: Array<{ body: string; readAt: string | null }> }>(request.get('/api/v1/orgs/acme/notifications'));
   expect((await mine()).notifications.map((n) => n.body)).toEqual(['发表了评论：我来看看']);
-  await page.reload();
+  expect((await mine()).notifications[0]!.readAt).toBeNull();
+  await page.goto(`/acme/requirements/${req.displayKey}`);
   await expect(page.getByRole('button', { name: '已关注' })).toBeVisible();
   await expect.poll(async () => (await mine()).notifications[0]!.readAt).not.toBeNull();
 
