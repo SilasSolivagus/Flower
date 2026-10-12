@@ -15,6 +15,7 @@ export type MemberView = {
   department: string | null;
   orgRole: OrgRole;
   status: 'active' | 'left';
+  wecomUserid: string | null;
   hasAccount: boolean;
   functionTagIds: string[];
   productRoles: Array<{ productId: string; role: ProductRole }>;
@@ -44,6 +45,7 @@ async function loadViews(tx: Tx, ids?: string[]): Promise<MemberView[]> {
     department: m.department,
     orgRole: m.orgRole,
     status: m.status,
+    wecomUserid: m.wecomUserid,
     hasAccount: m.accountId !== null,
     functionTagIds: tags.filter((x) => x.memberId === m.id).map((x) => x.tagId),
     productRoles: roles.filter((x) => x.memberId === m.id).map((x) => ({ productId: x.productId, role: x.role })),
