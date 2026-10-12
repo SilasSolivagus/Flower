@@ -5,7 +5,8 @@ set -eu
 cd "$(dirname "$0")/.."
 
 DIR="${1:-packages/core/assets/fonts}"
-BASE=https://github.com/notofonts/noto-cjk/raw/main/Sans/SubsetOTF/SC
+# 固定到上游的一个提交，避免上游更新字体后校验失败
+BASE=https://github.com/notofonts/noto-cjk/raw/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/SubsetOTF/SC
 mkdir -p "$DIR"
 
 sha256() {
