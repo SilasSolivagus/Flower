@@ -23,15 +23,9 @@ import type { Context } from 'hono';
 import { z } from 'zod';
 import type { ApiDeps, App } from '../api';
 import { readJson } from '../http';
+import { idParam } from './notifications';
 
 const uuid = z.string().uuid();
-
-/** 校验路径参数是合法的 UUID，否则报 400（而不是让 Postgres 的 22P02 落到 404）。 */
-function idParam(c: Context, name: string, message: string): string {
-  const r = uuid.safeParse(c.req.param(name));
-  if (!r.success) throw new AppError('invalid', message);
-  return r.data;
-}
 
 function subjectParam(c: Context): SubscriptionSubject {
   const type = z.enum(SUBSCRIPTION_SUBJECT_TYPES).safeParse(c.req.param('type'));

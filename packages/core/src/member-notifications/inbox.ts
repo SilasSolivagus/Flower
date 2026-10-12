@@ -5,6 +5,7 @@ import { withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { type MemberNotificationKind, NOTIFICATION_RETENTION_DAYS, type NotificationSubjectType } from '../notifications/constants';
+import { CURSOR_RE } from '../notifications/deliveries';
 
 export type MemberNotificationView = {
   id: string;
@@ -22,7 +23,6 @@ export type NotificationFilter = 'all' | 'unread' | 'mentioned';
 export type NotificationListQuery = { filter?: NotificationFilter; kind?: MemberNotificationKind; before?: string; limit?: number };
 
 const N = memberNotifications;
-const CURSOR_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 function assertCanMark(actor: Actor): void {
   if (actor.tokenScope?.access === 'read') throw new AppError('forbidden', '只读 Token 不能标记已读');

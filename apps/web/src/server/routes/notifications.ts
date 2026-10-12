@@ -38,7 +38,7 @@ const ids = z.array(uuid).max(100);
 const record = z.record(z.string(), z.unknown());
 
 /** 校验路径参数是合法的 UUID，否则报 400（而不是让 Postgres 的 22P02 落到 404）。 */
-function idParam(c: Context, name: string, message: string): string {
+export function idParam(c: Context, name: string, message: string): string {
   const r = uuid.safeParse(c.req.param(name));
   if (!r.success) throw new AppError('invalid', message);
   return r.data;

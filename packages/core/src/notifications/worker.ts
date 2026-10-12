@@ -43,7 +43,7 @@ async function dueOrgIds(db: Db, now: Date): Promise<string[]> {
 }
 
 /** 只取底层原因（drizzle 的查询错误把 SQL 与参数放在外层 message 里，原因在 cause 中）。 */
-function causeMessage(e: unknown): string {
+export function causeMessage(e: unknown): string {
   const cause = e instanceof Error && e.cause instanceof Error ? e.cause : e;
   return cause instanceof Error ? cause.message : String(cause);
 }

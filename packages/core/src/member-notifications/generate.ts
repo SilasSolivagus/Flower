@@ -2,6 +2,7 @@ import { asc, and, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import { domainEvents, memberNotifications, members, notificationCursors, organizations } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
+import { causeMessage } from '../notifications/worker';
 import { type EventRow, pickRecipients, planEventTx } from './content';
 import { dispatchPersonalTx, type OutboundItem } from './dispatch';
 import { prefsForTx } from './prefs';
@@ -19,12 +20,6 @@ export const STALE_TRANSACTION_MS = 10 * 60 * 1000;
 const E = domainEvents;
 const C = notificationCursors;
 const N = memberNotifications;
-
-/** 只取底层原因（drizzle 的查询错误把 SQL 与参数放在外层 message 里）。 */
-function causeMessage(e: unknown): string {
-  const cause = e instanceof Error && e.cause instanceof Error ? e.cause : e;
-  return cause instanceof Error ? cause.message : String(cause);
-}
 
 type StaleTransaction = { pid: number; ageSeconds: number };
 

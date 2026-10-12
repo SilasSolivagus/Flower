@@ -11,19 +11,12 @@ import {
   unbindMyWecom,
   type WecomOAuthDeps,
 } from '@flower/core';
-import type { Context } from 'hono';
 import { z } from 'zod';
 import type { ApiDeps, App } from '../api';
 import { readJson } from '../http';
+import { idParam } from './notifications';
 
-const uuid = z.string().uuid();
 const csvBody = z.object({ csv: z.string().max(200_000) });
-
-function idParam(c: Context, name: string, message: string): string {
-  const r = uuid.safeParse(c.req.param(name));
-  if (!r.success) throw new AppError('invalid', message);
-  return r.data;
-}
 
 const oauth = (deps: ApiDeps): WecomOAuthDeps => ({ secretKey: deps.notify.secretKey, publicUrl: deps.publicUrl, apiBase: deps.wecomApiBase });
 

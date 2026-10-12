@@ -413,7 +413,7 @@ export async function resendDelivery(db: Db, actor: Actor, id: string): Promise<
   return viewOf(db, actor.orgId, newId);
 }
 
-const CURSOR_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+export const CURSOR_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 /**
  * 发送记录：按 (created_at, id) 倒序。游标为上一页最后一条的 `{created_at 微秒精度 UTC}|{id}`：
