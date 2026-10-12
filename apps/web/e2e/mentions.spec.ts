@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { createProduct, createRequirement, json, login, ok, OWNER, setupInstance } from './helpers';
+import { createDocument, createProduct, createRequirement, json, login, memberRequest, ok, OWNER, presetTemplateId, setupInstance, tick } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -59,4 +59,61 @@ test('评论与需求描述：输入 @ 补全成员，看不到产品的标出�
   const left = comments.getByText('@张三', { exact: true });
   await expect(left).toHaveAttribute('title', 'zhang@example.com · 已绑定企业微信 · 已离开组织');
   await expect(left).toHaveClass(/text-muted-foreground/);
+});
+
+test('PRD 正文：输入 @ 补全成员并插入成员标签；自动保存后正文为 @ 写法，刷新后仍显示；被 @ 的人收到通知', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const zhang = await memberRequest(request, { email: 'zhang@example.com', name: '张三' });
+  const doc = await createDocument(request, productId, { title: '登录 PRD', templateId: await presetTemplateId(request, productId) });
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/documents/${doc.displayKey}`);
+  const body = page.getByRole('region', { name: '正文' });
+  await expect(body).toContainText('1. 背景介绍');
+  await body.locator('.bn-block-content').last().click();
+  await page.keyboard.press('End');
+  await page.keyboard.type('请 @张');
+  await expect(page.getByRole('option', { name: /张三/ })).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(body.locator('.mention-chip')).toHaveText('@张三');
+  await expect(body.getByRole('status')).toHaveText('已保存');
+  const saved = await json<{ document: { markdown: string } }>(request.get(`/api/v1/orgs/acme/documents/${doc.displayKey}`));
+  expect(saved.document.markdown).toContain(`[@张三](member:${zhang.memberId})`);
+  await page.reload();
+  await expect(page.getByRole('region', { name: '正文' }).locator('.mention-chip')).toHaveText('@张三');
+  expect((await tick(request)).notified).toBe(1);
+  const list = await json<{ notifications: Array<{ body: string; title: string }> }>(zhang.ctx.get('/api/v1/orgs/acme/notifications'));
+  expect(list.notifications.map((n) => [n.body, n.title])).toEqual([['在 PRD 正文中 @ 了你', 'PAN-PRD-1 登录 PRD']]);
+  await zhang.ctx.dispose();
+});
+
+test('PRD 正文：@ 没有匹配的成员时回车关闭补全并照常换行；已离开成员的 @ 显示为灰色原名', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const zhangId = (await json<{ member: { id: string } }>(request.post('/api/v1/orgs/acme/members', { data: { displayName: '张三', email: 'zhang@example.com' } }))).member.id;
+  const doc = await createDocument(request, productId, { title: '登录 PRD' });
+  await ok(request.put(`/api/v1/orgs/acme/documents/${doc.id}/content`, { data: { baseVersion: doc.version, markdown: `负责人 [@张三](member:${zhangId})` } }));
+  await ok(request.patch(`/api/v1/orgs/acme/members/${zhangId}`, { data: { displayName: '张三丰' } }));
+  await ok(request.patch(`/api/v1/orgs/acme/members/${zhangId}`, { data: { status: 'left' } }));
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/documents/${doc.displayKey}`);
+  const body = page.getByRole('region', { name: '正文' });
+  const chip = body.locator('.mention-chip');
+  await expect(chip).toHaveText('@张三');
+  await expect(chip).toHaveClass(/mention-chip-grey/);
+  await expect(chip).toHaveAttribute('title', /已离开组织/);
+
+  await body.locator('.bn-block-content').last().click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(' @无此人');
+  const empty = page.getByText('无匹配项');
+  await expect(empty).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(empty).toBeHidden();
+  await page.keyboard.type('下一行');
+  await expect(body.locator('.bn-block-content')).toHaveCount(2);
+  await expect(body.locator('.bn-block-content').first()).toContainText('@无此人');
+  await expect(body.locator('.bn-block-content').last()).toHaveText('下一行');
+  // 读入的 @ 再次保存时写法不变（仍是写入时的姓名）
+  await expect(body.getByRole('status')).toHaveText('已保存');
+  const saved = await json<{ document: { markdown: string } }>(request.get(`/api/v1/orgs/acme/documents/${doc.displayKey}`));
+  expect(saved.document.markdown).toContain(`负责人 [@张三](member:${zhangId}) @无此人`);
 });

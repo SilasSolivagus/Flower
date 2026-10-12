@@ -14,7 +14,7 @@ import { type SelectionAnchor, selectionAnchor } from '@/features/documents/edit
 import { uploadDataImages } from '@/features/documents/import';
 import { editorAnchors, findSectionIndex, type SaveState, saveStateLabel } from '@/features/documents/model';
 import { ApiError, api, apiUpload } from '@/lib/api';
-import { linkKeys, qk, useApiMutation, useDocumentComments, useDocumentLinks } from '@/lib/queries';
+import { linkKeys, qk, useApiMutation, useDocumentComments, useDocumentLinks, useMentionMembers } from '@/lib/queries';
 import type { Attachment, DocumentDetail, LinkSuggestion } from '@/lib/types';
 import { AnchorCommentDialog } from './comments';
 
@@ -81,6 +81,7 @@ export function EditorPane({
   const router = useRouter();
   const links = useDocumentLinks(org, doc.id);
   const comments = useDocumentComments(org, doc.id);
+  const mentionMembers = useMentionMembers(org, doc.productId);
   const anchors = useMemo(() => editorAnchors(comments.data ?? []), [comments.data]);
   const decorations = useMemo<DecorationInput>(
     () => ({ org, productKey: doc.productKey, cards: links.data ?? [], anchors, activeAnchorId: activeCommentId }),
@@ -285,7 +286,7 @@ export function EditorPane({
         </div>
       )}
       <div ref={container} className="relative px-2 py-4" onMouseUp={onSelect} onKeyUp={onSelect} onClick={onBodyClick}>
-        <DocumentBodyEditor ref={handle} initialMarkdown={doc.markdown ?? ''} editable={editable && !conflict} onDirty={onDirty} uploadImage={uploadImage} decorations={decorations} searchLinks={editable ? searchLinks : undefined} />
+        <DocumentBodyEditor ref={handle} initialMarkdown={doc.markdown ?? ''} editable={editable && !conflict} onDirty={onDirty} uploadImage={uploadImage} decorations={decorations} searchLinks={editable ? searchLinks : undefined} mentionMembers={mentionMembers.data} />
         {pick && (
           <Button
             size="sm"

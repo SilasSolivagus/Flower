@@ -6,11 +6,14 @@ import { SuggestionMenu } from '@blocknote/core/extensions';
 import { zh } from '@blocknote/core/locales';
 import { type DefaultReactSuggestionItem, SuggestionMenuController, type SuggestionMenuProps, useComponentsContext, useCreateBlockNote } from '@blocknote/react';
 import { BlockNoteView } from '@blocknote/shadcn';
+import { cleanMentionName } from '@flower/core/links';
 import { useTheme } from 'next-themes';
 import { createContext, type KeyboardEvent, type Ref, type RefObject, useCallback, useContext, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { SUGGESTION_KIND_LABEL } from '@/features/links/model';
-import type { LinkSuggestion } from '@/lib/types';
+import { filterMentionMembers, MENTION_NO_ACCESS } from '@/features/mentions/model';
+import type { LinkSuggestion, MentionMember } from '@/lib/types';
 import { type DecorationInput, decorationsKey, flowerDecorations } from './decorations';
+import { MentionMembersContext, prdSchema } from './mention';
 
 export type PrdEditorHandle = { getMarkdown: () => string };
 export type PrdEditorProps = {
@@ -22,10 +25,13 @@ export type PrdEditorProps = {
   decorations?: DecorationInput;
   /** 输入 [[ 时的补全搜索；不传时不启用补全。 */
   searchLinks?: (query: string) => Promise<LinkSuggestion[]>;
+  /** 本组织成员：@ 显示当前姓名；可编辑时输入 @ 弹出成员补全。不传时不启用 @ 补全。 */
+  mentionMembers?: MentionMember[];
   ref?: Ref<PrdEditorHandle>;
 };
 
 const TRIGGER = '[[';
+const MENTION_TRIGGER = '@';
 const DEBOUNCE_MS = 150;
 
 /** 补全条目：带着它所属的查询，回车时据此判断列表是否已落定到当前输入。 */
@@ -34,7 +40,7 @@ type LinkItem = DefaultReactSuggestionItem & { query: string };
 type MenuShown = Pick<SuggestionMenuProps<LinkItem>, 'items' | 'selectedIndex' | 'onItemClick'>;
 const MenuShownContext = createContext<RefObject<MenuShown | null> | null>(null);
 
-/** [[ 补全菜单：显示方式与 BlockNote 默认菜单相同，另把显示中的条目与选中项记下来。 */
+/** [[ 与 @ 的补全菜单：显示方式与 BlockNote 默认菜单相同，另把显示中的条目与选中项记下来。 */
 function LinkSuggestionMenu({ items, loadingState, selectedIndex, onItemClick }: SuggestionMenuProps<LinkItem>) {
   const Components = useComponentsContext()!;
   const shownRef = useContext(MenuShownContext);
@@ -57,7 +63,7 @@ function LinkSuggestionMenu({ items, loadingState, selectedIndex, onItemClick }:
             ]
           : []),
         <Components.SuggestionMenu.Item
-          key={item.title}
+          key={`${i}:${item.title}`}
           id={`bn-suggestion-menu-item-${i}`}
           className="bn-suggestion-menu-item"
           item={item}
@@ -71,22 +77,22 @@ function LinkSuggestionMenu({ items, loadingState, selectedIndex, onItemClick }:
   );
 }
 
-/** Markdown → 块：用一个不挂载的编辑器实例解析，只在首次渲染时调用。空正文返回 undefined（BlockNote 要求初始内容非空）。 */
+/** Markdown → 块：用一个不挂载、带 mention 的编辑器实例解析，只在首次渲染时调用。空正文返回 undefined（BlockNote 要求初始内容非空）。 */
 function parseMarkdown(markdown: string) {
   if (!markdown.trim()) return undefined;
-  const blocks = BlockNoteEditor.create().tryParseMarkdownToBlocks(markdown);
+  const blocks = BlockNoteEditor.create({ schema: prdSchema }).tryParseMarkdownToBlocks(markdown);
   return blocks.length > 0 ? blocks : undefined;
 }
 
 /**
  * 一篇 PRD 正文的 BlockNote 编辑器。Markdown 是唯一数据源：挂载时解析一次，之后由父组件
  * 通过 ref 的 getMarkdown() 在需要保存时序列化；正文被外部替换（冲突后重新加载、恢复版本）时由父组件换 key 重新挂载。
- * [[ ]] 在正文里是普通文字，链接卡由装饰插件显示。
+ * [[ ]] 在正文里是普通文字，链接卡由装饰插件显示；@ 成员是内联元素（mention.tsx）。
  */
-export function PrdEditor({ initialMarkdown, editable, onDirty, uploadImage, decorations, searchLinks, ref }: PrdEditorProps) {
+export function PrdEditor({ initialMarkdown, editable, onDirty, uploadImage, decorations, searchLinks, mentionMembers, ref }: PrdEditorProps) {
   const [initialContent] = useState(() => parseMarkdown(initialMarkdown));
   const [extensions] = useState(() => [flowerDecorations()]);
-  const editor = useCreateBlockNote({ initialContent, dictionary: zh, uploadFile: uploadImage, extensions });
+  const editor = useCreateBlockNote({ schema: prdSchema, initialContent, dictionary: zh, uploadFile: uploadImage, extensions });
   useImperativeHandle(ref, () => ({ getMarkdown: () => editor.blocksToMarkdownLossy(editor.document) }), [editor]);
   // 只带元数据的事务：不改文档，不触发 onChange，因此不会引起自动保存
   useEffect(() => {
@@ -124,17 +130,40 @@ export function PrdEditor({ initialMarkdown, editable, onDirty, uploadImage, dec
     [editor, searchLinks],
   );
 
-  // [[ 补全菜单打开时的回车由这里处理，拦在 BlockNote 自己的菜单按键处理（挂在内层编辑区的捕获阶段）之前：
+  // @ 补全：在本组织成员里本地筛选，不发请求；选中后插入成员标签和一个空格
+  const getMentionItems = useCallback(
+    async (query: string): Promise<LinkItem[]> =>
+      filterMentionMembers(mentionMembers ?? [], query).map((m) => ({
+        query,
+        title: m.displayName,
+        subtext: m.canSeeProduct ? (m.email ?? undefined) : MENTION_NO_ACCESS,
+        group: '成员',
+        onItemClick: () => {
+          editor.insertInlineContent([{ type: 'mention', props: { memberId: m.id, name: cleanMentionName(m.displayName) } }, ' '], { updateSelection: true });
+        },
+      })),
+    [editor, mentionMembers],
+  );
+
+  // 补全菜单打开时的回车由这里处理，拦在 BlockNote 自己的菜单按键处理（挂在内层编辑区的捕获阶段）之前：
   // BlockNote 在新查询的结果返回前仍用上一次查询的条目响应回车，且不识别 Safari 确认组字时的回车。
   const menuShown = useRef<MenuShown | null>(null);
   const onKeyDownCapture = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'Enter') return;
-    const menu = editor.getExtension(SuggestionMenu)?.store.state;
-    if (!menu?.show || menu.triggerCharacter !== TRIGGER) return;
+    const suggestion = editor.getExtension(SuggestionMenu);
+    const menu = suggestion?.store.state;
+    if (!menu?.show || (menu.triggerCharacter !== TRIGGER && menu.triggerCharacter !== MENTION_TRIGGER)) return;
     e.stopPropagation();
     // 输入法组字时的回车用于上屏，不选条目；Safari 确认组字时 isComposing 已为 false，但 keyCode 仍是 229
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
     e.preventDefault();
+    // @ 没有匹配的成员：关掉补全，这次回车照常交给编辑器（换行，已输入的文字保留）
+    if (menu.triggerCharacter === MENTION_TRIGGER && filterMentionMembers(mentionMembers ?? [], menu.query).length === 0) {
+      suggestion?.closeMenu();
+      const view = editor.prosemirrorView;
+      view?.someProp('handleKeyDown', (f) => f(view, e.nativeEvent));
+      return;
+    }
     const shown = menuShown.current;
     const item = shown && shown.selectedIndex !== undefined ? shown.items[shown.selectedIndex] : undefined;
     // 列表还没落定到当前输入（防抖未到或请求在途，显示的是上一次查询的结果）时，回车不采用
@@ -143,12 +172,19 @@ export function PrdEditor({ initialMarkdown, editable, onDirty, uploadImage, dec
 
   const { resolvedTheme } = useTheme();
   return (
-    <BlockNoteView editor={editor} editable={editable} onChange={() => onDirty?.()} theme={resolvedTheme === 'dark' ? 'dark' : 'light'} onKeyDownCapture={onKeyDownCapture}>
-      {editable && searchLinks && (
-        <MenuShownContext value={menuShown}>
-          <SuggestionMenuController triggerCharacter={TRIGGER} getItems={getItems} suggestionMenuComponent={LinkSuggestionMenu} />
-        </MenuShownContext>
-      )}
-    </BlockNoteView>
+    <MentionMembersContext value={mentionMembers}>
+      <BlockNoteView editor={editor} editable={editable} onChange={() => onDirty?.()} theme={resolvedTheme === 'dark' ? 'dark' : 'light'} onKeyDownCapture={onKeyDownCapture}>
+        {editable && searchLinks && (
+          <MenuShownContext value={menuShown}>
+            <SuggestionMenuController triggerCharacter={TRIGGER} getItems={getItems} suggestionMenuComponent={LinkSuggestionMenu} />
+          </MenuShownContext>
+        )}
+        {editable && mentionMembers && (
+          <MenuShownContext value={menuShown}>
+            <SuggestionMenuController triggerCharacter={MENTION_TRIGGER} getItems={getMentionItems} suggestionMenuComponent={LinkSuggestionMenu} />
+          </MenuShownContext>
+        )}
+      </BlockNoteView>
+    </MentionMembersContext>
   );
 }
