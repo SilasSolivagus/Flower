@@ -5,6 +5,7 @@ import type { AccountView } from '../src/auth/accounts';
 import type { Actor } from '../src/domain-types';
 import { newId } from '../src/ids';
 import { notifyScheduleAlertTx } from '../src/member-notifications/alerts';
+import { deleteExpiredNotifications } from '../src/member-notifications/inbox';
 import { createMessageTemplate } from '../src/notifications/message-templates';
 import { createRule } from '../src/notifications/rules';
 import { createSchedule } from '../src/notifications/schedules';
@@ -21,6 +22,10 @@ import { fakeTransport } from './notify-transport';
 vi.mock('../src/member-notifications/alerts', async (importOriginal) => {
   const m = await importOriginal<typeof import('../src/member-notifications/alerts')>();
   return { ...m, notifyScheduleAlertTx: vi.fn(m.notifyScheduleAlertTx) };
+});
+vi.mock('../src/member-notifications/inbox', async (importOriginal) => {
+  const m = await importOriginal<typeof import('../src/member-notifications/inbox')>();
+  return { ...m, deleteExpiredNotifications: vi.fn(m.deleteExpiredNotifications) };
 });
 
 let t: Awaited<ReturnType<typeof createTestDb>>;
@@ -234,5 +239,34 @@ describe('系统告警写入出错', () => {
     expect(await schedule(badCron.id)).toMatchObject({ enabled: false, nextRunAt: null, alertState: 'alert' });
     expect((await deliveriesOf(healthy.id)).map((d) => d.status)).toEqual(['sent']);
     await t.adminDb.update(notificationSchedules).set({ enabled: false }).where(inArray(notificationSchedules.id, [broken.id, healthy.id]));
+  });
+});
+
+describe('站内通知与清理出错', () => {
+  it('生成或清理出错：同一组织本轮的定时推送照常执行与发送，下一轮生成照常', async () => {
+    const s = await overview();
+    const rule = await createRule(t.db, owner, productId, { name: '隔离规则', eventTypes: ['requirement.created'], channelIds: [channelId] });
+    await createRequirement(t.db, owner, productId, { title: '生成出错时照常推送' });
+    const now = new Date();
+    await t.adminDb.update(notificationSchedules).set({ nextRunAt: new Date(now.getTime() - 1000) }).where(eq(notificationSchedules.id, s.id));
+    vi.mocked(deleteExpiredNotifications).mockRejectedValueOnce(new Error('清理失败'));
+    // 无效的陈旧事务阈值让生成在 savepoint 之外的查询出错
+    const failingGeneration = { ...deps, staleTransactionMs: 'x' as unknown as number };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const summary = await runNotificationTick(t.db, failingGeneration, now);
+      expect(summary).toMatchObject({ schedulesRun: 1, events: 0 });
+      const messages = warn.mock.calls.map((c) => String(c[0]));
+      expect(messages).toContainEqual(expect.stringContaining('站内通知生成出错'));
+      expect(messages).toContainEqual(expect.stringContaining('清理过期站内通知出错'));
+    } finally {
+      warn.mockRestore();
+    }
+    expect((await deliveriesOf(s.id)).map((d) => d.status)).toEqual(['sent']);
+    const ruleRows = await t.adminDb.select().from(notificationDeliveries).where(eq(notificationDeliveries.ruleId, rule.id));
+    expect(ruleRows.map((d) => d.status)).toEqual(['sent']);
+    expect((await runNotificationTick(t.db, deps, now)).events).toBeGreaterThan(0);
+    await t.adminDb.update(notificationSchedules).set({ enabled: false }).where(eq(notificationSchedules.id, s.id));
+    await t.adminDb.update(notificationRules).set({ enabled: false }).where(eq(notificationRules.id, rule.id));
   });
 });

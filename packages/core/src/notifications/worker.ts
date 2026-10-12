@@ -121,7 +121,7 @@ async function runDueSchedules(db: Db, orgId: string, deps: NotifyDeps, now: Dat
 }
 
 /**
- * 一轮：逐个组织先生成站内通知，再执行到点的定时推送，最后发送到期的记录。测试与端到端传入 now 手动驱动；
+ * 一轮：逐个组织先生成站内通知，再执行到点的定时推送、发送到期的记录，最后清理过期数据。测试与端到端传入 now 手动驱动；
  * 不传时每个组织开始处理时取当前时间（前面的组织可能处理了几分钟，不能沿用本轮开始的时间）。
  */
 export async function runNotificationTick(db: Db, deps: NotifyDeps, now?: Date): Promise<TickSummary> {
@@ -129,14 +129,16 @@ export async function runNotificationTick(db: Db, deps: NotifyDeps, now?: Date):
   for (const orgId of await dueOrgIds(db, now ?? new Date())) {
     summary.orgs++;
     const orgNow = now ?? new Date();
-    // 每个组织单独兜底：一个组织出错只跳过它本轮剩下的处理，不影响其他组织
+    // 每个组织单独兜底，组织内站内通知生成、定时推送与发送、两项清理也各自兜底：一处出错只跳过这一项本轮的处理
     try {
       const g = await generateMemberNotifications(db, orgId, deps, orgNow);
       summary.events += g.events;
       summary.notified += g.notifications;
+    } catch (e) {
+      console.warn(`[notify] 站内通知生成出错，本轮已跳过：org=${orgId}：${causeMessage(e)}`);
+    }
+    try {
       summary.schedulesRun += await runDueSchedules(db, orgId, deps, orgNow);
-      await deleteExpiredNotifications(db, orgId, orgNow);
-      await withOrg(db, orgId, (tx) => tx.delete(wecomBindStates).where(lt(wecomBindStates.expiresAt, bindStateCutoff(orgNow))));
       const r = await processDueDeliveries(db, orgId, deps, orgNow);
       summary.sent += r.sent;
       summary.failed += r.failed;
@@ -144,6 +146,16 @@ export async function runNotificationTick(db: Db, deps: NotifyDeps, now?: Date):
       summary.rateLimited += r.rateLimited;
     } catch (e) {
       console.warn(`[notify] 组织本轮处理出错，已跳过：org=${orgId}：${causeMessage(e)}`);
+    }
+    try {
+      await deleteExpiredNotifications(db, orgId, orgNow);
+    } catch (e) {
+      console.warn(`[notify] 清理过期站内通知出错，本轮已跳过：org=${orgId}：${causeMessage(e)}`);
+    }
+    try {
+      await withOrg(db, orgId, (tx) => tx.delete(wecomBindStates).where(lt(wecomBindStates.expiresAt, bindStateCutoff(orgNow))));
+    } catch (e) {
+      console.warn(`[notify] 清理过期扫码绑定 state 出错，本轮已跳过：org=${orgId}：${causeMessage(e)}`);
     }
   }
   return summary;
