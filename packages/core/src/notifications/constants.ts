@@ -8,9 +8,9 @@ export const CHANNEL_KIND_LABELS: Record<ChannelKind, string> = { wecom_robot: '
 /** 每分钟发送上限的默认值：企微机器人 20 条/分钟，其余 60。 */
 export const DEFAULT_RATE_LIMIT: Record<ChannelKind, number> = { wecom_robot: 20, webhook: 60, email: 60 };
 
-export const TEMPLATE_FORMATS = ['text', 'markdown', 'template_card', 'email'] as const;
+export const TEMPLATE_FORMATS = ['text', 'markdown', 'markdown_v2', 'template_card', 'email'] as const;
 export type TemplateFormat = (typeof TEMPLATE_FORMATS)[number];
-export const TEMPLATE_FORMAT_LABELS: Record<TemplateFormat, string> = { text: '文本', markdown: 'Markdown', template_card: '模板卡片', email: '邮件' };
+export const TEMPLATE_FORMAT_LABELS: Record<TemplateFormat, string> = { text: '文本', markdown: 'Markdown', markdown_v2: 'Markdown v2（表格、列表，无字色）', template_card: '模板卡片', email: '邮件' };
 
 /** 事件规则可以订阅的领域事件。 */
 export const NOTIFIABLE_EVENT_TYPES = [

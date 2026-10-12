@@ -16,6 +16,7 @@ import type { MessageTemplate } from '@/lib/types';
 const FORMAT_HINT: Record<TemplateFormat, string> = {
   text: '纯文本。',
   markdown: '企业微信 markdown：支持加粗、链接、引用与 <font color="warning|comment|info">。',
+  markdown_v2: '企业微信 markdown_v2：支持表格、列表、分割线、多级引用，不支持字色；旧版客户端显示为纯文本。',
   template_card: '内容是企业微信 template_card 对象的 JSON，只替换字符串里的变量。',
   email: '第一行是邮件主题，其余为正文。',
 };

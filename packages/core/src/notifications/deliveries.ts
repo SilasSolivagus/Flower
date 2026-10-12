@@ -139,7 +139,7 @@ async function renderRuleDeliveryTx(tx: Tx, d: DeliveryRow, channel: ChannelRow,
   const tpl = await resolveTemplateTx(tx, rule?.templateId ?? null, 'event');
   const data = await eventMessageDataTx(tx, d.eventId, await orgContextTx(tx, d.orgId, deps.publicUrl));
   const msg = renderMessage(tpl.format, tpl.body, data);
-  if (channel.kind === 'wecom_robot' && msg.format === 'markdown') msg.text = truncateBytes(msg.text, WECOM_MARKDOWN_MAX_BYTES, TRUNCATED_MARK);
+  if (channel.kind === 'wecom_robot' && (msg.format === 'markdown' || msg.format === 'markdown_v2')) msg.text = truncateBytes(msg.text, WECOM_MARKDOWN_MAX_BYTES, TRUNCATED_MARK);
   return toChannelPayloads(channel.kind, msg)[0]!;
 }
 
@@ -260,7 +260,7 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
       try {
         const config = configs.get(channel.id) ?? readChannelConfig(channel, deps.secretKey);
         configs.set(channel.id, config);
-        outcome = await sendPayload(channel.kind, config, d.payload as ChannelPayload, deps.transport, now);
+        outcome = await sendPayload(channel.kind, config, d.payload as ChannelPayload, deps.transport, clockAfter(now));
       } catch (e) {
         outcome = { result: 'failed', response: errorText(e) };
       }

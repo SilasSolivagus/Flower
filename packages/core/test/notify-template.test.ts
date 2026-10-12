@@ -48,6 +48,22 @@ describe('按通道生成请求体', () => {
     expect(toChannelPayloads('wecom_robot', { format: 'email', text: '主题\n正文' })).toEqual([{ type: 'json', body: { msgtype: 'text', text: { content: '主题\n正文' } } }]);
   });
 
+  it('markdown_v2：企微发 markdown_v2，Webhook 与邮件同 markdown', () => {
+    const v2 = { format: 'markdown_v2' as const, text: '# 标题\n| a | b |\n|---|---|\n| 1 | 2 |' };
+    expect(toChannelPayloads('wecom_robot', v2)).toEqual([{ type: 'json', body: { msgtype: 'markdown_v2', markdown_v2: { content: v2.text } } }]);
+    expect(toChannelPayloads('webhook', v2)).toEqual([{ type: 'json', body: { format: 'markdown_v2', content: v2.text } }]);
+    expect(toChannelPayloads('email', v2)).toEqual([{ type: 'email', subject: '标题', text: v2.text }]);
+    expect(renderMessage('markdown_v2', '\n**{{t}}**\n', { t: 'x' })).toEqual({ format: 'markdown_v2', text: '**x**' });
+    expect(() => assertTemplateBody('markdown_v2', '{{#a}}x')).toThrow('模板语法错误');
+    expect(() => assertTemplateBody('markdown_v2', '{{a}}')).not.toThrow();
+    expect(payloadPreview({ type: 'json', body: { msgtype: 'markdown_v2', markdown_v2: { content: '# 标题' } } })).toBe('# 标题');
+    const long = ['# 表格', ...Array.from({ length: 20 }, (_, i) => `| ${i} | ${'需求标题'.repeat(30)} |`)].join('\n\n');
+    const parts = toChannelPayloads('wecom_robot', { format: 'markdown_v2', text: long }).map((p) => (p.type === 'json' ? (p.body.markdown_v2 as { content: string }).content : ''));
+    expect(parts.length).toBeGreaterThan(1);
+    for (const p of parts) expect(Buffer.byteLength(p, 'utf8')).toBeLessThanOrEqual(4096);
+    expect(parts[1]!.startsWith('# 表格（续2）')).toBe(true);
+  });
+
   it('Webhook：{format, content}；卡片的 content 为对象', () => {
     expect(toChannelPayloads('webhook', md)).toEqual([{ type: 'json', body: { format: 'markdown', content: '# 标题\n正文' } }]);
     expect(toChannelPayloads('webhook', card)).toEqual([{ type: 'json', body: { format: 'template_card', content: card.card } }]);

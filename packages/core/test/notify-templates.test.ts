@@ -122,6 +122,7 @@ describe('消息模板', () => {
 
   it('新建：校验语法与卡片 JSON；名称唯一；成员只能看不能建；访客不能看', async () => {
     await expect(createMessageTemplate(t.db, owner, { name: '坏模板', format: 'markdown', body: '{{#a}}' })).rejects.toThrow('模板语法错误');
+    expect((await createMessageTemplate(t.db, owner, { name: '表格模板', format: 'markdown_v2', body: '| a |\n|---|\n| {{x}} |' })).format).toBe('markdown_v2');
     await expect(createMessageTemplate(t.db, owner, { name: '坏卡片', format: 'template_card', body: 'not json' })).rejects.toThrow('JSON 对象');
     const tpl = await createMessageTemplate(t.db, owner, { name: '简版', format: 'text', body: '{{subject.key}} {{summary}}' });
     expect(tpl).toMatchObject({ builtin: false, builtinKey: null, usage: { rules: 0, schedules: 0 } });

@@ -225,6 +225,35 @@ describe('后台发送', () => {
     expect((await ofRule(rule.id))[0]).toMatchObject({ status: 'sent' });
   });
 
+  it('markdown_v2 事件消息同样截断并注明，只发一条 markdown_v2', async () => {
+    const productId = await newProduct();
+    const ch = await wecomChannel(t.db, owner, 'v2 长消息群', { url: url('long-v2') });
+    const tpl = await createMessageTemplate(t.db, owner, { name: 'v2 事件模板', format: 'markdown_v2', body: `## {{subject.key}}\n\n${'很长的变更说明。'.repeat(400)}` });
+    await createRule(t.db, owner, productId, { name: 'v2 长消息规则', eventTypes: ['requirement.created'], channelIds: [ch.id], templateId: tpl.id });
+    await createRequirement(t.db, owner, productId, { title: 'v2 长消息需求' });
+    await process(later());
+    const calls = callsTo(url('long-v2'));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.body.msgtype).toBe('markdown_v2');
+    const content = (calls[0]!.body.markdown_v2 as { content: string }).content;
+    expect(content.endsWith('…（内容过长，已截断）')).toBe(true);
+    expect(Buffer.byteLength(content, 'utf8')).toBeLessThanOrEqual(4096);
+  });
+
+  it('Webhook 签名时间戳取发送时刻的时钟，不用本轮开始时的 now', async () => {
+    const productId = await newProduct();
+    const hookUrl = 'http://127.0.0.1:9/hooks/stale-clock';
+    const ch = await createChannel(t.db, owner, { kind: 'webhook', name: '时钟 Webhook', config: { url: hookUrl, secret: 's3cret' } }, TEST_DEPS);
+    const rule = await createRule(t.db, owner, productId, { name: '时钟规则', eventTypes: ['requirement.created'], channelIds: [ch.id] });
+    await createRequirement(t.db, owner, productId, { title: '时钟需求' });
+    const [d] = await ofRule(rule.id);
+    const stale = new Date(Date.now() - 10 * 60_000);
+    await t.adminDb.update(notificationDeliveries).set({ nextAttemptAt: stale }).where(eq(notificationDeliveries.id, d!.id));
+    await process(stale);
+    const [call] = callsTo(hookUrl);
+    expect(Number(call!.headers['x-flower-timestamp'])).toBeGreaterThanOrEqual(Math.floor((Date.now() - 5_000) / 1000));
+  });
+
   it('通道收窄可用产品后：已排队的不再允许的产品记录放弃，不发送', async () => {
     const productId = await newProduct();
     const other = await newProduct();

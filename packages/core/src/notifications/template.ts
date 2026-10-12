@@ -107,7 +107,7 @@ export function assertTemplateBody(format: TemplateFormat, body: string): void {
   }
 }
 
-export type RenderedMessage = { format: 'text' | 'markdown' | 'email'; text: string } | { format: 'template_card'; card: Record<string, unknown> };
+export type RenderedMessage = { format: 'text' | 'markdown' | 'markdown_v2' | 'email'; text: string } | { format: 'template_card'; card: Record<string, unknown> };
 
 export function renderMessage(format: TemplateFormat, body: string, data: Record<string, unknown>): RenderedMessage {
   if (format === 'template_card') return { format, card: mapStrings(parseCard(body), (s) => renderTemplate(s, data)) as Record<string, unknown> };
@@ -198,6 +198,7 @@ export function toChannelPayloads(kind: ChannelKind, msg: RenderedMessage): Chan
   }
   if (msg.format === 'template_card') return [{ type: 'json', body: { msgtype: 'template_card', template_card: msg.card } }];
   if (msg.format === 'markdown') return splitMarkdown(msg.text).map((content) => ({ type: 'json' as const, body: { msgtype: 'markdown', markdown: { content } } }));
+  if (msg.format === 'markdown_v2') return splitMarkdown(msg.text).map((content) => ({ type: 'json' as const, body: { msgtype: 'markdown_v2', markdown_v2: { content } } }));
   return [{ type: 'json', body: { msgtype: 'text', text: { content: truncateBytes(msg.text, 2048) } } }];
 }
 
@@ -211,7 +212,7 @@ export function payloadPreview(payload: DeliveryPayload | null): string {
     const b = payload.body;
     const card = b.msgtype === 'template_card' ? b.template_card : b.format === 'template_card' ? b.content : null;
     if (card) text = [toText(get(card, 'main_title.title')), toText(get(card, 'main_title.desc'))].filter(Boolean).join(' · ');
-    else text = toText(get(b, 'markdown.content')) || toText(get(b, 'text.content')) || toText(b.content);
+    else text = toText(get(b, 'markdown.content')) || toText(get(b, 'markdown_v2.content')) || toText(get(b, 'text.content')) || toText(b.content);
   }
   return text.slice(0, 200);
 }
