@@ -8,9 +8,11 @@ import { type DefaultReactSuggestionItem, SuggestionMenuController, type Suggest
 import { BlockNoteView } from '@blocknote/shadcn';
 import { cleanMentionName } from '@flower/core/links';
 import { useTheme } from 'next-themes';
+import type { Transaction } from 'prosemirror-state';
+import type { EditorView } from 'prosemirror-view';
 import { createContext, type KeyboardEvent, type Ref, type RefObject, useCallback, useContext, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { SUGGESTION_KIND_LABEL } from '@/features/links/model';
-import { filterMentionMembers, MENTION_NO_ACCESS } from '@/features/mentions/model';
+import { canOpenMentionAfter, encodeMentionsForEditor, filterMentionMembers, MENTION_NO_ACCESS, restoreMentionMarkup } from '@/features/mentions/model';
 import type { LinkSuggestion, MentionMember } from '@/lib/types';
 import { type DecorationInput, decorationsKey, flowerDecorations } from './decorations';
 import { MentionMembersContext, prdSchema } from './mention';
@@ -77,10 +79,26 @@ function LinkSuggestionMenu({ items, loadingState, selectedIndex, onItemClick }:
   );
 }
 
+/** @ 只在行首、空白或标点之后打开补全（与评论输入框相同）；邮箱等字母数字后的 @ 是普通文字。 */
+function shouldOpenMention(tr: Transaction): boolean {
+  const { $from } = tr.selection;
+  return canOpenMentionAfter($from.parentOffset === 0 ? undefined : $from.parent.textBetween($from.parentOffset - 1, $from.parentOffset, undefined, '\ufffc'));
+}
+
+/**
+ * 把一次回车按正常方式交给编辑器（换行、拆块等）。补全菜单打开时外层的捕获处理已 stopPropagation + preventDefault，
+ * 事件到不了 ProseMirror；又不能直接放行，因为 BlockNote 自己的菜单按键处理（内层编辑区的捕获监听）在菜单卸载前仍会吞掉回车，
+ * 而 BlockNote 没有「执行默认回车」的高层接口。调用方传入 editor.prosemirrorView；这里依赖 ProseMirror 的 someProp('handleKeyDown')，
+ * 升级 BlockNote 后要重跑 e2e/mentions.spec.ts 的「没有匹配的成员时回车」用例。
+ */
+function passEnterToEditor(view: EditorView | undefined, e: KeyboardEvent<HTMLDivElement>) {
+  view?.someProp('handleKeyDown', (f) => f(view, e.nativeEvent));
+}
+
 /** Markdown → 块：用一个不挂载、带 mention 的编辑器实例解析，只在首次渲染时调用。空正文返回 undefined（BlockNote 要求初始内容非空）。 */
 function parseMarkdown(markdown: string) {
   if (!markdown.trim()) return undefined;
-  const blocks = BlockNoteEditor.create({ schema: prdSchema }).tryParseMarkdownToBlocks(markdown);
+  const blocks = BlockNoteEditor.create({ schema: prdSchema }).tryParseMarkdownToBlocks(encodeMentionsForEditor(markdown));
   return blocks.length > 0 ? blocks : undefined;
 }
 
@@ -93,7 +111,7 @@ export function PrdEditor({ initialMarkdown, editable, onDirty, uploadImage, dec
   const [initialContent] = useState(() => parseMarkdown(initialMarkdown));
   const [extensions] = useState(() => [flowerDecorations()]);
   const editor = useCreateBlockNote({ schema: prdSchema, initialContent, dictionary: zh, uploadFile: uploadImage, extensions });
-  useImperativeHandle(ref, () => ({ getMarkdown: () => editor.blocksToMarkdownLossy(editor.document) }), [editor]);
+  useImperativeHandle(ref, () => ({ getMarkdown: () => restoreMentionMarkup(editor.blocksToMarkdownLossy(editor.document)) }), [editor]);
   // 只带元数据的事务：不改文档，不触发 onChange，因此不会引起自动保存
   useEffect(() => {
     if (!decorations) return;
@@ -160,8 +178,7 @@ export function PrdEditor({ initialMarkdown, editable, onDirty, uploadImage, dec
     // @ 没有匹配的成员：关掉补全，这次回车照常交给编辑器（换行，已输入的文字保留）
     if (menu.triggerCharacter === MENTION_TRIGGER && filterMentionMembers(mentionMembers ?? [], menu.query).length === 0) {
       suggestion?.closeMenu();
-      const view = editor.prosemirrorView;
-      view?.someProp('handleKeyDown', (f) => f(view, e.nativeEvent));
+      passEnterToEditor(editor.prosemirrorView, e);
       return;
     }
     const shown = menuShown.current;
@@ -181,7 +198,7 @@ export function PrdEditor({ initialMarkdown, editable, onDirty, uploadImage, dec
         )}
         {editable && mentionMembers && (
           <MenuShownContext value={menuShown}>
-            <SuggestionMenuController triggerCharacter={MENTION_TRIGGER} getItems={getMentionItems} suggestionMenuComponent={LinkSuggestionMenu} />
+            <SuggestionMenuController triggerCharacter={MENTION_TRIGGER} shouldOpen={shouldOpenMention} getItems={getMentionItems} suggestionMenuComponent={LinkSuggestionMenu} />
           </MenuShownContext>
         )}
       </BlockNoteView>

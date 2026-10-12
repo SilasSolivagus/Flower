@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MentionMember } from '@/lib/types';
-import { activeMentionQuery, applyMention, filterMentionMembers, mentionTitle } from './model';
+import { parseMentions } from '@flower/core/links';
+import { activeMentionQuery, applyMention, canOpenMentionAfter, encodeMentionsForEditor, filterMentionMembers, mentionEditorHref, mentionTitle, restoreMentionMarkup } from './model';
 
 const A = '0192a000-0000-7000-8000-00000000000a';
 const m = (over: Partial<MentionMember>): MentionMember => ({ id: A, displayName: '张三', email: 'zhang@example.com', status: 'active', wecomBound: false, canSeeProduct: true, ...over });
@@ -41,5 +42,35 @@ describe('@ 补全', () => {
     expect(mentionTitle(m({ email: null, status: 'left' }))).toBe('没有邮箱 · 未绑定企业微信 · 已离开组织');
     expect(mentionTitle(null)).toBe('成员已不在组织中');
     expect(mentionTitle(undefined)).toBe('');
+  });
+});
+
+describe('@ 的打开条件与 PRD 编辑器里的写法转换', () => {
+  it('@ 前是行首、空白或标点才打开补全；字母数字之后（邮箱）不打开', () => {
+    for (const prev of [undefined, ' ', '\n', '（', '，', '。', '(', '"']) expect(canOpenMentionAfter(prev)).toBe(true);
+    for (const prev of ['a', 'Z', '3', '张', '_']) expect(canOpenMentionAfter(prev)).toBe(false);
+  });
+
+  it('含 Markdown 特殊字符的姓名：读入前换成带姓名编码的链接，导出后换回，写法逐字节不变；服务端仍识别出成员', () => {
+    const name = 'A & B <c> *x_y* \\_ (1)! #2 ~`q\\';
+    const upper = A.toUpperCase();
+    const md = `负责人 [@${name}](member:${upper}) 和 [@ 李四 ](member:${A}) 尾\n\n代码 \`[@x_y](member:${A})\``;
+    const encoded = encodeMentionsForEditor(md);
+    expect(encoded).toBe(`负责人 [@](${mentionEditorHref(upper, name)}) 和 [@](${mentionEditorHref(A, ' 李四 ')}) 尾\n\n代码 \`[@x_y](member:${A})\``);
+    expect(mentionEditorHref(A, name)).toMatch(/^member:[0-9a-f-]{36}\?n=[0-9A-Za-z%._~-]*$/);
+    // BlockNote 导出时链接文字可能被转义：只按链接里的编码换回
+    const exported = encoded.replace('[@](', `[@A \\& B \\<c> \\*x\\_y\\* \\\\_ (1)! #2 ~\`q\\](`);
+    expect(restoreMentionMarkup(exported)).toBe(md);
+    expect(parseMentions(restoreMentionMarkup(exported)).map((m) => [m.memberId, m.name])).toEqual([
+      [A, name],
+      [A, '李四'],
+    ]);
+  });
+
+  it('前面有反斜杠的（正文里的普通文字）与不带姓名编码的链接不换', () => {
+    const href = mentionEditorHref(A, 'x');
+    expect(restoreMentionMarkup(`\\[@x](${href})`)).toBe(`\\[@x](${href})`);
+    expect(restoreMentionMarkup(`[@x](member:${A})`)).toBe(`[@x](member:${A})`);
+    expect(encodeMentionsForEditor('没有 @')).toBe('没有 @');
   });
 });
