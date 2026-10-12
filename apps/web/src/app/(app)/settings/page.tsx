@@ -1,7 +1,8 @@
 'use client';
 
+import { useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { ConfirmAction } from '@/components/confirm-action';
 import { FormError } from '@/components/form-error';
 import { IssueTokenDialog } from '@/components/issue-token-dialog';
@@ -14,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { describeScope, tokenStatus } from '@/features/tokens/model';
 import { api } from '@/lib/api';
 import { qk, useApiMutation, useMe, useOrg, useProducts, useTokens } from '@/lib/queries';
+import { PersonalNotifications } from './notifications-section';
 
 function PersonalTokens({ org }: { org: string }) {
   const orgQ = useOrg(org);
@@ -74,18 +76,23 @@ function PersonalTokens({ org }: { org: string }) {
   );
 }
 
-export default function PersonalSettingsPage() {
+function PersonalSettings() {
   const me = useMe();
   const { theme, setTheme } = useTheme();
   const [name, setName] = useState('');
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
   const [pwError, setPwError] = useState<string | null>(null);
   const [org, setOrg] = useState<string>('');
+  const params = useSearchParams();
+  const [noticeOrg, setNoticeOrg] = useState<string>('');
   const [synced, setSynced] = useState<typeof me.data>(undefined);
   if (me.data && me.data !== synced) {
     setSynced(me.data);
     setName(me.data.account.name);
     setOrg(org || me.data.orgs[0]?.slug || '');
+    // 扫码绑定回调带回 ?org=：通知一节默认打开那个组织
+    const wanted = params.get('org');
+    setNoticeOrg(noticeOrg || (wanted && me.data.orgs.some((o) => o.slug === wanted) ? wanted : me.data.orgs[0]?.slug) || '');
   }
   const profile = useApiMutation((body: { name?: string; preferences?: { theme: 'light' | 'dark' | 'system' } }) => api('/me', { method: 'PATCH', body }), {
     invalidate: [qk.me],
@@ -167,6 +174,39 @@ export default function PersonalSettingsPage() {
         </Button>
       </form>
       {me.data.orgs.length > 0 && (
+        <section aria-labelledby="notify-title" className="flex flex-col gap-3 rounded-md border bg-card p-4">
+          <div className="flex items-center gap-3">
+            <h2 id="notify-title" className="flex-1 font-semibold">
+              通知
+            </h2>
+            <Select value={noticeOrg} onValueChange={setNoticeOrg}>
+              <SelectTrigger className="w-48" aria-label="通知设置所属组织">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {me.data.orgs.map((o) => (
+                  <SelectItem key={o.id} value={o.slug}>
+                    {o.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {params.get('wecom') === 'bound' && (
+            <p role="status" className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
+              企业微信绑定成功。
+            </p>
+          )}
+          {params.get('wecom_error') && (
+            <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              企业微信绑定失败：{params.get('wecom_error')}
+            </p>
+          )}
+          <p className="text-[13px] text-muted-foreground">通知偏好按组织分别设置。站内通知在顶栏铃铛里查看；企业微信提醒发到产品的个人提醒群并 @ 到你。</p>
+          {noticeOrg && <PersonalNotifications key={noticeOrg} org={noticeOrg} />}
+        </section>
+      )}
+      {me.data.orgs.length > 0 && (
         <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
           <div className="flex items-center gap-3">
             <h2 className="flex-1 font-semibold">个人 Token</h2>
@@ -188,5 +228,13 @@ export default function PersonalSettingsPage() {
         </section>
       )}
     </PlainShell>
+  );
+}
+
+export default function PersonalSettingsPage() {
+  return (
+    <Suspense>
+      <PersonalSettings />
+    </Suspense>
   );
 }
