@@ -86,3 +86,5 @@ export * from './notifications/worker';
 export * from './member-notifications/subscriptions';
 export * from './member-notifications/prefs';
 export * from './wecom/accounts';
+export * from './wecom/app';
+export * from './wecom/oauth';
