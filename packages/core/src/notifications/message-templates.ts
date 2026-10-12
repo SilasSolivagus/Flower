@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm';
 import { productRoleOf, requireNonGuest, requireOrgAdmin } from '../access/permissions';
 import type { Db } from '../db/client';
 import { messageTemplates, notificationRules, notificationSchedules, productMembers } from '../db/schema';
@@ -6,7 +6,7 @@ import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
 import { recordEvent } from '../events';
-import { BUILTIN_TEMPLATES } from './builtin';
+import { BUILTIN_TEMPLATES, currentBuiltinBody, PREVIOUS_BUILTIN_BODIES } from './builtin';
 import { BUILTIN_TEMPLATE_KEYS, type BuiltinTemplateKey, TEMPLATE_FORMATS, type TemplateFormat } from './constants';
 import { assertTemplateBody } from './template';
 
@@ -42,12 +42,21 @@ function assertBody(format: TemplateFormat, body: string): string {
   return body;
 }
 
-/** 补齐四个预置模板（已有或同名时跳过）。属于基础数据补齐，不记事件。 */
+/**
+ * 补齐四个预置模板（已有或同名时跳过）；内容仍是以前默认内容的预置行换成当前默认内容，修改过的不动。
+ * 属于基础数据补齐，不记事件。
+ */
 async function ensureBuiltinsTx(tx: Tx, orgId: string): Promise<void> {
   await tx
     .insert(messageTemplates)
     .values(BUILTIN_TEMPLATE_KEYS.map((k) => ({ orgId, name: BUILTIN_TEMPLATES[k].name, format: BUILTIN_TEMPLATES[k].format, body: BUILTIN_TEMPLATES[k].body, builtin: true, builtinKey: k })))
     .onConflictDoNothing();
+  for (const k of BUILTIN_TEMPLATE_KEYS) {
+    await tx
+      .update(messageTemplates)
+      .set({ body: BUILTIN_TEMPLATES[k].body, updatedAt: new Date() })
+      .where(and(eq(messageTemplates.builtin, true), eq(messageTemplates.builtinKey, k), inArray(messageTemplates.body, PREVIOUS_BUILTIN_BODIES[k])));
+  }
 }
 
 async function viewsTx(tx: Tx, rows: TemplateRow[]): Promise<MessageTemplateView[]> {
@@ -154,17 +163,13 @@ export async function deleteMessageTemplate(db: Db, actor: Actor, id: string): P
   });
 }
 
-/** 渲染用的模板：指定的模板 → 本组织的预置行 → 代码中的默认内容。 */
+/** 渲染用的模板：指定的模板 → 本组织的预置行 → 代码中的默认内容。仍是以前默认内容的预置行按当前默认内容渲染。 */
 export async function resolveTemplateTx(tx: Tx, templateId: string | null, key: BuiltinTemplateKey): Promise<{ format: TemplateFormat; body: string }> {
-  if (templateId) {
-    const [row] = await tx.select({ format: messageTemplates.format, body: messageTemplates.body }).from(messageTemplates).where(eq(messageTemplates.id, templateId));
-    if (row) return row;
-  }
-  const [builtin] = await tx
-    .select({ format: messageTemplates.format, body: messageTemplates.body })
-    .from(messageTemplates)
-    .where(and(eq(messageTemplates.builtin, true), eq(messageTemplates.builtinKey, key)));
-  return builtin ?? { format: BUILTIN_TEMPLATES[key].format, body: BUILTIN_TEMPLATES[key].body };
+  const cols = { format: messageTemplates.format, body: messageTemplates.body, builtinKey: messageTemplates.builtinKey };
+  const [row] = templateId ? await tx.select(cols).from(messageTemplates).where(eq(messageTemplates.id, templateId)) : [];
+  const [builtin] = row ? [row] : await tx.select(cols).from(messageTemplates).where(and(eq(messageTemplates.builtin, true), eq(messageTemplates.builtinKey, key)));
+  if (!builtin) return { format: BUILTIN_TEMPLATES[key].format, body: BUILTIN_TEMPLATES[key].body };
+  return { format: builtin.format, body: builtin.builtinKey ? currentBuiltinBody(builtin.builtinKey, builtin.body) : builtin.body };
 }
 
 export async function assertTemplateIdTx(tx: Tx, templateId: string | null | undefined): Promise<string | null> {

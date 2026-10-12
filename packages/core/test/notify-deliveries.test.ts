@@ -77,7 +77,20 @@ describe('测试消息', () => {
     const view = await sendTestMessage(t.db, owner, ch.id, deps);
     expect(view).toMatchObject({ kind: 'test', status: 'sent', attempts: 1, channel: { id: ch.id, name: '测试群', kind: 'wecom_robot' }, source: { type: 'test', name: null, alert: false } });
     const [call] = callsTo(url('test'));
-    expect((call!.body.text as { content: string }).content).toMatch(/^Flower 测试消息：通道「测试群」可以正常接收推送。\n发送时间：\d{2}-\d{2} \d{2}:\d{2}$/);
+    expect(call!.body).toEqual({
+      msgtype: 'template_card',
+      template_card: {
+        card_type: 'text_notice',
+        source: { desc: 'Flower' },
+        main_title: { title: '推送通道已连通', desc: '测试群' },
+        horizontal_content_list: [
+          { keyname: '发送时间', value: expect.stringMatching(/^\d{2}-\d{2} \d{2}:\d{2}$/) },
+          { keyname: '发送人', value: 'Owner' },
+        ],
+        card_action: { type: 1, url: 'http://flower.example.com/acme/settings/notifications' },
+      },
+    });
+    expect(view.preview).toBe('推送通道已连通 · 测试群');
     expect(JSON.stringify(view)).not.toContain('127.0.0.1');
 
     fake.reset(() => BAD);

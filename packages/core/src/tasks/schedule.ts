@@ -108,11 +108,10 @@ export type IterationOverview = {
   attention: Array<{ kind: 'attention' | 'notice'; title: string; assignees: string[]; note: string }>;
 };
 
-/**
- * 迭代概览（push 的 A 方案）：任务按需求聚合为行（没有需求的按标题），行进度为各任务展示进度的平均；
- * 标了「关注」且未完成的行视为遗留下期，不计入整体进度；理论进度按迭代的工作日比例。
- */
-export function iterationOverview(tasks: OverviewTask[], iteration: { startDate: string; endDate: string }, today: string): IterationOverview {
+export type OverviewRow = { title: string; progress: number; attention: boolean; note: string; assignees: string[] };
+
+/** 概览的行：任务按需求聚合（没有需求的按标题），行进度为各任务展示进度的平均。 */
+export function overviewRows(tasks: OverviewTask[], today: string): OverviewRow[] {
   const groups = new Map<string, OverviewTask[]>();
   for (const t of tasks) {
     const title = t.title.trim();
@@ -120,14 +119,25 @@ export function iterationOverview(tasks: OverviewTask[], iteration: { startDate:
     const key = t.requirementId ?? `title:${title}`;
     groups.set(key, [...(groups.get(key) ?? []), t]);
   }
-  const rows = [...groups.values()].map((segs) => ({
+  return [...groups.values()].map((segs) => ({
     title: segs[0]!.title.trim(),
     progress: Math.round(segs.reduce((sum, s) => sum + displayProgress(s, today), 0) / segs.length),
     attention: segs.some((s) => s.flag === 'attention'),
     note: segs.map((s) => (s.note ?? '').trim()).find((n) => n !== '') ?? '',
     assignees: [...new Set(segs.map((s) => s.assigneeName).filter((x): x is string => !!x))],
   }));
-  const counted = rows.filter((r) => !(r.attention && r.progress < 100));
+}
+
+/** 计入整体进度的行：标了「关注」且未完成的行视为遗留下期，不计入。 */
+export const countedRows = (rows: OverviewRow[]): OverviewRow[] => rows.filter((r) => !(r.attention && r.progress < 100));
+
+/**
+ * 迭代概览（push 的 A 方案）：任务按需求聚合为行（没有需求的按标题），行进度为各任务展示进度的平均；
+ * 标了「关注」且未完成的行视为遗留下期，不计入整体进度；理论进度按迭代的工作日比例。
+ */
+export function iterationOverview(tasks: OverviewTask[], iteration: { startDate: string; endDate: string }, today: string): IterationOverview {
+  const rows = overviewRows(tasks, today);
+  const counted = countedRows(rows);
   const overall = counted.length ? Math.round(counted.reduce((sum, r) => sum + r.progress, 0) / counted.length) : 0;
   const total = workdaysElapsed(iteration.startDate, iteration.endDate);
   const expected = total > 0 ? Math.min(100, Math.max(0, Math.round((workdaysElapsed(iteration.startDate, today) / total) * 100))) : 0;

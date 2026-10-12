@@ -59,7 +59,7 @@ test('定时推送：产品设置里新建「新需求」并立即执行；组�
   await expect(page.getByText('已生成 1 条待发记录，几秒内发送')).toBeVisible();
   await tick(request);
   const md = hook.received.at(-1)!.body as { markdown: { content: string } };
-  expect(md.markdown.content).toMatch(/^# 📋 \d{1,2}\/\d{1,2} 新增需求/);
+  expect(md.markdown.content).toMatch(/^# 📋 网盘 新增需求 · \d{2}-\d{2} 周[日一二三四五六]/);
   expect(md.markdown.content).toContain('今天的新需求');
 
   await ok(request.post('/api/v1/orgs/acme/notification-schedules', { data: { productId, name: '研发日报', cron: '0 19 * * 1-5', source: 'overview_card', channelIds: [channelId] } }));
@@ -70,7 +70,7 @@ test('定时推送：产品设置里新建「新需求」并立即执行；组�
   await page.getByRole('button', { name: '执行', exact: true }).click();
   await expect(page.getByText('已生成 1 条待发记录，几秒内发送')).toBeVisible();
   await tick(request);
-  expect(hook.received.at(-1)!.body).toMatchObject({ msgtype: 'template_card', template_card: { card_type: 'text_notice' } });
+  expect(hook.received.at(-1)!.body).toMatchObject({ msgtype: 'template_card', template_card: { card_type: 'text_notice', source: { desc: 'Flower · 研发日报' } } });
 });
 
 test('产品「推送」页签与组织「定时推送」页签在 1440 与 760 宽度下不横向滚动', async ({ page, request }) => {

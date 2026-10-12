@@ -109,8 +109,37 @@ export function assertTemplateBody(format: TemplateFormat, body: string): void {
 
 export type RenderedMessage = { format: 'text' | 'markdown' | 'markdown_v2' | 'email'; text: string } | { format: 'template_card'; card: Record<string, unknown> };
 
+const WHOLE_VAR = /^\{\{\s*([\w.]+)\s*\}\}$/;
+const DROP = Symbol('drop');
+
+/**
+ * 卡片的值：字符串恰好是一个 {{path}} 时按取到的值插入——对象与列表原样插入，null 去掉所在的键或列表项
+ * （可选的卡片区块由数据给出现成对象或 null）；其余字符串按文字渲染。
+ */
+function renderCard(v: unknown, data: Record<string, unknown>): unknown {
+  if (typeof v === 'string') {
+    const m = WHOLE_VAR.exec(v);
+    if (m) {
+      const value = lookup([data], m[1]!);
+      if (value === null) return DROP;
+      if (typeof value === 'object') return value;
+    }
+    return renderTemplate(v, data);
+  }
+  if (Array.isArray(v)) return v.map((x) => renderCard(x, data)).filter((x) => x !== DROP);
+  if (v && typeof v === 'object') {
+    return Object.fromEntries(
+      Object.entries(v).flatMap(([k, x]) => {
+        const r = renderCard(x, data);
+        return r === DROP ? [] : [[k, r]];
+      }),
+    );
+  }
+  return v;
+}
+
 export function renderMessage(format: TemplateFormat, body: string, data: Record<string, unknown>): RenderedMessage {
-  if (format === 'template_card') return { format, card: mapStrings(parseCard(body), (s) => renderTemplate(s, data)) as Record<string, unknown> };
+  if (format === 'template_card') return { format, card: renderCard(parseCard(body), data) as Record<string, unknown> };
   return { format, text: renderTemplate(body, data).trim() };
 }
 
@@ -184,8 +213,16 @@ const subjectLine = (text: string): string =>
 export function toChannelPayloads(kind: ChannelKind, msg: RenderedMessage): ChannelPayload[] {
   if (kind === 'email') {
     if (msg.format === 'template_card') {
-      const lines = [toText(get(msg.card, 'main_title.desc')), ...cardLinks(msg.card)].filter(Boolean);
-      return [{ type: 'email', subject: toText(get(msg.card, 'main_title.title')) || 'Flower 推送', text: lines.join('\n') }];
+      const c = msg.card;
+      const pairs = Array.isArray(c.horizontal_content_list) ? c.horizontal_content_list : [];
+      const lines = [
+        toText(get(c, 'main_title.desc')),
+        get(c, 'emphasis_content.title') ? `${toText(get(c, 'emphasis_content.desc'))}：${toText(get(c, 'emphasis_content.title'))}` : '',
+        ...pairs.map((p) => `${toText(get(p, 'keyname'))}：${toText(get(p, 'value'))}`),
+        get(c, 'quote_area.quote_text') ? `${toText(get(c, 'quote_area.title'))}\n${toText(get(c, 'quote_area.quote_text'))}` : '',
+        ...cardLinks(c),
+      ].filter(Boolean);
+      return [{ type: 'email', subject: toText(get(c, 'main_title.title')) || 'Flower 推送', text: lines.join('\n') }];
     }
     if (msg.format === 'email') {
       const [first, ...rest] = msg.text.split('\n');

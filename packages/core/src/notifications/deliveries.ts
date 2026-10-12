@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, or, type SQL, sql } from 'drizzle-orm';
 import { requireOrgAdmin } from '../access/permissions';
 import type { Db } from '../db/client';
-import { notificationChannels, notificationDeliveries, notificationDigestItems, notificationRules, notificationSchedules } from '../db/schema';
+import { members, notificationChannels, notificationDeliveries, notificationDigestItems, notificationRules, notificationSchedules } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
@@ -11,8 +11,8 @@ import { type ChannelRow, readChannelConfig } from './channels';
 import { type ChannelKind, type ChannelPayload, type DeliveryKind, type DeliveryStatus, RESPONSE_MAX_CHARS } from './constants';
 import { resolveTemplateTx } from './message-templates';
 import { type NotifyDeps, retryDelayMs, type SendOutcome, sendPayload } from './sender';
-import { eventMessageDataTx, formatMinute, orgContextTx } from './sources';
-import { payloadPreview, renderMessage, TRUNCATED_MARK, toChannelPayloads, truncateBytes, WECOM_MARKDOWN_MAX_BYTES } from './template';
+import { CARD_LIMITS, clip, eventMessageDataTx, formatMinute, type OrgContext, orgContextTx } from './sources';
+import { payloadPreview, type RenderedMessage, renderMessage, TRUNCATED_MARK, toChannelPayloads, truncateBytes, WECOM_MARKDOWN_MAX_BYTES } from './template';
 
 export type DeliveryRow = typeof notificationDeliveries.$inferSelect;
 export type DeliveryView = {
@@ -320,7 +320,24 @@ async function viewOf(db: Db, orgId: string, id: string): Promise<DeliveryView> 
   });
 }
 
-/** 发一条固定内容的测试消息：只对启用的通道；在请求内同步发送一次，失败不重试。 */
+/** 测试消息：企微发文本通知卡片（整卡点击到推送设置页），其他通道为固定文本。 */
+async function testMessageTx(tx: Tx, actor: Actor, ch: ChannelRow, ctx: OrgContext, now: Date): Promise<RenderedMessage> {
+  const time = formatMinute(now, ctx.timeZone);
+  if (ch.kind !== 'wecom_robot') return { format: 'text', text: `Flower 测试消息：通道「${ch.name}」可以正常接收推送。\n发送时间：${time}` };
+  const [me] = await tx.select({ name: members.displayName }).from(members).where(eq(members.id, actor.memberId));
+  return {
+    format: 'template_card',
+    card: {
+      card_type: 'text_notice',
+      source: { desc: 'Flower' },
+      main_title: { title: '推送通道已连通', desc: clip(ch.name, CARD_LIMITS.desc) },
+      horizontal_content_list: [{ keyname: '发送时间', value: time }, ...(me ? [{ keyname: '发送人', value: me.name }] : [])],
+      card_action: { type: 1, url: `${ctx.base}/settings/notifications` },
+    },
+  };
+}
+
+/** 发一条测试消息：只对启用的通道；在请求内同步发送一次，失败不重试。 */
 export async function sendTestMessage(db: Db, actor: Actor, channelId: string, deps: NotifyDeps): Promise<DeliveryView> {
   requireOrgAdmin(actor);
   const now = new Date();
@@ -329,7 +346,7 @@ export async function sendTestMessage(db: Db, actor: Actor, channelId: string, d
     if (!ch) throw new AppError('not_found', '通道不存在');
     if (!ch.enabled) throw new AppError('invalid', '通道已停用，启用后才能发送测试消息');
     const ctx = await orgContextTx(tx, actor.orgId, deps.publicUrl);
-    const [payload] = toChannelPayloads(ch.kind, { format: 'text', text: `Flower 测试消息：通道「${ch.name}」可以正常接收推送。\n发送时间：${formatMinute(now, ctx.timeZone)}` });
+    const [payload] = toChannelPayloads(ch.kind, await testMessageTx(tx, actor, ch, ctx, now));
     const [row] = await tx
       .insert(notificationDeliveries)
       .values({ orgId: actor.orgId, kind: 'test', channelId, payload: payload!, status: 'pending', nextAttemptAt: now })

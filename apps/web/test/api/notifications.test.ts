@@ -49,7 +49,7 @@ describe('推送接口', () => {
     channelId = created.body.channel.id;
     const test = await call(app, 'POST', `/orgs/acme/notification-channels/${channelId}/test`, { session });
     expect(test.body.delivery).toMatchObject({ kind: 'test', status: 'sent', attempts: 1 });
-    expect(hook.received.at(-1)!.body).toMatchObject({ msgtype: 'text' });
+    expect(hook.received.at(-1)!.body).toMatchObject({ msgtype: 'template_card', template_card: { main_title: { title: '推送通道已连通', desc: '研发群' } } });
     const list = await call(app, 'GET', '/orgs/acme/notification-channels', { session });
     const deliveries = await call(app, 'GET', '/orgs/acme/notification-deliveries', { session });
     for (const r of [created, test, list, deliveries]) expect(JSON.stringify(r.body)).not.toContain('api-demo-0001');

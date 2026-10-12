@@ -64,7 +64,7 @@ export async function generateScheduleRunTx(tx: Tx, s: ScheduleRow, deps: { publ
       .where(and(inArray(notificationDigestItems.id, open), isNull(notificationDigestItems.runId)))
       .returning({ eventId: notificationDigestItems.eventId, createdAt: notificationDigestItems.createdAt });
     if (items.length === 0) return skip('没有待合并的变化', false);
-    messages = [renderMessage(tpl.format, tpl.body, await digestDataTx(tx, s, items, ctx))];
+    messages = [renderMessage(tpl.format, tpl.body, await digestDataTx(tx, s, items, ctx, now))];
   }
   const rows = channels.flatMap((c) =>
     messages

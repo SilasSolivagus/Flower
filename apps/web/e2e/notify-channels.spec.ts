@@ -31,7 +31,7 @@ test('登记企微通道、确认后发送测试消息、修改（地址留空�
   await page.getByRole('button', { name: '发送', exact: true }).click();
   await expect(page.getByText('测试消息已发送')).toBeVisible();
   expect(hook.received.length).toBe(before + 1);
-  expect(hook.received.at(-1)!.body).toMatchObject({ msgtype: 'text' });
+  expect(hook.received.at(-1)!.body).toMatchObject({ msgtype: 'template_card', template_card: { card_type: 'text_notice', main_title: { title: '推送通道已连通', desc: '研发群' } } });
 
   await row.getByRole('button', { name: '修改' }).click();
   await expect(page.getByLabel('机器人地址')).toHaveValue('');

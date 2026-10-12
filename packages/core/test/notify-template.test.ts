@@ -35,6 +35,12 @@ describe('模板渲染', () => {
     expect(card).toEqual({ format: 'template_card', card: { card_type: 'text_notice', main_title: { title: '日报' }, jump_list: [{ type: 1, url: 'http://127.0.0.1/x' }] } });
     expect(renderMessage('markdown', '\n**{{t}}**\n\n', { t: '标题' })).toEqual({ format: 'markdown', text: '**标题**' });
   });
+
+  it('卡片：值恰好是一个 {{path}} 时对象与列表原样插入、null 去掉所在的键或列表项；缺字段与数字仍按文字渲染', () => {
+    const body = JSON.stringify({ a: '{{obj}}', b: '{{nil}}', c: ['{{nil}}', '{{list}}', 'x{{nil}}'], d: '{{missing}}', e: '{{n}}', f: '前缀 {{obj}}' });
+    const card = renderMessage('template_card', body, { obj: { k: '{{n}}' }, nil: null, list: [1, 2], n: 3 });
+    expect(card).toEqual({ format: 'template_card', card: { a: { k: '{{n}}' }, c: [[1, 2], 'x'], d: '', e: '3', f: '前缀 ' } });
+  });
 });
 
 describe('按通道生成请求体', () => {
@@ -69,10 +75,19 @@ describe('按通道生成请求体', () => {
     expect(toChannelPayloads('webhook', card)).toEqual([{ type: 'json', body: { format: 'template_card', content: card.card } }]);
   });
 
-  it('邮件：主题取第一行并去掉 markdown 标记；email 格式第一行是主题；卡片取标题、描述与链接', () => {
+  it('邮件：主题取第一行并去掉 markdown 标记；email 格式第一行是主题；卡片取标题、描述、关键数据、名称 + 值、引用区与链接', () => {
     expect(toChannelPayloads('email', { format: 'markdown', text: '**PAN-1 新建需求**\n> 详情' })).toEqual([{ type: 'email', subject: 'PAN-1 新建需求', text: '**PAN-1 新建需求**\n> 详情' }]);
     expect(toChannelPayloads('email', { format: 'email', text: '周报\n第一行\n第二行' })).toEqual([{ type: 'email', subject: '周报', text: '第一行\n第二行' }]);
     expect(toChannelPayloads('email', card)).toEqual([{ type: 'email', subject: '日报 · 2026-10-09', text: '1016 发版\n查看：http://127.0.0.1/i/1' }]);
+    const full = {
+      ...card.card,
+      emphasis_content: { title: '62%', desc: '整体进度（理论 70%）' },
+      horizontal_content_list: [{ keyname: '需求', value: '12 项' }],
+      quote_area: { type: 0, title: '需要关注', quote_text: 'PAN-1 离线下载 · 林澄' },
+    };
+    expect(toChannelPayloads('email', { format: 'template_card', card: full })).toEqual([
+      { type: 'email', subject: '日报 · 2026-10-09', text: '1016 发版\n整体进度（理论 70%）：62%\n需求：12 项\n需要关注\nPAN-1 离线下载 · 林澄\n查看：http://127.0.0.1/i/1' },
+    ]);
   });
 
   it('markdown 超过 4096 字节按段拆分，第 2 条起标题加「（续n）」；单段过长截断', () => {
