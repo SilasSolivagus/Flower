@@ -8,6 +8,8 @@ let cleanup: () => Promise<void>;
 let hook: Awaited<ReturnType<typeof startFakeWebhook>>;
 let session: string;
 let editorSession: string;
+let adminSession: string;
+let viewerSession: string;
 let readToken: string;
 let writeToken: string;
 let productId: string;
@@ -20,6 +22,15 @@ beforeAll(async () => {
   productId = (await call(app, 'POST', '/orgs/acme/products', { session, body: { name: '网盘', key: 'PAN' } })).body.product.id;
   const inv = await call(app, 'POST', '/orgs/acme/invitations', { session, body: { email: 'editor@example.com', orgRole: 'member' } });
   editorSession = sessionFrom((await call(app, 'POST', `/invitations/${inv.body.token}/accept`, { body: { name: '编辑', password: 'password123' } })).res);
+  const join = async (email: string, name: string, role: 'admin' | 'viewer') => {
+    const invite = await call(app, 'POST', '/orgs/acme/invitations', { session, body: { email, orgRole: 'member' } });
+    const s = sessionFrom((await call(app, 'POST', `/invitations/${invite.body.token}/accept`, { body: { name, password: 'password123' } })).res);
+    const memberId = (await call(app, 'GET', '/orgs/acme', { session: s })).body.me.memberId;
+    await call(app, 'PUT', `/orgs/acme/products/${productId}/roles/${memberId}`, { session, body: { role } });
+    return s;
+  };
+  adminSession = await join('product-admin@example.com', '产品管理员', 'admin');
+  viewerSession = await join('viewer@example.com', '只读成员', 'viewer');
   const me = (await call(app, 'GET', '/orgs/acme', { session })).body.me.memberId;
   const issue = (access: 'read' | 'write') => call(app, 'POST', '/orgs/acme/tokens', { session, body: { memberId: me, name: access, scope: { products: 'all', access } } });
   readToken = (await issue('read')).body.token;
@@ -93,6 +104,81 @@ describe('推送接口', () => {
     expect((await call(app, 'PATCH', `/orgs/acme/notification-rules/${rule.body.rule.id}`, { session, body: { enabled: false } })).body.rule.enabled).toBe(false);
     expect((await call(app, 'DELETE', `/orgs/acme/notification-rules/${rule.body.rule.id}`, { session })).status).toBe(409);
     expect((await call(app, 'DELETE', `/orgs/acme/notification-channels/${channelId}`, { session })).status).toBe(409);
+  });
+
+  it('权限：产品管理员（不是组织管理员）可以管理本产品的规则与定时推送；只读成员都不能；两者都不能管理通道与发送记录', async () => {
+    const rule = { name: '产品管理员的规则', eventTypes: ['requirement.created'], channelIds: [channelId] };
+    const schedule = { productId, name: '产品管理员的日报', cron: '0 9 * * *', source: 'overview_card', channelIds: [channelId] };
+    expect((await call(app, 'GET', `/orgs/acme/products/${productId}/notification-channels`, { session: adminSession })).status).toBe(200);
+    const createdRule = await call(app, 'POST', `/orgs/acme/products/${productId}/notification-rules`, { session: adminSession, body: rule });
+    expect(createdRule.status).toBe(201);
+    expect((await call(app, 'PATCH', `/orgs/acme/notification-rules/${createdRule.body.rule.id}`, { session: adminSession, body: { enabled: false } })).status).toBe(200);
+    expect((await call(app, 'GET', `/orgs/acme/products/${productId}/notification-rules`, { session: adminSession })).status).toBe(200);
+    const createdSchedule = await call(app, 'POST', '/orgs/acme/notification-schedules', { session: adminSession, body: schedule });
+    expect(createdSchedule.status).toBe(201);
+    const scheduleId = createdSchedule.body.schedule.id;
+    expect((await call(app, 'GET', `/orgs/acme/notification-schedules?product=${productId}`, { session: adminSession })).status).toBe(200);
+    expect((await call(app, 'POST', `/orgs/acme/notification-schedules/${scheduleId}/run`, { session: adminSession })).status).toBe(200);
+    expect((await call(app, 'GET', '/orgs/acme/message-templates', { session: adminSession })).status).toBe(200);
+
+    const denied: Array<[string, string, string, unknown?]> = [
+      [adminSession, 'GET', '/orgs/acme/notification-channels'],
+      [adminSession, 'POST', `/orgs/acme/notification-channels/${channelId}/test`],
+      [adminSession, 'GET', '/orgs/acme/notification-schedules'],
+      [adminSession, 'GET', '/orgs/acme/notification-deliveries'],
+      [adminSession, 'POST', '/orgs/acme/message-templates', { name: 'x', format: 'text', body: 'x' }],
+      [viewerSession, 'GET', '/orgs/acme/notification-channels'],
+      [viewerSession, 'GET', `/orgs/acme/products/${productId}/notification-channels`],
+      [viewerSession, 'GET', `/orgs/acme/products/${productId}/notification-rules`],
+      [viewerSession, 'POST', `/orgs/acme/products/${productId}/notification-rules`, rule],
+      [viewerSession, 'PATCH', `/orgs/acme/notification-rules/${createdRule.body.rule.id}`, { enabled: true }],
+      [viewerSession, 'GET', `/orgs/acme/notification-schedules?product=${productId}`],
+      [viewerSession, 'POST', '/orgs/acme/notification-schedules', schedule],
+      [viewerSession, 'POST', `/orgs/acme/notification-schedules/${scheduleId}/run`],
+      [viewerSession, 'DELETE', `/orgs/acme/notification-schedules/${scheduleId}`],
+      [viewerSession, 'GET', '/orgs/acme/notification-deliveries'],
+    ];
+    for (const [who, method, path, body] of denied) {
+      expect((await call(app, method, path, { session: who, body })).status, `${who === adminSession ? '产品管理员' : '只读成员'} ${method} ${path}`).toBe(403);
+    }
+  });
+
+  it('Webhook 签名密钥与 SMTP 密码不出现在任何响应里', async () => {
+    const SECRET = 'hmac-secret-should-not-leak-9f3a';
+    const PASS = 'smtp-pass-should-not-leak-7c1e';
+    const hookCreated = await call(app, 'POST', '/orgs/acme/notification-channels', {
+      session,
+      body: { kind: 'webhook', name: '签名 Webhook', config: { url: hook.url('api-webhook-0002'), secret: SECRET } },
+    });
+    expect(hookCreated.status).toBe(201);
+    const mailCreated = await call(app, 'POST', '/orgs/acme/notification-channels', {
+      session,
+      body: { kind: 'email', name: '邮件通知', config: { host: 'smtp.example.com', port: 465, secure: true, user: 'robot@example.com', pass: PASS, from: 'robot@example.com', to: ['pm@example.com'] } },
+    });
+    expect(mailCreated.status).toBe(201);
+    const webhookId = hookCreated.body.channel.id;
+    const mailId = mailCreated.body.channel.id;
+    // 只给 Webhook 发测试消息（本机假接收端）；邮件通道不发送
+    const test = await call(app, 'POST', `/orgs/acme/notification-channels/${webhookId}/test`, { session });
+    expect(test.body.delivery).toMatchObject({ status: 'sent' });
+    expect(hook.received.at(-1)!.headers['x-flower-signature']).toMatch(/^sha256=/);
+    const responses = [
+      hookCreated,
+      mailCreated,
+      test,
+      await call(app, 'PATCH', `/orgs/acme/notification-channels/${webhookId}`, { session, body: { name: '签名 Webhook（改）' } }),
+      await call(app, 'PATCH', `/orgs/acme/notification-channels/${mailId}`, { session, body: { name: '邮件通知（改）' } }),
+      await call(app, 'GET', '/orgs/acme/notification-channels', { session }),
+      await call(app, 'GET', `/orgs/acme/products/${productId}/notification-channels`, { session }),
+      await call(app, 'GET', '/orgs/acme/notification-deliveries', { session }),
+    ];
+    for (const r of responses) {
+      expect(r.status).toBeLessThan(300);
+      const text = JSON.stringify(r.body);
+      expect(text).not.toContain(SECRET);
+      expect(text).not.toContain(PASS);
+      expect(text).not.toContain('api-webhook-0002');
+    }
   });
 
   it('模板：列表含四个预置模板；语法错误 400', async () => {
