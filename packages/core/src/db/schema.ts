@@ -28,9 +28,13 @@ import {
   DELIVERY_KINDS,
   DELIVERY_STATUSES,
   type DeliveryPayload,
+  MEMBER_NOTIFICATION_KINDS,
+  NOTIFICATION_SUBJECT_TYPES,
   RULE_MODES,
   type RuleFilter,
   SCHEDULE_SOURCES,
+  SUBSCRIPTION_SOURCES,
+  SUBSCRIPTION_SUBJECT_TYPES,
   TEMPLATE_FORMATS,
 } from '../notifications/constants';
 
@@ -97,6 +101,8 @@ export const organizations = pgTable('organizations', {
   slug: text('slug').notNull().unique(),
   name: text('name').notNull(),
   settings: jsonb('settings').$type<OrgSettings>().notNull().default({}),
+  /** 个人通知的邮件通道（P3-B1）；通道删除时置空。 */
+  personalEmailChannelId: uuid('personal_email_channel_id').references((): AnyPgColumn => notificationChannels.id, { onDelete: 'set null' }),
   createdAt: createdAt(),
   deletedAt: ts('deleted_at'),
 });
@@ -114,6 +120,8 @@ export const products = pgTable(
     requirementSeq: integer('requirement_seq').notNull().default(0),
     documentSeq: integer('document_seq').notNull().default(0),
     taskSeq: integer('task_seq').notNull().default(0),
+    /** 个人提醒通道（P3-B1）：对本产品可用、已启用的企业微信机器人通道；通道删除时置空。 */
+    personalChannelId: uuid('personal_channel_id').references((): AnyPgColumn => notificationChannels.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
     deletedAt: ts('deleted_at'),
   },
@@ -132,9 +140,15 @@ export const members = pgTable(
     department: text('department'),
     orgRole: text('org_role', { enum: ['owner', 'admin', 'member', 'guest'] }).notNull(),
     status: text('status', { enum: ['active', 'left'] }).notNull().default('active'),
+    /** 企业微信账号（userid），同一组织内唯一（P3-B1）。 */
+    wecomUserid: text('wecom_userid'),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex('members_org_account').on(t.orgId, t.accountId), index('members_account').on(t.accountId)],
+  (t) => [
+    uniqueIndex('members_org_account').on(t.orgId, t.accountId),
+    index('members_account').on(t.accountId),
+    uniqueIndex('members_org_wecom').on(t.orgId, t.wecomUserid).where(sql`${t.wecomUserid} is not null`),
+  ],
 );
 
 export const productMembers = pgTable(
@@ -917,7 +931,123 @@ export const notificationDeliveries = pgTable(
     index('notification_deliveries_run').on(t.runId),
     check(
       'notification_deliveries_source',
-      sql`(${t.kind} = 'rule' and ${t.ruleId} is not null and ${t.scheduleId} is null) or (${t.kind} = 'schedule' and ${t.scheduleId} is not null and ${t.ruleId} is null) or (${t.kind} = 'test' and ${t.ruleId} is null and ${t.scheduleId} is null)`,
+      sql`(${t.kind} = 'rule' and ${t.ruleId} is not null and ${t.scheduleId} is null) or (${t.kind} = 'schedule' and ${t.scheduleId} is not null and ${t.ruleId} is null) or (${t.kind} in ('test', 'personal') and ${t.ruleId} is null and ${t.scheduleId} is null)`,
     ),
   ],
+);
+
+// ---------- P3-B1：站内通知、关注、个人偏好、企业微信 ----------
+
+export const memberNotifications = pgTable(
+  'member_notifications',
+  {
+    id: id(),
+    orgId: orgRef(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => members.id),
+    /** 系统告警没有对应的领域事件，为空。 */
+    eventId: uuid('event_id').references(() => domainEvents.id),
+    kind: text('kind', { enum: MEMBER_NOTIFICATION_KINDS }).notNull(),
+    subjectType: text('subject_type', { enum: NOTIFICATION_SUBJECT_TYPES }).notNull(),
+    subjectId: uuid('subject_id').notNull(),
+    /** 「编号 标题」。 */
+    title: text('title').notNull(),
+    /** 动作，如「在评论中 @ 了你」。 */
+    body: text('body').notNull(),
+    /** 站内相对路径，如 /acme/requirements/PAN-12。 */
+    url: text('url').notNull(),
+    actorMemberId: memberRef('actor_member_id'),
+    createdAt: createdAt(),
+    readAt: ts('read_at'),
+  },
+  (t) => [
+    uniqueIndex('member_notifications_member_event_kind').on(t.memberId, t.eventId, t.kind).where(sql`${t.eventId} is not null`),
+    index('member_notifications_member_created').on(t.memberId, t.createdAt.desc()),
+    index('member_notifications_unread').on(t.memberId).where(sql`${t.readAt} is null`),
+    index('member_notifications_subject').on(t.memberId, t.subjectType, t.subjectId),
+    index('member_notifications_read_at').on(t.readAt).where(sql`${t.readAt} is not null`),
+  ],
+);
+
+export const memberNotificationPrefs = pgTable(
+  'member_notification_prefs',
+  {
+    id: id(),
+    orgId: orgRef(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => members.id),
+    kind: text('kind', { enum: MEMBER_NOTIFICATION_KINDS }).notNull(),
+    inApp: boolean('in_app').notNull(),
+    wecom: boolean('wecom').notNull(),
+    email: boolean('email').notNull(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('member_notification_prefs_member_kind').on(t.memberId, t.kind)],
+);
+
+export const subscriptions = pgTable(
+  'subscriptions',
+  {
+    id: id(),
+    orgId: orgRef(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => members.id),
+    subjectType: text('subject_type', { enum: SUBSCRIPTION_SUBJECT_TYPES }).notNull(),
+    subjectId: uuid('subject_id').notNull(),
+    source: text('source', { enum: SUBSCRIPTION_SOURCES }).notNull(),
+    /** 取消关注的时间：不删行，避免被自动关注加回。 */
+    mutedAt: ts('muted_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('subscriptions_member_subject').on(t.memberId, t.subjectType, t.subjectId), index('subscriptions_subject').on(t.subjectType, t.subjectId)],
+);
+
+/** 站内通知的后台处理进度：每个组织一行。 */
+export const notificationCursors = pgTable('notification_cursors', {
+  orgId: uuid('org_id')
+    .primaryKey()
+    .references(() => organizations.id),
+  /** 最后处理的事件（occurred_at, id）；为空表示从头处理。 */
+  lastOccurredAt: ts('last_occurred_at'),
+  lastEventId: uuid('last_event_id'),
+  /** 连续处理失败的事件与次数：同一条连续失败 3 次后跳过。 */
+  failingEventId: uuid('failing_event_id'),
+  failures: integer('failures').notNull().default(0),
+  updatedAt: ts('updated_at').notNull().defaultNow(),
+});
+
+export const wecomApps = pgTable(
+  'wecom_apps',
+  {
+    id: id(),
+    orgId: orgRef(),
+    corpId: text('corp_id').notNull(),
+    agentId: text('agent_id').notNull(),
+    /** 加密后的应用密钥（notifications/secrets.ts 的 `v1:…`），明文只在换取 access_token 时解密。 */
+    secret: text('secret').notNull(),
+    secretHint: text('secret_hint').notNull(),
+    bindEnabled: boolean('bind_enabled').notNull().default(false),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('wecom_apps_org').on(t.orgId)],
+);
+
+/** 扫码绑定的一次性 state：只存 SHA-256，10 分钟过期，用过即作废。 */
+export const wecomBindStates = pgTable(
+  'wecom_bind_states',
+  {
+    id: id(),
+    orgId: orgRef(),
+    memberId: uuid('member_id')
+      .notNull()
+      .references(() => members.id),
+    stateHash: text('state_hash').notNull(),
+    expiresAt: ts('expires_at').notNull(),
+    usedAt: ts('used_at'),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('wecom_bind_states_hash').on(t.stateHash)],
 );

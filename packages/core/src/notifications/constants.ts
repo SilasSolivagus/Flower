@@ -46,9 +46,9 @@ export const SCHEDULE_SOURCES = ['overview_card', 'new_requirements', 'digest'] 
 export type ScheduleSource = (typeof SCHEDULE_SOURCES)[number];
 export const SCHEDULE_SOURCE_LABELS: Record<ScheduleSource, string> = { overview_card: '概览卡片', new_requirements: '新需求', digest: '变更摘要' };
 
-export const DELIVERY_KINDS = ['rule', 'schedule', 'test'] as const;
+export const DELIVERY_KINDS = ['rule', 'schedule', 'test', 'personal'] as const;
 export type DeliveryKind = (typeof DELIVERY_KINDS)[number];
-export const DELIVERY_KIND_LABELS: Record<DeliveryKind, string> = { rule: '事件规则', schedule: '定时推送', test: '测试消息' };
+export const DELIVERY_KIND_LABELS: Record<DeliveryKind, string> = { rule: '事件规则', schedule: '定时推送', test: '测试消息', personal: '个人提醒' };
 
 /** failed 表示本次失败、等待重试；dead 表示已放弃。 */
 export const DELIVERY_STATUSES = ['pending', 'sending', 'sent', 'failed', 'dead'] as const;
