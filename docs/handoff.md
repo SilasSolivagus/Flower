@@ -37,6 +37,9 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
 | `docs/superpowers/specs/2026-10-10-flower-p3a-notifications-design.md` | P3-A 设计（推送，已确认；§9 为企微消息版式与看板图片补充） |
 | `docs/superpowers/plans/2026-10-10-flower-p3a-notifications.md` | P3-A 计划（Task 1–18；§9 的实现在计划之外按控制方简报完成） |
 | `docs/p3a-validation.md` | P3-A 真实数据验证、测试群联调记录与人工验收清单 |
+| `docs/superpowers/specs/2026-10-12-flower-p3b1-member-notifications-design.md` | P3-B1 设计（站内通知、@ 成员、关注、个人偏好与企业微信绑定，已确认） |
+| `docs/superpowers/plans/2026-10-12-flower-p3b1-member-notifications.md` | P3-B1 计划 |
+| `docs/p3b1-validation.md` | P3-B1 真实数据验证、测试群联调记录与人工验收清单 |
 | `docs/story-map/flower-story-map.html` | 用户故事地图（在线版：https://claude.ai/artifact/TsrYHNpBZ2TLc6uq6suadu） |
 | 视觉样稿 | https://claude.ai/artifact/DgxTagCVRUGsKbvZSm9XPL （最上面一行"定稿"：A 配色 + C 密度） |
 | `docs/diagrams/` | 服务器现状图、目标架构草案 |
@@ -86,7 +89,7 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
   - 修订带合入来源、模块文档有合入记录；功能点改名同步模块文档小节标题；`[[ ]]` 节点链接指向模块文档（功能点带小节）。
   - 迁移核对结果（Task 14，只读）：迁移前深度 1 节点（业务域）23 个、文档 204 份（node_id 均未设置）；迁移后 `document_affected_nodes` RLS 已开启（0 行）、`documents_module_node` 唯一索引与 `documents_kind_node` 检查约束已建立，pan123 文档数仍为 204。详见 `docs/p2b2-validation.md`。
 
-- **P3-A 推送：已完成，待合并**（分支 `feat/p3a-notifications`）。
+- **P3-A 推送：已完成，已合并（PR #15）**。
   - 通道：企微机器人、Webhook（HMAC 签名）、邮件；配置 AES-256-GCM 加密，界面与接口只返回脱敏提示；保存与发送前都检查内网地址，发送时对解析出的 IP 再检查并直连该 IP（防止公网域名解析到内网）。
   - 消息模板：四个预置模板（事件推送、新需求、变更摘要、概览卡片），按企微能力重新设计版式；自建模板支持 text、markdown、markdown_v2、模板卡片、邮件。
   - 事件规则：领域事件写入的同一事务内匹配，即时推送或并入变更摘要，可按状态、优先级、节点、文档状态、字段过滤；匹配出错不影响业务写入。
@@ -96,13 +99,23 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
   - 测试群联调四次发送全部成功（测试卡片、新需求、看板图片 + 概览卡片、事件推送），见 `docs/p3a-validation.md`。
   - 看板图片需要思源黑体：开发环境先执行 `./scripts/fetch-fonts.sh`；镜像构建时自动下载。
 
+- **P3-B1 站内通知：已完成，待合并**（分支 `feat/p3b1-member-notifications`）。
+  - @ 成员：评论、需求描述、PRD 正文（写法 `[@姓名](member:ID)`，只为新增的 @ 发通知）。
+  - 五类站内通知（被 @、被指派、关注对象变化、等我签字、系统告警）：顶栏铃铛与通知页；打开对象时自动标为已读，已读 90 天清理。
+  - 关注：负责、分配、评论、被 @ 自动关注，详情页可取消或手动关注。
+  - 个人通知偏好：每类按站内、企业微信、邮件分别开关。
+  - 企业微信群里 @ 到人：产品指定个人提醒通道，同一轮合并为一条；邮件按人合并，走组织指定的个人通知邮件通道。
+  - 成员企业微信账号：手动填写、CSV 导入；扫码绑定已实现，待正式部署后用真实企业微信验证。
+  - 后台按组织游标处理事件，未提交事务里的事件不会被跳过，失败 3 次跳过；测试群联调群里 @ 到人成功，见 `docs/p3b1-validation.md`。
+
 ## 下一步
 
-1. 合并 P3-A（分支 `feat/p3a-notifications`）。
-2. 用户按 `docs/p3a-validation.md` 第 5 节验收，并决定第 6 节的正式切换事项。
-3. 规划 P3-B：站内通知与个人通知偏好、基础数据看板。
-4. 用户按 `docs/p2b2-validation.md` 第 4 节、`docs/p2b1-validation.md` 第 4 节、`docs/p2a-validation.md` 第 5 节、`docs/p1b-validation.md`「P1-B2」第 3、4 节与「P1-C」第 2 节在本地 pan123 上验收。注意：2026-10-12 为 P3-A 重导过 pan123，之前复验留下的 PAN-PRD-205、PAN-PRD-206 与业务域「P2-B2 复验」已不在；P3-A 联调留下测试需求 PAN-765。
-5. 下次 `--replace` 重导前先跑 `--dry-run`：真实数据如果出现同名的不同人，会报「多人共用这个写法」，需要先在 `people.json` 里区分；重导后执行一次 `legacy rejoin`。
+1. 合并 P3-B1（分支 `feat/p3b1-member-notifications`）。
+2. 用户按 `docs/p3b1-validation.md` 第 5 节验收，并处理第 6 节（正式部署后的扫码绑定等）；P3-A 的验收与切换事项见 `docs/p3a-validation.md` 第 5、6 节。
+3. 规划 P3-B2：基础数据看板。
+4. 下次 `--replace` 重导前先跑 `--dry-run`；重导后执行一次 `legacy rejoin`。注意重导会删除 P3-A / P3-B1 复验留下的测试数据（PAN-765、PAN-766、测试成员「联调成员（测试）」）。
+
+P3-B1 验证中记下的留观项（非阻塞）：打开 PRD、任务详情时标为已读缺页面级端到端测试；定时推送进入告警时如果写管理员提醒失败，这次的站内告警会丢失（只记警告）；`[[` 链接前面恰好是反斜杠时不识别；输入框代码片段里的 `@` 也会弹出补全；PRD 里复制的 @ 粘到评论后不识别为 @；Shift+Enter 软换行后行首的 @ 不弹出补全；CSV 单元格里的逗号会被拆开；离开组织成员的企业微信账号仍占用；generate 与 worker 两个模块互相导入；后台卡住的长事务告警日志每轮每个组织打一次。
 
 P3-A 验证中记下的留观项（非阻塞）：看板图片在定时推送的事务与锁内生成（约 1 秒），定时推送明显增多后改为事务外生成；「测试中」按状态键或名称识别（test、testing、qa、测试、验收），自定义状态名不符时计入开发中；燃尽小图没有历史数据；markdown_v2 的大表格中间没有空行时超长会截断而不是分条；推送内容中的字段值没有做 markdown 转义；概览卡片标题日期按定时推送时区、发版剩余天数按组织时区，两者不同时可能差一天；渠道与模板列表的引用计数会扫描整个组织的规则与定时推送。
 

@@ -20,6 +20,20 @@
 
 ## 记录
 
+### 2026-10-12 · 本地 · P3-B1 站内通知、@ 成员、关注、个人通知偏好与企业微信绑定
+- 分支 / PR：`feat/p3b1-member-notifications`
+- 做了什么：
+  - 数据模型：member_notifications、member_notification_prefs、subscriptions、notification_cursors、wecom_apps、wecom_bind_states（均开 RLS）；members.wecom_userid、products.personal_channel_id、organizations.personal_email_channel_id；发送记录新增 kind = personal。游标在迁移时初始化为各组织最新事件。
+  - @ 写法 `[@姓名](member:ID)`；评论、需求描述、PRD 正文的事件记下新增的被 @ 成员，新建需求、PRD、任务的事件带负责人。
+  - 后台循环按组织游标处理事件（SKIP LOCKED；先单独读出仍在进行中事务的最早开始时间，只处理早于它的事件，超过 10 分钟的事务不再等待；每条 savepoint；连续失败 3 次跳过）：五类通知、收件人排名与过滤、自动关注；企业微信按产品合并 @ 到本人、邮件按人合并，经 P3-A 发送队列发出；定时推送进入告警时给组织管理员系统告警（savepoint 隔离）；已读 90 天与过期绑定 state 清理；生成、推送、清理各自兜底。
+  - 企业微信：成员账号手动填写、CSV 预览与导入；自建应用配置（密钥加密）与扫码绑定（一次性 state，10 分钟过期，只访问 qyapi.weixin.qq.com，不跟随重定向）。
+  - 页面：顶栏铃铛、通知页、@ 补全与成员标签（输入框与 BlockNote 自定义内联元素）、关注按钮、个人设置的通知偏好与绑定、成员页企业微信账号列与导入、推送页企业微信应用与个人通知邮件通道、产品个人提醒通道。
+- 怎么验证的：
+  - `pnpm test`：core 590、web 217、migrate 123，全部通过；typecheck 通过；web lint 0 警告；全量 e2e 144 通过、1 跳过（`editor-perf.spec.ts`）；`./scripts/smoke.sh` 通过。
+  - Task 19 迁移核对：六张新表 RLS 与策略、游标指向最新事件、pan123 数量不变。
+  - pan123 上两个账号的复验（被 @、被指派、关注与取消关注、偏好开关、设置页，1440 / 760）与测试群联调（群里 @ 到人，errcode 0，用户确认显示正确），详见 `docs/p3b1-validation.md`。
+- 留给对方：扫码绑定需在正式部署、配置授权回调域后用真实企业微信验证；是否为历史负责人、评论者补自动关注由用户决定。
+
 ### 2026-10-12 · 云端 · PR #15 审查：发送时按解析出的 IP 拦截内网地址
 - 分支 / PR：`feat/p3a-notifications`，PR #15
 - 做了什么：审查 P3-A（租户隔离、密钥、SSRF、权限、发送管道、迁移、页面导入、字体脚本）。阻塞问题一个：内网地址检查只看字面量，公网域名解析到内网（或 Docker 内的 `postgres`、`flower` 这类单段主机名）可以绕过，测试消息还会把响应体返回给组织管理员。改为 `defaultTransport` 用 http(s).request + 自定义 lookup，解析后逐个地址检查、直连检查过的 IP，不跟随重定向，响应体最多读 64 KB；SMTP 先解析检查再直连该 IP，TLS 用原主机名（servername）校验证书。新增 `packages/core/test/notify-sender.test.ts`。`docs/handoff.md` 把「只发一次」改为「至少一次投递」的准确说法。
