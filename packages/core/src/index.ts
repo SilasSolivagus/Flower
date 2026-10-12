@@ -91,3 +91,5 @@ export * from './wecom/oauth';
 export * from './member-notifications/recipients';
 export * from './member-notifications/content';
 export * from './member-notifications/generate';
+export * from './member-notifications/channels';
+export * from './member-notifications/dispatch';

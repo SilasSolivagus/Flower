@@ -1,8 +1,9 @@
 import { asc, and, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
-import { domainEvents, memberNotifications, notificationCursors, organizations } from '../db/schema';
+import { domainEvents, memberNotifications, members, notificationCursors, organizations } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import { type EventRow, pickRecipients, planEventTx } from './content';
+import { dispatchPersonalTx, type OutboundItem } from './dispatch';
 import { prefsForTx } from './prefs';
 import { eligibleMembersTx } from './recipients';
 import { autoSubscribeTx } from './subscriptions';
@@ -56,46 +57,68 @@ const pendingEvents = (orgId: string, bound: string) =>
     sql`${E.occurredAt} < ${bound}::timestamptz`,
   );
 
-/** 处理一条事件：算收件人、按偏好写站内通知（同一人同一事件同一类只一条）、补自动关注。返回新写的通知数。 */
-async function processEventTx(tx: Tx, ev: EventRow, slug: string): Promise<number> {
+/**
+ * 处理一条事件：算收件人、按偏好写站内通知（同一人同一事件同一类只一条）、补自动关注；
+ * 偏好开了企业微信或邮件的，收集成个人提醒，由调用方在本轮结束时合并分发。
+ */
+async function processEventTx(tx: Tx, ev: EventRow, slug: string): Promise<{ created: number; outbound: OutboundItem[] }> {
   const plan = await planEventTx(tx, ev, slug);
-  if (!plan) return 0;
+  if (!plan) return { created: 0, outbound: [] };
   const chosen = pickRecipients(plan.candidates, ev.actorMemberId);
   const eligible = await eligibleMembersTx(tx, plan.subject.productId, [...chosen.keys(), ...plan.autoSubscribe]);
   const recipients = [...chosen.values()].filter((c) => eligible.has(c.memberId));
   const prefs = await prefsForTx(tx, recipients.map((c) => c.memberId));
+  const [actor] = ev.actorMemberId ? await tx.select({ name: members.displayName }).from(members).where(eq(members.id, ev.actorMemberId)) : [];
   let created = 0;
+  const outbound: OutboundItem[] = [];
   for (const c of recipients) {
-    if (!prefs.get(c.memberId)![c.kind].inApp) continue;
-    const rows = await tx
-      .insert(N)
-      .values({
-        orgId: ev.orgId,
-        memberId: c.memberId,
-        eventId: ev.id,
-        kind: c.kind,
-        subjectType: plan.subject.type,
-        subjectId: plan.subject.id,
-        title: plan.subject.title,
+    const pref = prefs.get(c.memberId)![c.kind];
+    if (pref.inApp) {
+      const rows = await tx
+        .insert(N)
+        .values({
+          orgId: ev.orgId,
+          memberId: c.memberId,
+          eventId: ev.id,
+          kind: c.kind,
+          subjectType: plan.subject.type,
+          subjectId: plan.subject.id,
+          title: plan.subject.title,
+          body: c.body,
+          url: plan.subject.url,
+          actorMemberId: ev.actorMemberId,
+        })
+        .onConflictDoNothing()
+        .returning({ id: N.id });
+      created += rows.length;
+    }
+    if (pref.wecom || pref.email) {
+      const m = eligible.get(c.memberId)!;
+      outbound.push({
+        productId: plan.subject.productId,
+        memberId: m.id,
+        email: m.email,
+        wecomUserid: m.wecomUserid,
+        viaWecom: pref.wecom,
+        viaEmail: pref.email,
+        actorName: actor?.name ?? null,
         body: c.body,
+        title: plan.subject.title,
         url: plan.subject.url,
-        actorMemberId: ev.actorMemberId,
-      })
-      .onConflictDoNothing()
-      .returning({ id: N.id });
-    created += rows.length;
+      });
+    }
   }
   const type = plan.subject.type;
   if (type === 'requirement' || type === 'document') {
     await autoSubscribeTx(tx, ev.orgId, { type, id: plan.subject.id }, plan.autoSubscribe.filter((id) => eligible.has(id)));
   }
-  return created;
+  return { created, outbound };
 }
 
 /**
  * 处理一个组织游标之后的新事件（最多 EVENT_BATCH 条）。先建游标行再 SKIP LOCKED 锁住：拿不到说明另一个实例在处理，本轮跳过。
  * 每条事件在 savepoint 里处理，成功后前移游标；失败时记下事件与次数并结束本轮，同一条连续失败 MAX_EVENT_FAILURES 次后跳过。
- * legacy.* 事件不处理，只前移游标。后台写入，不记领域事件。
+ * legacy.* 事件不处理，只前移游标。本轮的企业微信与邮件提醒在最后合并写入发送队列。后台写入，不记领域事件。
  */
 export async function generateMemberNotifications(
   db: Db,
@@ -114,12 +137,15 @@ export async function generateMemberNotifications(
     const { bound, stale } = await eventBoundTx(tx, deps.staleTransactionMs ?? STALE_TRANSACTION_MS);
     for (const s of stale) console.warn(`[notify] 有事务已开启 ${s.ageSeconds} 秒，站内通知生成不再等待它：pid=${s.pid}`);
     const events = await tx.select().from(E).where(pendingEvents(orgId, bound)).orderBy(asc(E.occurredAt), asc(E.id)).limit(EVENT_BATCH);
+    const outbound: OutboundItem[] = [];
     let last: string | null = null;
     let failing: { eventId: string; failures: number } | null = null;
     for (const ev of events) {
       if (!ev.type.startsWith('legacy.')) {
         try {
-          summary.notifications += await tx.transaction((sp) => processEventTx(sp, ev, org!.slug));
+          const r = await tx.transaction((sp) => processEventTx(sp, ev, org!.slug));
+          summary.notifications += r.created;
+          outbound.push(...r.outbound);
         } catch (e) {
           const failures = cursor.failingEventId === ev.id ? cursor.failures + 1 : 1;
           if (failures < MAX_EVENT_FAILURES) {
@@ -133,6 +159,13 @@ export async function generateMemberNotifications(
       }
       last = ev.id;
       summary.events += 1;
+    }
+    if (outbound.length > 0) {
+      try {
+        await tx.transaction((sp) => dispatchPersonalTx(sp, orgId, outbound, deps.publicUrl, now));
+      } catch (e) {
+        console.warn(`[notify] 个人提醒写入发送队列失败，本轮的企业微信与邮件提醒未发送：org=${orgId}：${causeMessage(e)}`);
+      }
     }
     if (last || failing || cursor.failingEventId) {
       await tx

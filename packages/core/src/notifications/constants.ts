@@ -73,8 +73,8 @@ export type NewRequirementsConfig = { emptyBehavior: 'skip' | 'notice'; onlineSo
 /** image：附带看板图片（只发企微通道）；缺少该键（迁移导入的旧数据）按开启处理。 */
 export type OverviewCardConfig = { titlePrefix?: string; image?: boolean };
 
-/** 一次发送的请求体：企微与 Webhook 为 JSON，邮件为主题与正文。 */
-export type ChannelPayload = { type: 'json'; body: Record<string, unknown> } | { type: 'email'; subject: string; text: string };
+/** 一次发送的请求体：企微与 Webhook 为 JSON，邮件为主题与正文（to 覆盖通道配置里的收件人，个人提醒用）。 */
+export type ChannelPayload = { type: 'json'; body: Record<string, unknown> } | { type: 'email'; subject: string; text: string; to?: string[] };
 /** 发送记录里的请求体；legacy 为迁移来的 push 推送日志原文。 */
 export type DeliveryPayload = ChannelPayload | { type: 'legacy'; content: string };
 

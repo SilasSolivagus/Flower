@@ -203,11 +203,20 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
         }
         continue;
       }
-      // 通道的可用产品可能在记录生成后收窄：不再允许的记录直接放弃（测试消息不属于产品，不受限制）
+      // 通道的可用产品可能在记录生成后收窄：不再允许的记录直接放弃（测试消息不属于产品；个人提醒在生成时已检查）
       const sendable: DeliveryRow[] = [];
       for (const d of list) {
+        // 个人提醒只经企业微信机器人（JSON 请求体）或邮件通道发出
+        if (d.kind === 'personal' && channel.kind !== (d.payload?.type === 'email' ? 'email' : 'wecom_robot')) {
+          await markDeadTx(tx, d, '个人提醒只能经企业微信机器人或邮件通道发送，未发送', claimAt);
+          summary.dead++;
+          continue;
+        }
         const allowed =
-          d.kind === 'test' || channel.allowedProductIds.length === 0 || channel.allowedProductIds.includes((await deliveryProductIdTx(tx, d)) ?? '');
+          d.kind === 'test' ||
+          d.kind === 'personal' ||
+          channel.allowedProductIds.length === 0 ||
+          channel.allowedProductIds.includes((await deliveryProductIdTx(tx, d)) ?? '');
         if (allowed) sendable.push(d);
         else {
           await markDeadTx(tx, d, '通道不再允许本产品使用，未发送', claimAt);
