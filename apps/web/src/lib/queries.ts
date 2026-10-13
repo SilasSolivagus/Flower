@@ -42,9 +42,11 @@ import type {
   NotificationSchedule,
   NotificationSettings,
   Org,
+  OrgDashboard,
   OrgMe,
   PersonalChannelSetting,
   Product,
+  ProductDashboard,
   ProductMemberRole,
   Release,
   RequirementComment,
@@ -83,6 +85,8 @@ export const qk = {
   requirement: (o: string, key: string) => ['org', o, 'requirements', 'detail', key] as const,
   requirementComments: (o: string, id: string) => ['org', o, 'requirements', 'comments', id] as const,
   reviews: (o: string, productId: string, query: string) => ['org', o, 'requirements', 'reviews', productId, query] as const,
+  productDashboard: (o: string, productId: string, query: string) => ['org', o, 'dashboard', 'product', productId, query] as const,
+  orgDashboard: (o: string, query: string) => ['org', o, 'dashboard', 'org', query] as const,
   nodes: (o: string, productId: string) => ['org', o, 'product', productId, 'nodes'] as const,
   iterations: (o: string, productId: string) => ['org', o, 'iterations', 'product', productId] as const,
   iterationList: (o: string) => ['org', o, 'iterations', 'list'] as const,
@@ -247,6 +251,28 @@ export const useReviewQueue = (o: string, productId: string | undefined, query: 
     queryFn: () => api<{ queue: ReviewQueue }>(`/orgs/${o}/products/${productId}/reviews?${query}`),
     select: (d) => d.queue,
     enabled: !!productId,
+    placeholderData: keepPreviousData,
+  });
+
+/** 看板打开时实时计算，前端缓存 5 分钟；切换筛选时保留上一次结果，避免闪烁。 */
+const DASHBOARD_STALE_MS = 5 * 60_000;
+
+export const useProductDashboard = (o: string, productId: string | undefined, query: string) =>
+  useQuery({
+    queryKey: qk.productDashboard(o, productId ?? '', query),
+    queryFn: () => api<{ dashboard: ProductDashboard }>(`/orgs/${o}/products/${productId}/dashboard${query ? `?${query}` : ''}`),
+    select: (d) => d.dashboard,
+    enabled: !!productId,
+    staleTime: DASHBOARD_STALE_MS,
+    placeholderData: keepPreviousData,
+  });
+
+export const useOrgDashboard = (o: string, query: string) =>
+  useQuery({
+    queryKey: qk.orgDashboard(o, query),
+    queryFn: () => api<{ dashboard: OrgDashboard }>(`/orgs/${o}/dashboard${query ? `?${query}` : ''}`),
+    select: (d) => d.dashboard,
+    staleTime: DASHBOARD_STALE_MS,
     placeholderData: keepPreviousData,
   });
 
