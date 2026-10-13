@@ -2,7 +2,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { organizations, products, requirements, stateTransitions, workflowVersions } from '../db/schema';
 import type { Tx } from '../db/tx';
 import type { WorkflowBody } from '../definitions/workflow-schema';
-import { validZone } from '../notifications/sources';
+import { validZone } from '../dates';
 import { DEFAULT_TIMEZONE } from '../tasks/tasks';
 import { type CategoryOf, type FlowRequirement, prepareFlow, type RawTransition, type StateCategory } from './metrics';
 
