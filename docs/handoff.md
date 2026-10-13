@@ -1,6 +1,6 @@
 # Flower 交接文档
 
-更新：2026-10-12。新会话接手时先读这份，再读下面列出的 spec 和计划。最近谁做了什么，看 `docs/agent-log.md`。
+更新：2026-10-13。新会话接手时先读这份，再读下面列出的 spec 和计划。最近谁做了什么，看 `docs/agent-log.md`。
 
 ## 项目是什么
 
@@ -40,6 +40,9 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
 | `docs/superpowers/specs/2026-10-12-flower-p3b1-member-notifications-design.md` | P3-B1 设计（站内通知、@ 成员、关注、个人偏好与企业微信绑定，已确认） |
 | `docs/superpowers/plans/2026-10-12-flower-p3b1-member-notifications.md` | P3-B1 计划 |
 | `docs/p3b1-validation.md` | P3-B1 真实数据验证、测试群联调记录与人工验收清单 |
+| `docs/superpowers/specs/2026-10-13-flower-p3b2-dashboard-design.md` | P3-B2 设计（基础数据看板，已确认；§7 产品工作情况表待讨论） |
+| `docs/superpowers/plans/2026-10-13-flower-p3b2-dashboard.md` | P3-B2 计划 |
+| `docs/p3b2-validation.md` | P3-B2 真实数据核对、性能与人工验收清单 |
 | `docs/story-map/flower-story-map.html` | 用户故事地图（在线版：https://claude.ai/artifact/TsrYHNpBZ2TLc6uq6suadu） |
 | 视觉样稿 | https://claude.ai/artifact/DgxTagCVRUGsKbvZSm9XPL （最上面一行"定稿"：A 配色 + C 密度） |
 | `docs/diagrams/` | 服务器现状图、目标架构草案 |
@@ -99,7 +102,7 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
   - 测试群联调四次发送全部成功（测试卡片、新需求、看板图片 + 概览卡片、事件推送），见 `docs/p3a-validation.md`。
   - 看板图片需要思源黑体：开发环境先执行 `./scripts/fetch-fonts.sh`；镜像构建时自动下载。
 
-- **P3-B1 站内通知：已完成，待合并**（分支 `feat/p3b1-member-notifications`）。
+- **P3-B1 站内通知：已完成，已合并（PR #16）**。
   - @ 成员：评论、需求描述、PRD 正文（写法 `[@姓名](member:ID)`，只为新增的 @ 发通知）。
   - 五类站内通知（被 @、被指派、关注对象变化、等我签字、系统告警）：顶栏铃铛与通知页；打开对象时自动标为已读，已读 90 天清理。
   - 关注：负责、分配、评论、被 @ 自动关注，详情页可取消或手动关注。
@@ -108,11 +111,18 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
   - 成员企业微信账号：手动填写、CSV 导入；扫码绑定已实现，待正式部署后用真实企业微信验证。
   - 后台按组织游标处理事件，未提交事务里的事件不会被跳过，失败 3 次跳过；测试群联调群里 @ 到人成功，见 `docs/p3b1-validation.md`。
 
+- **P3-B2 基础数据看板：已完成，待合并**（分支 `feat/p3b2-dashboard`）。
+  - 产品看板（主导航「看板」）：关键数字卡片与上期升降、每周吞吐量与在制品及 85 分位趋势、卡在哪儿（当前各状态停留与停留最久的需求）、迭代承诺与版本按期、专项完成率、评审效率与驳回率；每项有口径说明，数据不足时显示「暂无数据」与原因。
+  - 时间段：近 30 / 90 / 180 天、自定义、按迭代；周按组织时区、从周一开始。
+  - 组织汇总（组织设置「看板」，仅组织管理员与全部产品范围的 Token）；只读接口 `GET /orgs/:org/products/:id/dashboard`、`GET /orgs/:org/dashboard`。
+  - 打开时实时计算，没有快照表与迁移；pan123 上四个看板用例 p95 在 18 毫秒以内。
+  - SQL 核对吞吐量、版本、专项三项与接口一致。pan123 的版本没有计划日期，迁移来的评审记录不是领域事件，迁移来的迭代没有承诺范围快照，对应指标显示「暂无数据」，见 `docs/p3b2-validation.md` 第 5 节。
+
 ## 下一步
 
-1. 合并 P3-B1（分支 `feat/p3b1-member-notifications`）。
-2. 用户按 `docs/p3b1-validation.md` 第 5 节验收，并处理第 6 节（正式部署后的扫码绑定等）；P3-A 的验收与切换事项见 `docs/p3a-validation.md` 第 5、6 节。
-3. 规划 P3-B2：基础数据看板。
+1. 合并 P3-B2（分支 `feat/p3b2-dashboard`）。
+2. 用户按 `docs/p3b2-validation.md` 第 6 节验收；P3-B1、P3-A 的验收事项见 `docs/p3b1-validation.md` 第 5、6 节与 `docs/p3a-validation.md` 第 5、6 节。
+3. 讨论 P3-B2 设计 §7「产品工作情况表」。
 4. 下次 `--replace` 重导前先跑 `--dry-run`；重导后执行一次 `legacy rejoin`。注意重导会删除 P3-A / P3-B1 复验留下的测试数据（PAN-765、PAN-766、测试成员「联调成员（测试）」）。
 
 P3-B1 验证中记下的留观项（非阻塞）：打开 PRD、任务详情时标为已读缺页面级端到端测试；定时推送进入告警时如果写管理员提醒失败，这次的站内告警会丢失（只记警告）；`[[` 链接前面恰好是反斜杠时不识别；输入框代码片段里的 `@` 也会弹出补全；PRD 里复制的 @ 粘到评论后不识别为 @；Shift+Enter 软换行后行首的 @ 不弹出补全；CSV 单元格里的逗号会被拆开；离开组织成员的企业微信账号仍占用；generate 与 worker 两个模块互相导入；后台卡住的长事务告警日志每轮每个组织打一次。
