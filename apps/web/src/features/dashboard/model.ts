@@ -188,10 +188,10 @@ export function releaseVerdict(r: {
 }): { text: string; tone: Tone } {
   const note = r.dueSource ? SOURCE_NOTE[r.dueSource] : '';
   if (r.status === 'released') {
-    if (r.dueDate === null || r.onTime === null) return { text: '无法判断：没有基线日期，所属迭代也没有结束日', tone: 'neutral' };
+    if (r.dueDate === null || r.onTime === null) return { text: '无法判断：没有基线日期，也没有所属迭代结束日', tone: 'neutral' };
     return r.onTime ? { text: `按期${note}`, tone: 'good' } : { text: `逾期 ${r.overdueDays} 天${note}`, tone: 'bad' };
   }
-  if (r.dueDate === null) return { text: '未发布，没有计划日期，所属迭代也没有结束日', tone: 'neutral' };
+  if (r.dueDate === null) return { text: '未发布，没有计划日期，也没有所属迭代结束日', tone: 'neutral' };
   const overdue = (r.overdueDays ?? 0) > 0;
   if (!overdue) return { text: `未发布${note}`, tone: 'neutral' };
   return { text: `未发布，已过${r.dueSource === 'iteration' ? '迭代结束日' : '计划日'} ${r.overdueDays} 天`, tone: 'bad' };

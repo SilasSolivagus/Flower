@@ -123,7 +123,7 @@ describe('图表与版本结论', () => {
     expect(releaseVerdict(rel({ dueSource: 'iteration' }))).toEqual({ text: '按期，按迭代结束日计', tone: 'good' });
     expect(releaseVerdict(rel({ dueSource: 'iteration', onTime: false, overdueDays: 4 }))).toEqual({ text: '逾期 4 天，按迭代结束日计', tone: 'bad' });
     const unjudgeable = releaseVerdict(rel({ dueDate: null, dueSource: null, onTime: null, overdueDays: null }));
-    expect(unjudgeable).toEqual({ text: '无法判断：没有基线日期，所属迭代也没有结束日', tone: 'neutral' });
+    expect(unjudgeable).toEqual({ text: '无法判断：没有基线日期，也没有所属迭代结束日', tone: 'neutral' });
     expect(unjudgeable.text).not.toContain('没有计划日期');
     expect(releaseVerdict(rel({ dueSource: 'baseline' })).text).not.toContain('没有计划日期');
     const pend = (o: object) => ({ status: 'planned' as const, dueDate: '2026-10-10', dueSource: 'planned' as const, onTime: null, overdueDays: 3, ...o });
@@ -131,7 +131,7 @@ describe('图表与版本结论', () => {
     expect(releaseVerdict(pend({ dueSource: 'iteration' }))).toEqual({ text: '未发布，已过迭代结束日 3 天', tone: 'bad' });
     expect(releaseVerdict(pend({ dueDate: '2026-10-20', overdueDays: 0 }))).toEqual({ text: '未发布', tone: 'neutral' });
     expect(releaseVerdict(pend({ dueDate: '2026-10-20', dueSource: 'iteration', overdueDays: 0 }))).toEqual({ text: '未发布，按迭代结束日计', tone: 'neutral' });
-    expect(releaseVerdict(pend({ dueDate: null, dueSource: null, overdueDays: null }))).toEqual({ text: '未发布，没有计划日期，所属迭代也没有结束日', tone: 'neutral' });
+    expect(releaseVerdict(pend({ dueDate: null, dueSource: null, overdueDays: null }))).toEqual({ text: '未发布，没有计划日期，也没有所属迭代结束日', tone: 'neutral' });
   });
 
   it('在制品卡片名称：时间段到今天为「当前在制品」，否则为「期末在制品」', () => {

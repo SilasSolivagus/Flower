@@ -140,6 +140,12 @@ describe('产品看板', () => {
     await expect(bad({ kind: 'iteration', iterationId: docIteration })).rejects.toMatchObject({ code: 'not_found', message: '迭代不存在' });
   });
 
+  it('按迭代：已取消的迭代与可选列表一致，不可解析', async () => {
+    const canceled = (await createIteration(t.db, owner, regularIteration(pan, '已取消轮', '2026-07-01', '2026-07-31'))).id;
+    await setIterationStatus(t.db, owner, canceled, 'canceled');
+    await expect(getProductDashboard(t.db, owner, pan, { range: { kind: 'iteration', iterationId: canceled }, now: NOW })).rejects.toMatchObject({ code: 'not_found', message: '迭代不存在' });
+  });
+
   it('空产品：各区块为空，没有数据的卡片与上期为 null，周趋势为 0', async () => {
     const dash = await getProductDashboard(t.db, owner, empty, { range: R90, now: NOW });
     expect(dash.cards).toEqual({

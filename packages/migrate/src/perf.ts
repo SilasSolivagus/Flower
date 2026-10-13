@@ -1,7 +1,6 @@
 import {
   type Actor,
   type Db,
-  DEFAULT_TIMEZONE,
   getIterationGantt,
   getIterationScope,
   getOrgDashboard,
@@ -13,12 +12,10 @@ import {
   listRequirementComments,
   listRequirements,
   listReviewQueue,
-  organizations,
+  orgTimeZone,
   todayInZone,
-  validZone,
   withOrg,
 } from '@flower/core';
-import { eq } from 'drizzle-orm';
 
 export type PerfCase = { name: string; run: () => Promise<unknown> };
 
@@ -66,10 +63,7 @@ export async function buildPerfCases(db: Db, actor: Actor, productId: string): P
   }
   const topAssignee = [...assigneeCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
   // 看板按迭代：本产品最近开始的常规迭代，规则同看板「可选迭代」（已到开始日、未取消）；「今天」按组织时区
-  const timeZone = await withOrg(db, actor.orgId, async (tx) => {
-    const [org] = await tx.select({ settings: organizations.settings }).from(organizations).where(eq(organizations.id, actor.orgId));
-    return validZone(org?.settings.timezone) ?? DEFAULT_TIMEZONE;
-  });
+  const timeZone = await withOrg(db, actor.orgId, (tx) => orgTimeZone(tx, actor.orgId));
   const today = todayInZone(timeZone);
   const recent = iterationList
     .filter((it) => it.type === 'regular' && it.product?.id === productId && it.status !== 'canceled' && it.startDate <= today)

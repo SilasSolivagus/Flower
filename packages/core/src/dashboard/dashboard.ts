@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { requireProductRole, visibleProductIds } from '../access/permissions';
 import { assertIsoDate } from '../dates';
 import type { Db } from '../db/client';
@@ -24,6 +24,8 @@ import {
 import { loadProductFlow, orgTimeZone, type ProductFlow } from './flow';
 import { addDays, type Completion, completionsOf, daysBetween, flowSummary, stuckNow, type WeekPoint, weeklySeries, zonedDate } from './metrics';
 import { loadReviewEvents } from './review';
+
+export { orgTimeZone };
 
 export const DASHBOARD_RANGE_DAYS = [30, 90, 180] as const;
 export const DASHBOARD_MAX_DAYS = 366;
@@ -105,7 +107,7 @@ async function resolveWindow(tx: Tx, productId: string | null, range: DashboardR
   const [it] = await tx
     .select({ id: iterations.id, name: iterations.name, startDate: iterations.startDate, endDate: iterations.endDate })
     .from(iterations)
-    .where(and(eq(iterations.id, range.iterationId), eq(iterations.productId, productId), eq(iterations.type, 'regular'), isNull(iterations.deletedAt)));
+    .where(and(eq(iterations.id, range.iterationId), eq(iterations.productId, productId), eq(iterations.type, 'regular'), ne(iterations.status, 'canceled'), isNull(iterations.deletedAt)));
   if (!it) throw new AppError('not_found', '迭代不存在');
   if (it.startDate > today) throw new AppError('invalid', '迭代还没有开始');
   return windowOf(it.startDate, it.endDate < today ? it.endDate : today, today, timeZone, { id: it.id, name: it.name });
