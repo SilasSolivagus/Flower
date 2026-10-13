@@ -96,8 +96,9 @@ export type IterationRow = {
   completed: number;
   canceled: number;
   rate: number | null;
-  added: number;
-  removed: number;
+  /** 没有快照时为 null（无从判断）。 */
+  added: number | null;
+  removed: number | null;
 };
 
 /**
@@ -131,8 +132,8 @@ export function iterationCommitment(it: IterationFact, byId: Map<string, FlowReq
     completed,
     canceled,
     rate: it.snapshotTaken ? ratio(completed, committed.length - canceled) : null,
-    added: it.currentIds.filter((id) => !committedSet.has(id)).length,
-    removed: committed.filter((r) => !current.has(r.id)).length,
+    added: it.snapshotTaken ? it.currentIds.filter((id) => !committedSet.has(id)).length : null,
+    removed: it.snapshotTaken ? committed.filter((r) => !current.has(r.id)).length : null,
   };
 }
 

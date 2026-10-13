@@ -101,8 +101,8 @@ describe('迭代承诺完成率', () => {
       committed: 0,
       completed: 0,
       rate: null,
-      added: 4,
-      removed: 0,
+      added: null,
+      removed: null,
     });
   });
 
