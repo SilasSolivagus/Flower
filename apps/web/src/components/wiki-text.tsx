@@ -1,9 +1,11 @@
 'use client';
 
-import { splitWikiText } from '@flower/core/links';
+import { splitRichText } from '@flower/core/links';
 import Link from 'next/link';
 import { Fragment } from 'react';
+import { MentionChip } from '@/components/mention-chip';
 import { cardFor, cardHref, cardLabel, isGrey, LINK_STATE_NOTE } from '@/features/links/model';
+import { useMentionMembers } from '@/lib/queries';
 import type { LinkCard } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -41,12 +43,13 @@ export function LinkChip({ org, card, target, label }: { org: string; card: Link
   );
 }
 
-/** 纯文本（需求描述、评论）的显示：[[ ]] 渲染为链接卡，其余原样（保留换行）。 */
+/** 纯文本（需求描述、评论）的显示：[[ ]] 渲染为链接卡，@ 渲染为成员标签，其余原样（保留换行）。 */
 export function WikiText({
   org,
   text,
   cards,
   productKey,
+  productId,
   as: Tag = 'p',
   className,
 }: {
@@ -54,16 +57,21 @@ export function WikiText({
   text: string;
   cards: LinkCard[];
   productKey: string;
+  /** 正文所在产品：用来取成员的当前姓名与能否看到该产品。 */
+  productId: string;
   as?: 'p' | 'span';
   className?: string;
 }) {
+  const members = useMentionMembers(org, productId);
   return (
     <Tag className={cn('whitespace-pre-wrap break-words', className)}>
-      {splitWikiText(text).map((s, i) =>
+      {splitRichText(text).map((s, i) =>
         s.kind === 'text' ? (
           <Fragment key={i}>{s.text}</Fragment>
-        ) : (
+        ) : s.kind === 'link' ? (
           <LinkChip key={i} org={org} card={cardFor(cards, s.link.target, productKey)} target={s.link.target} label={s.link.label} />
+        ) : (
+          <MentionChip key={i} mention={s.mention} member={members.data ? (members.data.find((m) => m.id === s.mention.memberId) ?? null) : undefined} />
         ),
       )}
     </Tag>

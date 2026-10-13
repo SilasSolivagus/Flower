@@ -225,7 +225,7 @@ export async function createTask(db: Db, actor: Actor, input: TaskCreateInput, o
       subjectType: 'task',
       subjectId: row!.id,
       actor,
-      payload: { number: row!.number, title: row!.title, requirementId: row!.requirementId, iterationId: row!.iterationId },
+      payload: { number: row!.number, title: row!.title, requirementId: row!.requirementId, iterationId: row!.iterationId, assigneeMemberId: row!.assigneeMemberId },
     });
     await relinkDangling(tx, { type: 'task', id: row!.id, texts: [taskDisplayKey(seq!.key, row!.number)] });
     const [view] = await hydrateTasks(tx, actor, [row!], opts.today ?? (await orgToday(tx, actor.orgId)));

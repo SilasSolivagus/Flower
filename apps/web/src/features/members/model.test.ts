@@ -3,7 +3,7 @@ import type { Invitation, Member } from '@/lib/types';
 import { activePeople, canListMembers, filterMembers, filterPickerOptions, invitationState, memberKind, pickerOptions } from './model';
 
 const m = (over: Partial<Member>): Member => ({
-  id: 'x', kind: 'human', displayName: '成员', email: null, department: null, orgRole: 'member', status: 'active',
+  id: 'x', kind: 'human', displayName: '成员', email: null, department: null, orgRole: 'member', status: 'active', wecomUserid: null,
   hasAccount: true, functionTagIds: [], productRoles: [], ...over,
 });
 const all = [

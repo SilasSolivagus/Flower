@@ -5,12 +5,14 @@ import { useEffect, useState } from 'react';
 import { Backlinks } from '@/components/backlinks';
 import { CheckItems } from '@/components/check-items';
 import { EditableTitle } from '@/components/editable-title';
+import { FollowButton } from '@/components/follow-button';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WikiText } from '@/components/wiki-text';
 import { WikilinkTextarea } from '@/components/wikilink-textarea';
+import { useMarkNotificationsRead } from '@/features/member-notifications/use-mark-read';
 import { api } from '@/lib/api';
 import { documentKeys, linkKeys, qk, requirementKeys, useApiMutation, useRequirement } from '@/lib/queries';
 import { Blockers } from './blockers';
@@ -30,6 +32,7 @@ export default function RequirementPage() {
   const router = useRouter();
   const q = useRequirement(org, decodedKey);
   const r = q.data;
+  useMarkNotificationsRead(org, 'requirement', r?.id);
   const [editingDesc, setEditingDesc] = useState(false);
   const [description, setDescription] = useState('');
   const patch = useApiMutation((body: { title?: string; description?: string }) => api(`/orgs/${org}/requirements/${r!.id}`, { method: 'PATCH', body }), {
@@ -53,6 +56,7 @@ export default function RequirementPage() {
         crumbs={[{ label: '需求', href: `/${org}/requirements?product=${r.productKey}` }, { label: r.displayKey }]}
         title={<EditableTitle displayKey={r.displayKey} title={r.title} canEdit={canEdit} onSubmit={(title, close) => patch.mutate({ title }, { onSuccess: close })} />}
         description={r.aliases.length > 0 ? `旧编号：${r.aliases.join('、')}` : undefined}
+        actions={<FollowButton org={org} type="requirement" id={r.id} />}
       />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-w-0 flex-col gap-4">
@@ -93,7 +97,7 @@ export default function RequirementPage() {
                 </div>
               </form>
             ) : r.description ? (
-              <WikiText org={org} text={r.description} cards={r.links} productKey={r.productKey} className="text-[13px] leading-6" />
+              <WikiText org={org} text={r.description} cards={r.links} productKey={r.productKey} productId={r.productId} className="text-[13px] leading-6" />
             ) : (
               <p className="text-[13px] leading-6 text-muted-foreground">暂无描述</p>
             )}

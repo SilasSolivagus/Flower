@@ -7,14 +7,50 @@ import { ConfirmAction } from '@/components/confirm-action';
 import { EmptyState } from '@/components/empty-state';
 import { LoadError } from '@/components/load-error';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { type FilterLookups, filterSummary } from '@/features/notifications/model';
 import { api } from '@/lib/api';
-import { notifyKeys, useApiMutation, useFields, useNodes, useNotificationRules, useProductWorkflow } from '@/lib/queries';
+import { notifyKeys, qk, useApiMutation, useFields, useNodes, useNotificationRules, usePersonalChannel, useProductChannels, useProductWorkflow } from '@/lib/queries';
 import type { NotificationRule } from '@/lib/types';
 import { ScheduleList } from '../../notifications/schedule-list';
 import { RuleDialog } from './rule-dialog';
+
+const NO_CHANNEL = 'none';
+
+/** 本产品的个人提醒通道：被 @、被指派等个人通知同时发到这个群并 @ 到本人。只列对本产品可用、已启用的企业微信机器人通道。 */
+function PersonalChannelPicker({ org, productId }: { org: string; productId: string }) {
+  const channels = useProductChannels(org, productId);
+  const current = usePersonalChannel(org, productId);
+  const save = useApiMutation((channelId: string | null) => api(`/orgs/${org}/products/${productId}/personal-channel`, { method: 'PUT', body: { channelId } }), {
+    invalidate: [qk.personalChannel(org, productId)],
+    success: '已保存',
+  });
+  if (!channels.data || !current.data) return null;
+  const options = channels.data.filter((c) => c.kind === 'wecom_robot');
+  return (
+    <section className="flex flex-wrap items-center gap-3 rounded-md border bg-card p-3">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="text-sm font-medium">个人提醒通道</span>
+        <span className="text-[12px] text-muted-foreground">被 @、被指派、等你签字等个人通知同时发到这个群并 @ 到本人；成员需要先绑定企业微信账号。</span>
+      </div>
+      <Select value={current.data.channelId ?? NO_CHANNEL} onValueChange={(v) => save.mutate(v === NO_CHANNEL ? null : v)}>
+        <SelectTrigger className="w-56" aria-label="个人提醒通道">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NO_CHANNEL}>不发企业微信个人提醒</SelectItem>
+          {options.map((c) => (
+            <SelectItem key={c.id} value={c.id}>
+              {c.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </section>
+  );
+}
 
 function RuleList({ org, productId }: { org: string; productId: string }) {
   const q = useNotificationRules(org, productId);
@@ -100,6 +136,7 @@ function RuleList({ org, productId }: { org: string; productId: string }) {
 export function NotificationsTab({ org, productId }: { org: string; productId: string }) {
   return (
     <div className="flex flex-col gap-8">
+      <PersonalChannelPicker org={org} productId={productId} />
       <RuleList org={org} productId={productId} />
       <div className="flex flex-col gap-3">
         <h2 className="font-semibold">定时推送</h2>

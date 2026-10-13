@@ -41,6 +41,8 @@ export function activeNavKey(pathname: string, org: string): string {
   if (/^\/reviews(\/|$)/.test(rest)) return 'reviews';
   if (/^\/documents(\/|$)/.test(rest)) return 'documents';
   if (/^\/overview(\/|$)/.test(rest)) return 'overview';
+  // 通知页不对应导航项（铃铛在顶栏）；不能返回 notifications，那是组织设置「推送」的键
+  if (/^\/notifications(\/|$)/.test(rest)) return 'inbox';
   const m = /^\/settings\/([^/]+)/.exec(rest);
   return m ? m[1]! : 'home';
 }

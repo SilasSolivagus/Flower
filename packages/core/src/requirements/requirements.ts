@@ -16,6 +16,7 @@ import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
 import { relinkDangling, syncSourceLinks } from '../links/links';
+import { mentionedMemberIds, newMentionIds } from '../links/syntax';
 import { assertAssignableMember, type EffectiveField, effectiveFields, loadRequirement, memberNames, productWorkflowBody } from './context';
 
 export type OptionRef = { id: string; key: string; label: string; color: string | null };
@@ -262,7 +263,7 @@ export async function createRequirement(
       subjectType: 'requirement',
       subjectId: row!.id,
       actor,
-      payload: { number: row!.number, title },
+      payload: { number: row!.number, title, ownerMemberId: row!.ownerMemberId, mentionedMemberIds: mentionedMemberIds(description) },
     });
     const [item] = await hydrateList(tx, seq!.key, [row!]);
     return item!;
@@ -307,7 +308,7 @@ export async function updateRequirement(
         subjectType: 'requirement',
         subjectId: requirementId,
         actor,
-        payload: { changes },
+        payload: { changes, ...(next.description !== cur.description ? { mentionedMemberIds: newMentionIds(cur.description, next.description) } : {}) },
       });
     }
     const [item] = await hydrateList(tx, await productKeyOf(tx, cur.productId), [row!]);

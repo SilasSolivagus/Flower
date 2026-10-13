@@ -264,6 +264,7 @@ sections 供 Agent 逐节写作，并由系统校验必填小节是否齐全。
 - 不支持"执行脚本"作为内容来源。"http"来源只允许实例管理员配置，且受白名单限制。
 - 外部触发：用 API Token 调用"立即执行某个定时推送"，取代 push 的 `/trigger/:id`。
 - P3-A 的实现细节与差异（2026-10-10）：通道先做企微机器人、Webhook、邮件；新增 `notification_digest_items` 承接合并推送；定时推送来源为 overview_card / new_requirements / digest，「http」来源与 AI 日报后置。见 P3-A 设计。
+- P3-B1 的补充（2026-10-12）：站内通知增加 kind、对象与已读字段，新增关注表 `subscriptions`、处理进度 `notification_cursors`、企业微信应用 `wecom_apps`；成员加企业微信账号，产品加个人提醒通道；偏好渠道为站内 / 企业微信 / 邮件。见 P3-B1 设计。
 
 ### 6.3 知识库
 

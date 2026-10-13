@@ -30,8 +30,10 @@ import {
   listProducts,
   listRequirements,
   listSchedules,
+  memberNotifications,
   messageTemplates,
   notificationChannels,
+  notificationCursors,
   notificationDeliveries,
   notificationDigestItems,
   notificationRules,
@@ -39,12 +41,14 @@ import {
   readAttachment,
   requirements,
   resolveActor,
+  subscriptions,
   tasks,
+  wecomApps,
   workflowDefinitions,
 } from '@flower/core';
 import { createTestDb } from '@flower/core/testing';
 import { seedInstance } from '@flower/core/testing/factories';
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildImportPlan } from '../src/plan';
 import type { ImportOptions } from '../src/plan-types';
@@ -122,6 +126,9 @@ describe('写入数据库', () => {
       .returning();
     await t.adminDb.insert(notificationDigestItems).values({ orgId: actor.orgId, ruleId: rl!.id, scheduleId: sch!.id, eventId: createdEvent!.id });
     await t.adminDb.insert(notificationDeliveries).values({ orgId: actor.orgId, kind: 'rule', ruleId: rl!.id, channelId: ch!.id, eventId: createdEvent!.id });
+    await t.adminDb.insert(memberNotifications).values({ orgId: actor.orgId, memberId: actor.memberId, eventId: createdEvent!.id, kind: 'mentioned', subjectType: 'requirement', subjectId: created.id, title: 't', body: 'b', url: '/u' });
+    await t.adminDb.insert(subscriptions).values({ orgId: actor.orgId, memberId: actor.memberId, subjectType: 'requirement', subjectId: created.id, source: 'manual' });
+    await t.adminDb.insert(wecomApps).values({ orgId: actor.orgId, corpId: 'ww1', agentId: '1', secret: 'v1:x', secretHint: '****' });
 
     await writeImport(t.adminDb, plan, { replace: true });
 
@@ -138,6 +145,10 @@ describe('写入数据库', () => {
     for (const table of [notificationDigestItems, notificationDeliveries, notificationRules, notificationSchedules, messageTemplates, notificationChannels]) {
       expect(await t.adminDb.select().from(table)).toEqual([]);
     }
+    for (const table of [memberNotifications, subscriptions, wecomApps]) expect(await t.adminDb.select().from(table)).toEqual([]);
+    const [cursor] = await t.adminDb.select().from(notificationCursors).where(eq(notificationCursors.orgId, after.orgId));
+    const [latest] = await t.adminDb.select({ id: domainEvents.id }).from(domainEvents).where(eq(domainEvents.orgId, after.orgId)).orderBy(desc(domainEvents.occurredAt), desc(domainEvents.id)).limit(1);
+    expect(cursor!.lastEventId).toBe(latest!.id);
     expect(await t.adminDb.select().from(comments).where(eq(comments.body, '导入后的评论'))).toEqual([]);
   });
 

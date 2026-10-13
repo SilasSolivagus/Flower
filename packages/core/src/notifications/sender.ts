@@ -10,7 +10,7 @@ import { type ChannelKind, type ChannelPayload, MAX_ATTEMPTS, RESPONSE_MAX_CHARS
 export type HttpResult = { status: number; text: string };
 export type Transport = {
   postJson(url: string, body: string, headers: Record<string, string>): Promise<HttpResult>;
-  sendMail(config: EmailConfig, message: { subject: string; text: string }): Promise<string>;
+  sendMail(config: EmailConfig, message: { subject: string; text: string; to?: string[] }): Promise<string>;
 };
 /** 后台发送与测试消息需要的依赖：实例密钥（解密配置）、对外网址（消息里的链接）、发送器。 */
 export type NotifyDeps = { secretKey: string; publicUrl: string; transport: Transport };
@@ -89,7 +89,7 @@ export const defaultTransport: Transport = {
       greetingTimeout: 10_000,
       socketTimeout: 20_000,
     });
-    const info = await transporter.sendMail({ from: cfg.from, to: cfg.to, subject: msg.subject, text: msg.text });
+    const info = await transporter.sendMail({ from: cfg.from, to: msg.to ?? cfg.to, subject: msg.subject, text: msg.text });
     return `SMTP 已接受 ${info.accepted.length} 个收件人`;
   },
 };
@@ -137,7 +137,10 @@ export async function sendPayload(kind: ChannelKind, config: ChannelConfig, payl
     if (kind === 'email') {
       if (payload.type !== 'email') return { result: 'failed', response: '请求体与通道类型不符' };
       assertSafeOutboundHost((config as EmailConfig).host, 'SMTP 服务器不能是本机或内网地址');
-      return { result: 'sent', response: (await transport.sendMail(config as EmailConfig, { subject: payload.subject, text: payload.text })).slice(0, RESPONSE_MAX_CHARS) };
+      return {
+        result: 'sent',
+        response: (await transport.sendMail(config as EmailConfig, { subject: payload.subject, text: payload.text, to: payload.to })).slice(0, RESPONSE_MAX_CHARS),
+      };
     }
     if (payload.type !== 'json') return { result: 'failed', response: '请求体与通道类型不符' };
     const url = (config as WecomConfig).url;

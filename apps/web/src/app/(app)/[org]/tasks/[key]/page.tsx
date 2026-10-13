@@ -7,6 +7,7 @@ import { Backlinks } from '@/components/backlinks';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useMarkNotificationsRead } from '@/features/member-notifications/use-mark-read';
 import { ITERATION_STATUS_LABEL, TASK_STATUS_LABEL } from '@/lib/labels';
 import { useTask } from '@/lib/queries';
 
@@ -14,6 +15,7 @@ import { useTask } from '@/lib/queries';
 export default function TaskPage() {
   const { org, key } = useParams<{ org: string; key: string }>();
   const q = useTask(org, decodeURIComponent(key));
+  useMarkNotificationsRead(org, 'task', q.data?.id);
   if (!q.data && q.isError) {
     return <QueryError error={q.error} noAccessMessage="任务不存在，或你没有查看它所在产品的权限。" retryMessage="加载任务失败，请重试。" onRetry={() => q.refetch()} />;
   }

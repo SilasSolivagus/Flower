@@ -5,8 +5,8 @@ import { createLocalStorage, defaultTransport, type Transport } from '@flower/co
 import { createTestDb } from '@flower/core/testing';
 import { type App, createApi } from '@/server/api';
 
-/** 接口测试用的应用。推送默认用真实发送器，测试里的通道地址一律指向本机假接收端（test/fake-webhook.ts）。 */
-export async function makeApp(opts: { transport?: Transport; tickApi?: boolean } = {}): Promise<{ app: App; cleanup: () => Promise<void> }> {
+/** 接口测试用的应用。推送默认用真实发送器，测试里的通道地址一律指向本机假接收端（test/fake-webhook.ts）；企业微信接口默认指向本机不可达端口。 */
+export async function makeApp(opts: { transport?: Transport; tickApi?: boolean; wecomApiBase?: string } = {}): Promise<{ app: App; cleanup: () => Promise<void> }> {
   const t = await createTestDb();
   const storage = createLocalStorage(mkdtempSync(path.join(os.tmpdir(), 'flower-api-storage-')));
   const app = createApi({
@@ -16,6 +16,7 @@ export async function makeApp(opts: { transport?: Transport; tickApi?: boolean }
     storage,
     notify: { secretKey: 'api-test-secret-api-test-secret-0001', publicUrl: 'http://localhost:3000', transport: opts.transport ?? defaultTransport },
     tickApi: opts.tickApi ?? false,
+    wecomApiBase: opts.wecomApiBase ?? 'http://127.0.0.1:9',
   });
   return { app, cleanup: t.cleanup };
 }

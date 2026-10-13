@@ -86,13 +86,13 @@ export function DocumentComments({ org, doc, focus = null }: { org: string; doc:
                 {c.author?.displayName ?? '已删除的成员'} · <span className="font-mono">{formatDateTime(c.createdAt)}</span>
                 {c.resolvedAt && <span className="ml-2 rounded-sm bg-muted px-1.5">已解决</span>}
               </p>
-              <WikiText org={org} text={c.body} cards={c.links} productKey={doc.productKey} className="text-[13px]" />
+              <WikiText org={org} text={c.body} cards={c.links} productKey={doc.productKey} productId={doc.productId} className="text-[13px]" />
               {replies.length > 0 && (
                 <ul className="ml-4 flex flex-col gap-2 border-l pl-3">
                   {replies.map((r) => (
                     <li key={r.id} className="text-[13px]">
                       <span className="text-[12px] text-muted-foreground">{r.author?.displayName ?? '已删除的成员'}：</span>
-                      <WikiText org={org} text={r.body} cards={r.links} productKey={doc.productKey} as="span" />
+                      <WikiText org={org} text={r.body} cards={r.links} productKey={doc.productKey} productId={doc.productId} as="span" />
                     </li>
                   ))}
                 </ul>

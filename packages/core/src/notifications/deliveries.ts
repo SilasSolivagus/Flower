@@ -9,7 +9,9 @@ import { recordEvent } from '../events';
 import type { ChannelConfig } from './channel-config';
 import { type ChannelRow, readChannelConfig } from './channels';
 import { type ChannelKind, type ChannelPayload, type DeliveryKind, type DeliveryStatus, RESPONSE_MAX_CHARS } from './constants';
+import { notifyScheduleAlertTx } from '../member-notifications/alerts';
 import { resolveTemplateTx } from './message-templates';
+import type { ScheduleRow } from './schedules';
 import { type NotifyDeps, retryDelayMs, type SendOutcome, sendPayload } from './sender';
 import { CARD_LIMITS, clip, eventMessageDataTx, formatMinute, type OrgContext, orgContextTx } from './sources';
 import { payloadPreview, type RenderedMessage, renderMessage, TRUNCATED_MARK, toChannelPayloads, truncateBytes, WECOM_MARKDOWN_MAX_BYTES } from './template';
@@ -66,11 +68,23 @@ async function tryChannelLockTx(tx: Tx, channelId: string): Promise<boolean> {
 }
 
 /**
+ * 给管理员写系统告警，放在 savepoint 里：出错只回滚告警部分并记警告，调用方的结算、认领与发送结果照常提交
+ * （否则已发出的消息会因记录回滚而重发，或该组织每轮在同一处失败）。
+ */
+export async function alertAdminsTx(tx: Tx, s: ScheduleRow, body: string, publicUrl: string, now: Date): Promise<void> {
+  try {
+    await tx.transaction((sp) => notifyScheduleAlertTx(sp, s, body, publicUrl, now));
+  } catch (e) {
+    console.warn(`[notify] 系统告警通知写入失败，本次不通知管理员：org=${s.orgId} schedule=${s.id}：${errorText(e)}`);
+  }
+}
+
+/**
  * 定时推送一次执行的结果：任一条成功 → 清零、解除告警、记 last_success_at（执行时间）、摘要条目已消费；
  * 同一次的记录全部放弃 → 连续失败加一、达到阈值告警、摘要条目释放。
  * 先锁定时推送行：同一次执行的几条记录在不同事务里结束时，按顺序判断「是否全部放弃」。
  */
-async function settleRunTx(tx: Tx, d: DeliveryRow, now: Date, outcome: 'sent' | 'dead'): Promise<void> {
+async function settleRunTx(tx: Tx, d: DeliveryRow, now: Date, outcome: 'sent' | 'dead', publicUrl: string): Promise<void> {
   if (!d.runId || !d.scheduleId) return;
   const [s] = await tx.select().from(notificationSchedules).where(eq(notificationSchedules.id, d.scheduleId)).for('no key update');
   if (!s) return;
@@ -89,16 +103,18 @@ async function settleRunTx(tx: Tx, d: DeliveryRow, now: Date, outcome: 'sent' | 
     .where(and(eq(notificationDeliveries.runId, d.runId), sql`${notificationDeliveries.status} <> 'dead'`));
   if (open!.n > 0) return;
   const failures = s.consecutiveFailures + 1;
+  const alert = failures >= s.failThreshold;
   await tx
     .update(notificationSchedules)
-    .set({ consecutiveFailures: failures, alertState: failures >= s.failThreshold ? 'alert' : s.alertState, updatedAt: now })
+    .set({ consecutiveFailures: failures, alertState: alert ? 'alert' : s.alertState, updatedAt: now })
     .where(eq(notificationSchedules.id, s.id));
+  if (alert && s.alertState !== 'alert') await alertAdminsTx(tx, s, `连续失败 ${failures} 次，已进入告警`, publicUrl, now);
   await tx.update(notificationDigestItems).set({ runId: null }).where(and(eq(notificationDigestItems.runId, d.runId), isNull(notificationDigestItems.consumedAt)));
 }
 
-async function markDeadTx(tx: Tx, d: DeliveryRow, response: string, now: Date): Promise<void> {
+async function markDeadTx(tx: Tx, d: DeliveryRow, response: string, now: Date, publicUrl: string): Promise<void> {
   await tx.update(notificationDeliveries).set({ status: 'dead', nextAttemptAt: null, response }).where(eq(notificationDeliveries.id, d.id));
-  await settleRunTx(tx, d, now, 'dead');
+  await settleRunTx(tx, d, now, 'dead', publicUrl);
 }
 
 type FinalizeResult = 'sent' | 'failed' | 'dead' | 'rate_limited' | 'skipped';
@@ -107,13 +123,13 @@ type FinalizeResult = 'sent' | 'failed' | 'dead' | 'rate_limited' | 'skipped';
  * 写入一次发送（或渲染）的结果。guard 限定要更新的行：本事务已锁住的行只按 id；
  * 事务外发送完的行还要求仍是本实例的租约（status = sending 且租约时间未变），已被回收的跳过。
  */
-async function finalizeTx(tx: Tx, d: DeliveryRow, outcome: SendOutcome, now: Date, guard: SQL | undefined): Promise<FinalizeResult> {
+async function finalizeTx(tx: Tx, d: DeliveryRow, outcome: SendOutcome, now: Date, guard: SQL | undefined, publicUrl: string): Promise<FinalizeResult> {
   const response = outcome.response.slice(0, RESPONSE_MAX_CHARS);
   const apply = async (set: Partial<typeof notificationDeliveries.$inferInsert>) =>
     (await tx.update(notificationDeliveries).set({ ...set, response }).where(guard).returning({ id: notificationDeliveries.id })).length > 0;
   if (outcome.result === 'sent') {
     if (!(await apply({ status: 'sent', attempts: d.attempts + 1, sentAt: now, nextAttemptAt: null }))) return 'skipped';
-    await settleRunTx(tx, d, now, 'sent');
+    await settleRunTx(tx, d, now, 'sent', publicUrl);
     return 'sent';
   }
   if (outcome.result === 'rate_limited') {
@@ -123,7 +139,7 @@ async function finalizeTx(tx: Tx, d: DeliveryRow, outcome: SendOutcome, now: Dat
   const delay = d.kind === 'test' ? null : retryDelayMs(attempts);
   if (delay === null) {
     if (!(await apply({ status: 'dead', attempts, nextAttemptAt: null }))) return 'skipped';
-    await settleRunTx(tx, d, now, 'dead');
+    await settleRunTx(tx, d, now, 'dead', publicUrl);
     return 'dead';
   }
   return (await apply({ status: 'failed', attempts, nextAttemptAt: new Date(now.getTime() + delay) })) ? 'failed' : 'skipped';
@@ -179,7 +195,7 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
         .where(and(eq(D.status, 'sending'), lte(D.nextAttemptAt, now)))
         .limit(BATCH)
         .for('no key update', { skipLocked: true });
-      for (const d of expired) tally(await finalizeTx(tx, d, { result: 'failed', response: INTERRUPTED }, claimAt, eq(D.id, d.id)));
+      for (const d of expired) tally(await finalizeTx(tx, d, { result: 'failed', response: INTERRUPTED }, claimAt, eq(D.id, d.id), deps.publicUrl));
     }
     const due = await tx
       .select()
@@ -198,19 +214,28 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
       const [channel] = await tx.select().from(notificationChannels).where(eq(notificationChannels.id, channelId));
       if (!channel || !channel.enabled) {
         for (const d of list) {
-          await markDeadTx(tx, d, '通道已停用，未发送', claimAt);
+          await markDeadTx(tx, d, '通道已停用，未发送', claimAt, deps.publicUrl);
           summary.dead++;
         }
         continue;
       }
-      // 通道的可用产品可能在记录生成后收窄：不再允许的记录直接放弃（测试消息不属于产品，不受限制）
+      // 通道的可用产品可能在记录生成后收窄：不再允许的记录直接放弃（测试消息不属于产品；个人提醒在生成时已检查）
       const sendable: DeliveryRow[] = [];
       for (const d of list) {
+        // 个人提醒只经企业微信机器人（JSON 请求体）或邮件通道发出
+        if (d.kind === 'personal' && channel.kind !== (d.payload?.type === 'email' ? 'email' : 'wecom_robot')) {
+          await markDeadTx(tx, d, '个人提醒只能经企业微信机器人或邮件通道发送，未发送', claimAt, deps.publicUrl);
+          summary.dead++;
+          continue;
+        }
         const allowed =
-          d.kind === 'test' || channel.allowedProductIds.length === 0 || channel.allowedProductIds.includes((await deliveryProductIdTx(tx, d)) ?? '');
+          d.kind === 'test' ||
+          d.kind === 'personal' ||
+          channel.allowedProductIds.length === 0 ||
+          channel.allowedProductIds.includes((await deliveryProductIdTx(tx, d)) ?? '');
         if (allowed) sendable.push(d);
         else {
-          await markDeadTx(tx, d, '通道不再允许本产品使用，未发送', claimAt);
+          await markDeadTx(tx, d, '通道不再允许本产品使用，未发送', claimAt, deps.publicUrl);
           summary.dead++;
         }
       }
@@ -239,7 +264,7 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
             payload = await tx.transaction((sp) => renderRuleDeliveryTx(sp, d, channel, deps));
           } catch (e) {
             // 渲染错误是确定性的，重试也一样，直接放弃
-            await markDeadTx(tx, d, `渲染失败：${errorText(e)}`.slice(0, RESPONSE_MAX_CHARS), claimAt);
+            await markDeadTx(tx, d, `渲染失败：${errorText(e)}`.slice(0, RESPONSE_MAX_CHARS), claimAt, deps.publicUrl);
             summary.dead++;
             continue;
           }
@@ -266,7 +291,7 @@ export async function processDueDeliveries(db: Db, orgId: string, deps: NotifyDe
       }
     }
     const mine = and(eq(D.id, d.id), eq(D.status, 'sending'), eq(D.nextAttemptAt, d.nextAttemptAt!));
-    tally(await withOrg(db, orgId, (tx) => finalizeTx(tx, d, outcome, clockAfter(now), mine)));
+    tally(await withOrg(db, orgId, (tx) => finalizeTx(tx, d, outcome, clockAfter(now), mine, deps.publicUrl)));
   }
   return summary;
 }
@@ -388,7 +413,7 @@ export async function resendDelivery(db: Db, actor: Actor, id: string): Promise<
   return viewOf(db, actor.orgId, newId);
 }
 
-const CURSOR_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+export const CURSOR_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z)\|([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 /**
  * 发送记录：按 (created_at, id) 倒序。游标为上一页最后一条的 `{created_at 微秒精度 UTC}|{id}`：

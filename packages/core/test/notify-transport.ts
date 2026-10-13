@@ -16,7 +16,7 @@ export function fakeTransport(initial: Responder = () => ({ status: 200, text: '
       return responder(call);
     },
     async sendMail(cfg: EmailConfig, msg) {
-      mails.push({ to: cfg.to, ...msg });
+      mails.push({ to: msg.to ?? cfg.to, subject: msg.subject, text: msg.text });
       return 'SMTP 已接受 1 个收件人';
     },
   };
