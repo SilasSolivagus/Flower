@@ -22,6 +22,7 @@ describe('buildNav', () => {
       '/acme/settings/templates',
       '/acme/settings/agents',
       '/acme/settings/notifications',
+      '/acme/settings/dashboard',
       '/acme/settings/general',
     ]);
   });
@@ -49,6 +50,7 @@ describe('buildNav', () => {
     expect(activeNavKey('/acme/documents', 'acme')).toBe('documents');
     expect(activeNavKey('/acme/documents/PAN-PRD-1', 'acme')).toBe('documents');
     expect(activeNavKey('/acme/settings/notifications', 'acme')).toBe('notifications');
+    expect(activeNavKey('/acme/settings/dashboard', 'acme')).toBe('dashboard');
     expect(activeNavKey('/acme/notifications', 'acme')).toBe('inbox');
     expect(activeNavKey('/acme/dashboard', 'acme')).toBe('product-dashboard');
   });

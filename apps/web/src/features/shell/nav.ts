@@ -14,6 +14,7 @@ const SETTINGS: Array<[string, string, NavIcon]> = [
   ['templates', '文档模板', 'doc'],
   ['agents', 'Agent 与 Token', 'bot'],
   ['notifications', '推送', 'bell'],
+  ['dashboard', '看板', 'chart'],
   ['general', '组织信息', 'building'],
 ];
 
