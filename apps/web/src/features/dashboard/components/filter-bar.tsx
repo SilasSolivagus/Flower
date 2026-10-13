@@ -98,7 +98,7 @@ export function FilterBar({
             </SelectContent>
           </Select>
         )}
-        {showCustom && <CustomRange initial={{ from: range.from, to: range.to }} today={range.today} onApply={(from, to) => onChange({ kind: 'custom', from, to })} />}
+        {showCustom && <CustomRange initial={filter.kind === 'custom' ? { from: filter.from, to: filter.to } : { from: range.from, to: range.to }} today={range.today} onApply={(from, to) => onChange({ kind: 'custom', from, to })} />}
       </div>
       <div role="group" aria-label="统计时间段">
         <p className="text-[13px] text-muted-foreground">{windowText(range)}</p>

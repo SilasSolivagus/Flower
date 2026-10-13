@@ -53,9 +53,10 @@ function DashboardPage() {
     }
   } else {
     const data = q.data;
+    const pid = product?.id ?? data.product.id;
     body = (
       <>
-        <FilterBar key={`${data.product.id}:${query}`} filter={filter} range={data.window} iterations={data.iterationOptions} onChange={(f) => go(data.product.id, f)} />
+        <FilterBar key={`${pid}:${query}`} filter={filter} range={data.window} iterations={data.iterationOptions} onChange={(f) => go(pid, f)} />
         <Sections org={org} data={data} />
       </>
     );
