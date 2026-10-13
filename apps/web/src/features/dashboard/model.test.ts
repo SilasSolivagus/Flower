@@ -130,6 +130,7 @@ describe('图表与版本结论', () => {
     expect(releaseVerdict(pend({}))).toEqual({ text: '未发布，已过计划日 3 天', tone: 'bad' });
     expect(releaseVerdict(pend({ dueSource: 'iteration' }))).toEqual({ text: '未发布，已过迭代结束日 3 天', tone: 'bad' });
     expect(releaseVerdict(pend({ dueDate: '2026-10-20', overdueDays: 0 }))).toEqual({ text: '未发布', tone: 'neutral' });
+    expect(releaseVerdict(pend({ dueDate: '2026-10-20', dueSource: 'iteration', overdueDays: 0 }))).toEqual({ text: '未发布，按迭代结束日计', tone: 'neutral' });
     expect(releaseVerdict(pend({ dueDate: null, dueSource: null, overdueDays: null }))).toEqual({ text: '未发布，没有计划日期，所属迭代也没有结束日', tone: 'neutral' });
   });
 

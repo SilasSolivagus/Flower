@@ -193,6 +193,6 @@ export function releaseVerdict(r: {
   }
   if (r.dueDate === null) return { text: '未发布，没有计划日期，所属迭代也没有结束日', tone: 'neutral' };
   const overdue = (r.overdueDays ?? 0) > 0;
-  if (!overdue) return { text: '未发布', tone: 'neutral' };
+  if (!overdue) return { text: `未发布${note}`, tone: 'neutral' };
   return { text: `未发布，已过${r.dueSource === 'iteration' ? '迭代结束日' : '计划日'} ${r.overdueDays} 天`, tone: 'bad' };
 }

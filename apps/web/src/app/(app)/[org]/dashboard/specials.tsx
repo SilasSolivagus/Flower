@@ -32,11 +32,9 @@ export function SpecialsSection({ specials }: { specials: ProductDashboard['spec
                   </span>
                 </div>
                 <div
-                  role="progressbar"
-                  aria-label={s.name}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={s.rate === null ? undefined : pct}
+                  {...(s.rate === null
+                    ? { 'aria-hidden': true }
+                    : { role: 'progressbar', 'aria-label': s.name, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': pct, 'aria-valuetext': formatRate(s.rate) })}
                   className="h-2 overflow-hidden rounded-full bg-muted"
                 >
                   <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
