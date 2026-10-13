@@ -69,3 +69,13 @@ export async function resetDatabase(): Promise<void> {
     await sql.end();
   }
 }
+
+/** 以 admin 角色在 flower_e2e 上执行一条带参数的语句并返回结果行；只用于把测试数据的时间改到过去（流转历史、发布日等）。 */
+export async function adminSql<T extends Record<string, unknown>>(statement: string, params: unknown[] = []): Promise<T[]> {
+  const sql = postgres(`${ADMIN}/${E2E_DB}`, { max: 1, onnotice: () => {} });
+  try {
+    return (await sql.unsafe(statement, params as never[])) as unknown as T[];
+  } finally {
+    await sql.end();
+  }
+}
