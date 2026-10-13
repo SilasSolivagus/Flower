@@ -30,7 +30,7 @@ import { parseSourceConfig, type ScheduleRow } from './schedules';
 
 export type OrgContext = { orgId: string; slug: string; name: string; timeZone: string; base: string };
 
-const validZone = (tz: string | undefined): string | null => {
+export const validZone = (tz: string | undefined): string | null => {
   if (!tz) return null;
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: tz });
