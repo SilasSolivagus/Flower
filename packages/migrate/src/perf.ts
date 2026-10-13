@@ -1,8 +1,11 @@
 import {
   type Actor,
   type Db,
+  DEFAULT_TIMEZONE,
   getIterationGantt,
   getIterationScope,
+  getOrgDashboard,
+  getProductDashboard,
   getRequirementByKey,
   getWorkbench,
   listIterations,
@@ -10,7 +13,12 @@ import {
   listRequirementComments,
   listRequirements,
   listReviewQueue,
+  organizations,
+  todayInZone,
+  validZone,
+  withOrg,
 } from '@flower/core';
+import { eq } from 'drizzle-orm';
 
 export type PerfCase = { name: string; run: () => Promise<unknown> };
 
@@ -57,6 +65,15 @@ export async function buildPerfCases(db: Db, actor: Actor, productId: string): P
     for (const t of g.tasks) if (t.assignee) assigneeCount.set(t.assignee.id, (assigneeCount.get(t.assignee.id) ?? 0) + 1);
   }
   const topAssignee = [...assigneeCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  // 看板按迭代：本产品最近开始的常规迭代，规则同看板「可选迭代」（已到开始日、未取消）；「今天」按组织时区
+  const timeZone = await withOrg(db, actor.orgId, async (tx) => {
+    const [org] = await tx.select({ settings: organizations.settings }).from(organizations).where(eq(organizations.id, actor.orgId));
+    return validZone(org?.settings.timezone) ?? DEFAULT_TIMEZONE;
+  });
+  const today = todayInZone(timeZone);
+  const recent = iterationList
+    .filter((it) => it.type === 'regular' && it.product?.id === productId && it.status !== 'canceled' && it.startDate <= today)
+    .sort((a, b) => b.startDate.localeCompare(a.startDate))[0];
   return [
     { name: '列表：默认第 1 页', run: () => listRequirements(db, actor, productId, {}) },
     { name: '列表：第 5 页', run: () => listRequirements(db, actor, productId, { page: 5 }) },
@@ -77,5 +94,12 @@ export async function buildPerfCases(db: Db, actor: Actor, productId: string): P
     { name: '评审队列：默认', run: () => listReviewQueue(db, actor, productId) },
     { name: '评审队列：等我签字', run: () => listReviewQueue(db, actor, productId, { waitingForMe: true }) },
     { name: '工作台', run: () => getWorkbench(db, actor.accountId!) },
+    { name: '看板：产品，近 90 天', run: () => getProductDashboard(db, actor, productId, { range: { kind: 'days', days: 90 } }) },
+    { name: '看板：产品，近 180 天', run: () => getProductDashboard(db, actor, productId, { range: { kind: 'days', days: 180 } }) },
+    {
+      name: '看板：产品，按迭代（最近开始的迭代）',
+      run: () => (recent ? getProductDashboard(db, actor, productId, { range: { kind: 'iteration', iterationId: recent.id } }) : Promise.resolve(null)),
+    },
+    { name: '看板：组织汇总，近 90 天', run: () => getOrgDashboard(db, actor, { range: { kind: 'days', days: 90 } }) },
   ];
 }

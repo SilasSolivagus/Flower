@@ -48,8 +48,12 @@ describe('性能测量', () => {
       '评审队列：默认',
       '评审队列：等我签字',
       '工作台',
+      '看板：产品，近 90 天',
+      '看板：产品，近 180 天',
+      '看板：产品，按迭代（最近开始的迭代）',
+      '看板：组织汇总，近 90 天',
     ]);
     const result = await measure(cases, 2);
-    expect(result).toHaveLength(16);
+    expect(result).toHaveLength(20);
   });
 });
