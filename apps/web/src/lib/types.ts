@@ -43,9 +43,11 @@ import type {
   ModuleDocumentTree as CoreModuleDocumentTree,
   MyOrg as CoreMyOrg,
   NotificationSettings as CoreNotificationSettings,
+  OrgDashboard as CoreOrgDashboard,
   OrgRole as CoreOrgRole,
   OrgView,
   PersonalChannelSetting as CorePersonalChannelSetting,
+  ProductDashboard as CoreProductDashboard,
   ProductMemberRole as CoreProductMemberRole,
   ProductRole as CoreProductRole,
   ProductView,
@@ -170,3 +172,7 @@ export type WecomAppSettings = Jsonify<CoreWecomAppSettings>;
 export type WecomImportResult = CoreWecomImportResult;
 export type WecomImportRow = WecomImportResult['rows'][number];
 export type PersonalChannelSetting = CorePersonalChannelSetting;
+
+export type ProductDashboard = Jsonify<CoreProductDashboard>;
+export type OrgDashboard = Jsonify<CoreOrgDashboard>;
+export type DashboardCards = ProductDashboard['cards'];

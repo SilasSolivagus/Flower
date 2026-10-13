@@ -6,6 +6,7 @@ import {
   Bot,
   Box,
   Building2,
+  ChartColumn,
   ClipboardCheck,
   FileText,
   Home,
@@ -44,6 +45,7 @@ const ICONS: Record<NavIcon, typeof Home> = {
   bot: Bot,
   building: Building2,
   bell: Bell,
+  chart: ChartColumn,
 };
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {

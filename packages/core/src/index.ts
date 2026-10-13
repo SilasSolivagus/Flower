@@ -56,6 +56,7 @@ export * from './tasks/queries';
 export * from './reviews/snapshot';
 export * from './reviews/queue';
 export * from './workbench/workbench';
+export * from './dashboard/dashboard';
 export * from './storage';
 export * from './documents/templates';
 export * from './documents/attachments';

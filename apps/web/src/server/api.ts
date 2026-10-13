@@ -10,6 +10,7 @@ import { registerMemberRoutes } from './routes/members';
 import { registerOrgRoutes } from './routes/orgs';
 import { registerProductRoutes } from './routes/products';
 import { registerTokenRoutes } from './routes/tokens';
+import { registerDashboardRoutes } from './routes/dashboard';
 import { registerDefinitionRoutes } from './routes/definitions';
 import { registerDocumentRoutes } from './routes/documents';
 import { registerIterationRoutes } from './routes/iterations';
@@ -64,6 +65,7 @@ export function createApi(deps: ApiDeps): App {
   registerStructureRoutes(app, deps);
   registerTaskRoutes(app, deps);
   registerReviewRoutes(app, deps);
+  registerDashboardRoutes(app, deps);
   registerWorkbenchRoutes(app, deps);
   registerDocumentRoutes(app, deps);
   registerTemplateRoutes(app, deps);

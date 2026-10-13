@@ -20,6 +20,16 @@
 
 ## 记录
 
+### 2026-10-13 · 本地 · P3-B2 基础数据看板
+- 分支 / PR：`feat/p3b2-dashboard`
+- 做了什么：
+  - core `src/dashboard/`：纯函数（周与组织时区、分位数、完成记录、吞吐量、前置与流动时间、在制品与停留、版本按期、迭代承诺、专项、评审效率与驳回率）与读取模块；`getProductDashboard`、`getOrgDashboard`（按可见产品过滤，组织汇总仅组织管理员，含全部产品范围的只读 Token）。无新表、无迁移、无新依赖。`validZone` 移到 `src/dates.ts`。
+  - 接口 `GET /orgs/:org/products/:id/dashboard`、`GET /orgs/:org/dashboard`（近 30/90/180 天、自定义、按迭代）。
+  - 页面：主导航「看板」（产品看板，纯 SVG 图表，口径说明，暂无数据原因）、组织设置「看板」（组织汇总）。
+  - perf 命令加四个看板用例。
+- 怎么验证的：`pnpm test`：core 628、web 235、migrate 123，全部通过；typecheck 通过；web lint 0 警告；全量 e2e 149 通过、1 跳过；`./scripts/smoke.sh` 通过。pan123 上四个看板用例 p95 在 18 毫秒以内；吞吐量、版本、专项三项 SQL 核对与接口一致；1440 / 760 界面复验通过，详见 `docs/p3b2-validation.md`。
+- 留给对方：pan123 版本按期达成率与评审指标因数据缺口显示暂无数据（见 `docs/p3b2-validation.md` 第 5 节）；设计 §7 产品工作情况表待讨论。
+
 ### 2026-10-12 · 本地 · P3-B1 站内通知、@ 成员、关注、个人通知偏好与企业微信绑定
 - 分支 / PR：`feat/p3b1-member-notifications`
 - 做了什么：

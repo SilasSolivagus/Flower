@@ -22,6 +22,7 @@ import { CHECK_STATE_LABELS } from '../requirements/labels';
 import { displayKey } from '../requirements/requirements';
 import { iterationTasksOverviewTx, overviewTaskOf } from '../tasks/queries';
 import { countedRows, type OverviewRow, overviewRows, todayInZone, workdaysElapsed } from '../tasks/schedule';
+import { validZone } from '../dates';
 import { orgToday } from '../tasks/tasks';
 import type { WorkflowBody } from '../definitions/workflow-schema';
 import { EVENT_TYPE_LABELS, isNotifiableEventType, type NewRequirementsConfig, type OverviewCardConfig, SCHEDULE_DEFAULT_TIMEZONE } from './constants';
@@ -29,16 +30,6 @@ import { DASHBOARD_MAX_ROWS, type DashboardData, type DashboardRow, type Dashboa
 import { parseSourceConfig, type ScheduleRow } from './schedules';
 
 export type OrgContext = { orgId: string; slug: string; name: string; timeZone: string; base: string };
-
-const validZone = (tz: string | undefined): string | null => {
-  if (!tz) return null;
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: tz });
-    return tz;
-  } catch {
-    return null;
-  }
-};
 
 export async function orgContextTx(tx: Tx, orgId: string, publicUrl: string): Promise<OrgContext> {
   const [org] = await tx.select().from(organizations).where(eq(organizations.id, orgId));

@@ -10,3 +10,14 @@ export function assertIsoDate(value: string, label: string): string {
   }
   return value;
 }
+
+/** 时区名有效（Intl 认识）则原样返回，否则返回 null。 */
+export const validZone = (tz: string | undefined): string | null => {
+  if (!tz) return null;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return tz;
+  } catch {
+    return null;
+  }
+};
