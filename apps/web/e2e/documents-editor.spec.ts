@@ -50,8 +50,10 @@ test('两个窗口同时编辑：后保存的一方看到冲突提示，重新�
   const productId = await createProduct(request);
   const doc = await createDocument(request, productId, { title: '冲突', templateId: await presetTemplateId(request, productId) });
   await login(page, OWNER.email, OWNER.password);
-  const other = await page.context().newPage();
   await page.goto(`/acme/documents/${doc.displayKey}`);
+  // 先等甲窗口的编辑器出来再开乙窗口：两个窗口同时首次加载编辑器时，慢机器上会超过断言的等待时间
+  await expect(page.getByRole('region', { name: '正文' })).toContainText('1. 背景介绍');
+  const other = await page.context().newPage();
   await other.goto(`/acme/documents/${doc.displayKey}`);
   await expect(other.getByRole('region', { name: '正文' })).toContainText('1. 背景介绍');
 
