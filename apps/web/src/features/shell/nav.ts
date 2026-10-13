@@ -1,6 +1,6 @@
 import type { OrgRole } from '@/lib/types';
 
-export type NavIcon = 'home' | 'grid' | 'list' | 'cycle' | 'review' | 'doc' | 'users' | 'tag' | 'box' | 'flow' | 'sliders' | 'bot' | 'building' | 'bell';
+export type NavIcon = 'home' | 'grid' | 'list' | 'cycle' | 'review' | 'doc' | 'users' | 'tag' | 'box' | 'flow' | 'sliders' | 'bot' | 'building' | 'bell' | 'chart';
 export type NavItem = { key: string; label: string; href?: string; icon: NavIcon };
 
 export const isOrgAdminRole = (role: OrgRole): boolean => role === 'owner' || role === 'admin';
@@ -22,6 +22,7 @@ export function buildNav(org: string, orgRole: OrgRole): { main: NavItem[]; sett
     main: [
       { key: 'home', label: '工作台', href: `/${org}`, icon: 'home' },
       { key: 'overview', label: '概览', href: `/${org}/overview`, icon: 'grid' },
+      { key: 'product-dashboard', label: '看板', href: `/${org}/dashboard`, icon: 'chart' },
       { key: 'requirements', label: '需求', href: `/${org}/requirements`, icon: 'list' },
       { key: 'iterations', label: '迭代', href: `/${org}/iterations`, icon: 'cycle' },
       { key: 'reviews', label: '评审', href: `/${org}/reviews`, icon: 'review' },
@@ -41,6 +42,8 @@ export function activeNavKey(pathname: string, org: string): string {
   if (/^\/reviews(\/|$)/.test(rest)) return 'reviews';
   if (/^\/documents(\/|$)/.test(rest)) return 'documents';
   if (/^\/overview(\/|$)/.test(rest)) return 'overview';
+  // 主导航「看板」与组织设置「看板」（键 dashboard）同名，主导航用另一个键，避免两项同时高亮
+  if (/^\/dashboard(\/|$)/.test(rest)) return 'product-dashboard';
   // 通知页不对应导航项（铃铛在顶栏）；不能返回 notifications，那是组织设置「推送」的键
   if (/^\/notifications(\/|$)/.test(rest)) return 'inbox';
   const m = /^\/settings\/([^/]+)/.exec(rest);

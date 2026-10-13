@@ -7,6 +7,7 @@ describe('buildNav', () => {
     expect(nav.main.map((i) => [i.label, i.href ?? null])).toEqual([
       ['工作台', '/acme'],
       ['概览', '/acme/overview'],
+      ['看板', '/acme/dashboard'],
       ['需求', '/acme/requirements'],
       ['迭代', '/acme/iterations'],
       ['评审', '/acme/reviews'],
@@ -49,5 +50,6 @@ describe('buildNav', () => {
     expect(activeNavKey('/acme/documents/PAN-PRD-1', 'acme')).toBe('documents');
     expect(activeNavKey('/acme/settings/notifications', 'acme')).toBe('notifications');
     expect(activeNavKey('/acme/notifications', 'acme')).toBe('inbox');
+    expect(activeNavKey('/acme/dashboard', 'acme')).toBe('product-dashboard');
   });
 });
