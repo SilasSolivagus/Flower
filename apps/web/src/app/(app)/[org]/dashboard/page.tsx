@@ -15,14 +15,22 @@ import { type DashboardFilter, DEFAULT_FILTER, dashboardHref, filterFromParams, 
 import { ApiError } from '@/lib/api';
 import { useProductDashboard, useProducts } from '@/lib/queries';
 import type { ProductDashboard } from '@/lib/types';
+import { DeliverySection } from './delivery';
+import { ReviewSection } from './review';
+import { SpecialsSection } from './specials';
+import { StuckSection } from './stuck';
 import { Trends } from './trends';
 
 /** 筛选栏之下的各区块，自上而下与设计 §4.1 一致。 */
-function Sections({ data }: { org: string; data: ProductDashboard }) {
+function Sections({ org, data }: { org: string; data: ProductDashboard }) {
   return (
     <>
       <MetricCards cards={data.cards} completedCount={data.completedCount} endsToday={data.window.endsToday} />
       <Trends weeks={data.weeks} />
+      <StuckSection org={org} stuck={data.stuck} />
+      <DeliverySection iterations={data.iterations} releases={data.releases} />
+      <SpecialsSection specials={data.specials} />
+      <ReviewSection review={data.review} />
     </>
   );
 }
