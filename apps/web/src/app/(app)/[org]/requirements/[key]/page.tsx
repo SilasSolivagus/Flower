@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Backlinks } from '@/components/backlinks';
+import { BlockerList } from '@/components/blocker-list';
 import { CheckItems } from '@/components/check-items';
 import { EditableTitle } from '@/components/editable-title';
 import { FollowButton } from '@/components/follow-button';
@@ -16,8 +17,7 @@ import { WikilinkTextarea } from '@/components/wikilink-textarea';
 import { useMarkNotificationsRead } from '@/features/member-notifications/use-mark-read';
 import { ProgressList } from '@/features/tracking/components/progress-list';
 import { api } from '@/lib/api';
-import { documentKeys, linkKeys, qk, requirementKeys, useApiMutation, useRequirement } from '@/lib/queries';
-import { Blockers } from './blockers';
+import { documentKeys, iterationKeys, linkKeys, qk, requirementKeys, useApiMutation, useRequirement } from '@/lib/queries';
 import { Comments } from './comments';
 import { FieldsPanel } from './fields-panel';
 import { History } from './history';
@@ -115,7 +115,7 @@ export default function RequirementPage() {
               invalidate={[requirementKeys(org), documentKeys(org), qk.workbench]}
             />
           )}
-          <Blockers org={org} requirement={r} />
+          <BlockerList org={org} blockers={r.blockers} canEdit={r.myRole !== 'viewer'} addPath={`/orgs/${org}/requirements/${r.id}/blockers`} invalidate={[requirementKeys(org), iterationKeys(org)]} />
           <Relations org={org} requirement={r} />
           <Backlinks org={org} type="requirement" id={r.id} />
           <Tabs defaultValue="comments">
