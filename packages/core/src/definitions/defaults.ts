@@ -26,6 +26,8 @@ export const BUILTIN_FIELDS: Array<{
   key: string;
   label: string;
   cardinality: 'single' | 'multi';
+  /** 作用的对象，缺省为需求。 */
+  appliesTo?: 'requirement' | 'work_item';
   options: Array<{ key: string; label: string; color: string }>;
 }> = [
   {
@@ -42,6 +44,26 @@ export const BUILTIN_FIELDS: Array<{
   { key: 'platform', label: '平台', cardinality: 'multi', options: [] },
   { key: 'source', label: '来源', cardinality: 'single', options: [] },
   { key: 'line', label: '业务线', cardinality: 'single', options: [] },
+  {
+    key: 'type',
+    label: '类型',
+    cardinality: 'single',
+    options: [
+      { key: 'feature', label: '新功能', color: '#2563eb' },
+      { key: 'improvement', label: '体验优化', color: '#0f766e' },
+      { key: 'incident', label: '线上问题', color: '#dc2626' },
+    ],
+  },
+  {
+    key: 'work_type',
+    label: '工作类型',
+    cardinality: 'single',
+    appliesTo: 'work_item',
+    options: [
+      { key: 'support', label: '技术支持', color: '#7c3aed' },
+      { key: 'coordination', label: '协调对接', color: '#ea580c' },
+    ],
+  },
 ];
 
 export const DEFAULT_FUNCTION_TAGS = [
@@ -67,7 +89,7 @@ export async function seedOrgDefaults(
   for (const f of BUILTIN_FIELDS) {
     const [field] = await tx
       .insert(fieldDefinitions)
-      .values({ orgId, key: f.key, label: f.label, cardinality: f.cardinality, builtin: true })
+      .values({ orgId, key: f.key, label: f.label, cardinality: f.cardinality, builtin: true, appliesTo: f.appliesTo ?? 'requirement' })
       .returning();
     if (f.options.length > 0) {
       await tx.insert(fieldOptions).values(f.options.map((o, i) => ({ orgId, fieldId: field!.id, ...o, sort: i })));

@@ -26,7 +26,7 @@ export async function effectiveFields(tx: Tx, productId: string): Promise<Map<st
   const defs = await tx
     .select()
     .from(fieldDefinitions)
-    .where(or(isNull(fieldDefinitions.productId), eq(fieldDefinitions.productId, productId)));
+    .where(and(eq(fieldDefinitions.appliesTo, 'requirement'), or(isNull(fieldDefinitions.productId), eq(fieldDefinitions.productId, productId))));
   const chosen = new Map<string, (typeof defs)[number]>();
   for (const d of defs) {
     const cur = chosen.get(d.key);

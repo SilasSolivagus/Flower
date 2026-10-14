@@ -15,6 +15,8 @@ export type FieldView = {
   label: string;
   cardinality: 'single' | 'multi';
   builtin: boolean;
+  /** 作用的对象：需求或工作项。 */
+  appliesTo: 'requirement' | 'work_item';
   productId: string | null;
   options: FieldOptionView[];
 };
@@ -32,7 +34,7 @@ async function withOptions(tx: Tx, rows: FieldRow[]): Promise<FieldView[]> {
   for (const f of rows) {
     const opts = await tx.select().from(fieldOptions).where(eq(fieldOptions.fieldId, f.id)).orderBy(asc(fieldOptions.sort));
     result.push({
-      id: f.id, key: f.key, label: f.label, cardinality: f.cardinality, builtin: f.builtin, productId: f.productId,
+      id: f.id, key: f.key, label: f.label, cardinality: f.cardinality, builtin: f.builtin, appliesTo: f.appliesTo, productId: f.productId,
       options: opts.map(optionView),
     });
   }
@@ -69,7 +71,7 @@ export async function listFields(db: Db, actor: Actor, opts: { productId?: strin
       .from(fieldDefinitions)
       .where(
         opts.productId
-          ? or(isNull(fieldDefinitions.productId), eq(fieldDefinitions.productId, opts.productId))
+          ? and(eq(fieldDefinitions.appliesTo, 'requirement'), or(isNull(fieldDefinitions.productId), eq(fieldDefinitions.productId, opts.productId)))
           : isNull(fieldDefinitions.productId),
       )
       .orderBy(asc(fieldDefinitions.createdAt));
@@ -175,6 +177,7 @@ export async function forkFieldForProduct(db: Db, actor: Actor, productId: strin
     await requireProductRole(tx, actor, productId, 'admin');
     const src = await loadField(tx, orgFieldId);
     if (src.productId) throw new AppError('invalid', '只能复制组织级字段');
+    if (src.appliesTo !== 'requirement') throw new AppError('invalid', '工作项字段只在组织级维护，不能被产品覆盖');
     let copy: FieldRow;
     try {
       [copy] = (await tx

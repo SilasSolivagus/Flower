@@ -57,12 +57,13 @@ async function definitionView(tx: Tx, d: DefRow): Promise<WorkflowDefinitionView
   };
 }
 
-/** 流程条件可引用的字段：组织字段，加上产品覆盖字段。 */
+/** 流程条件可引用的字段：作用于需求的组织级字段，加上产品覆盖字段。 */
 async function fieldKeysFor(tx: Tx, productId: string | null): Promise<string[]> {
+  const scope = productId ? or(isNull(fieldDefinitions.productId), eq(fieldDefinitions.productId, productId)) : isNull(fieldDefinitions.productId);
   const rows = await tx
     .select({ key: fieldDefinitions.key })
     .from(fieldDefinitions)
-    .where(productId ? or(isNull(fieldDefinitions.productId), eq(fieldDefinitions.productId, productId)) : isNull(fieldDefinitions.productId));
+    .where(and(eq(fieldDefinitions.appliesTo, 'requirement'), scope));
   return [...new Set(rows.map((r) => r.key))];
 }
 

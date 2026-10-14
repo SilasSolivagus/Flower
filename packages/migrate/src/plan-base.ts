@@ -71,8 +71,8 @@ export function buildBase(ctx: PlanContext): void {
   for (const f of BUILTIN_FIELDS) {
     const fieldId = ctx.id('field', f.key);
     ctx.fieldId.set(f.key, fieldId);
-    rows.fieldDefinitions.push({ id: fieldId, orgId, productId: null, key: f.key, label: f.label, cardinality: f.cardinality, builtin: true, createdAt });
-    (optionSets[f.key] ?? []).forEach((o, i) =>
+    rows.fieldDefinitions.push({ id: fieldId, orgId, productId: null, key: f.key, label: f.label, cardinality: f.cardinality, builtin: true, appliesTo: f.appliesTo ?? 'requirement', createdAt });
+    (optionSets[f.key] ?? f.options).forEach((o, i) =>
       rows.fieldOptions.push({ id: ctx.id('option', `${f.key}:${o.key}`), orgId, fieldId, key: o.key, label: o.label, color: o.color ?? null, sort: i, active: true }),
     );
   }
@@ -82,7 +82,7 @@ export function buildBase(ctx: PlanContext): void {
   if (!boss) ctx.problem(`会签角色「${BOSS_ROLE}」没有对应成员（people.json 的 signoffRoles）`);
   const bossId = boss ? ctx.memberIdByKey.get(boss.key)! : ctx.id('member', '__missing_boss');
   ctx.workflow = buildWorkflowV1Body(ctx.tagIdByName, bossId);
-  const valid = validateWorkflowBody(ctx.workflow, { fieldKeys: BUILTIN_FIELDS.map((f) => f.key) });
+  const valid = validateWorkflowBody(ctx.workflow, { fieldKeys: BUILTIN_FIELDS.filter((f) => (f.appliesTo ?? 'requirement') === 'requirement').map((f) => f.key) });
   if (!valid.ok) ctx.problem(`流程 v1 校验失败：${valid.issues.map((i) => `${i.path} ${i.message}`).join('；')}`);
   const definitionId = ctx.id('workflow', 'v1');
   const versionId = ctx.id('workflow-version', 'v1');
