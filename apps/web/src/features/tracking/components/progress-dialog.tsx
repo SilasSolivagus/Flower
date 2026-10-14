@@ -27,7 +27,7 @@ function ProgressForm({ org, target, defaultFollower, onDone }: { org: string; t
     () =>
       api<{ progress: ProgressEntry }>(`/orgs/${org}/${base}/${target.id}/progress`, {
         method: 'POST',
-        body: { body, nextStep: nextStep.trim() || null, followerMemberId: follower, ...(dateChanged ? { expectedDate: expected || null } : {}) },
+        body: { body: body.trim(), nextStep: nextStep.trim() || null, followerMemberId: follower, ...(dateChanged ? { expectedDate: expected || null } : {}) },
       }),
     { invalidate: [trackingKeys(org), requirementKeys(org), qk.workbench], silentError: true, success: '已记录进展', onSuccess: () => onDone(follower) },
   );

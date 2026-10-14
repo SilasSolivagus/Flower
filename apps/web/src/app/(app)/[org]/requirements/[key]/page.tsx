@@ -10,9 +10,11 @@ import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WikiText } from '@/components/wiki-text';
 import { WikilinkTextarea } from '@/components/wikilink-textarea';
 import { useMarkNotificationsRead } from '@/features/member-notifications/use-mark-read';
+import { ProgressList } from '@/features/tracking/components/progress-list';
 import { api } from '@/lib/api';
 import { documentKeys, linkKeys, qk, requirementKeys, useApiMutation, useRequirement } from '@/lib/queries';
 import { Blockers } from './blockers';
@@ -25,6 +27,7 @@ import { Relations } from './relations';
 import { Releases } from './releases';
 import { SideLists } from './side-lists';
 import { StatusPanel } from './status-panel';
+import { TrackingPanel } from './tracking-panel';
 
 export default function RequirementPage() {
   const { org, key } = useParams<{ org: string; key: string }>();
@@ -115,11 +118,27 @@ export default function RequirementPage() {
           <Blockers org={org} requirement={r} />
           <Relations org={org} requirement={r} />
           <Backlinks org={org} type="requirement" id={r.id} />
-          <Comments org={org} requirementId={r.id} productId={r.productId} productKey={r.productKey} />
+          <Tabs defaultValue="comments">
+            <TabsList>
+              <TabsTrigger value="comments">评论</TabsTrigger>
+              <TabsTrigger value="progress">进展记录</TabsTrigger>
+            </TabsList>
+            <TabsContent value="comments">
+              <Comments org={org} requirementId={r.id} productId={r.productId} productKey={r.productKey} />
+            </TabsContent>
+            <TabsContent value="progress">
+              <ProgressList
+                org={org}
+                target={{ type: 'requirement', id: r.id, displayKey: r.displayKey, title: r.title, expectedDate: r.tracking.expectedDate, canEditDate: canEdit }}
+                canWrite={canEdit}
+              />
+            </TabsContent>
+          </Tabs>
           <History requirement={r} />
         </div>
         <div className="flex flex-col gap-4">
           <StatusPanel org={org} requirement={r} />
+          <TrackingPanel org={org} requirement={r} />
           <PrdCard org={org} requirement={r} />
           <FieldsPanel org={org} requirement={r} />
           <Assignments org={org} requirement={r} />
