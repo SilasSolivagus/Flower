@@ -20,6 +20,17 @@
 
 ## 记录
 
+### 2026-10-14 · 本地 · P3-C1 工作跟进
+- 分支 / PR：`feat/p3c1-tracking`
+- 做了什么：
+  - 数据模型：`requirements` 加跟进五列，新表 `work_items`、`progress_updates`（RLS），`blockers` 可挂工作项，`organizations.work_item_seq`；迁移 0019（结构）与 0020（RLS、回填 tracked_since、补齐内置字段「类型」「工作类型」）；`field_definitions.applies_to` 开始生效。
+  - core `src/tracking/`：停留与老化纯函数、工作项权限、需求跟进设置与自动加入、工作项、进展记录、跟进列表与阈值；通知（工作项指派与 @、跟进人、关注者）、工作项关注、组织级 @ 候选成员；工作台两个区块。
+  - 接口 `/orgs/:org/tracking`、`/tracking-settings`、需求跟进与进展、`/work-items`、`/progress`、`/mention-members`。
+  - 页面：主导航「跟进」（四个页签、筛选、写进展、新建工作项）、工作项详情、需求详情跟进区块与进展记录页签、工作台、组织设置「跟进」；阻塞项区块抽为共享组件。
+  - perf 命令加四个跟进用例。
+- 怎么验证的：`pnpm test`：core 688、web 250、migrate 124，全部通过；typecheck 通过；web lint 0 警告；全量 e2e 156 通过、1 跳过；`./scripts/smoke.sh` 通过。开发库迁移核对（RLS、回填 81、需求数 766 不变、内置字段、约束）与预期一致；跟进列表 p95 约 12 毫秒、工作台 29.5 毫秒；pan123 上两个账号复验（写进展与跟进人通知、暂停与恢复、工作项全流程、四个页签、阈值，1440 / 760）通过，详见 `docs/p3c1-validation.md`。
+- 留给对方：旧「进展」评论未转换、历史需求没有加入跟进时间、「类型」待补填（见 `docs/p3c1-validation.md` 第 5 节）；下一步 P3-C2 周期汇总；待规划原型评审增值模块。
+
 ### 2026-10-13 · 本地 · P3-B2 基础数据看板
 - 分支 / PR：`feat/p3b2-dashboard`
 - 做了什么：
