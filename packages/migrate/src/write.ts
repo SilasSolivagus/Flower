@@ -58,6 +58,10 @@ export async function deleteOrgData(tx: Tx, orgId: string): Promise<void> {
   await tx.execute(sql`delete from ${core.iterationScopeSnapshots} where org_id = ${orgId}`);
   await tx.execute(sql`delete from ${core.documentAffectedNodes} where org_id = ${orgId}`);
   await tx.execute(sql`delete from ${core.entityLinks} where org_id = ${orgId}`);
+  // 工作跟进：进展记录引用需求、工作项与成员；挂在工作项上的阻塞项引用工作项；工作项引用产品与成员
+  await tx.execute(sql`delete from ${core.progressUpdates} where org_id = ${orgId}`);
+  await tx.execute(sql`delete from ${core.blockers} where org_id = ${orgId} and work_item_id is not null`);
+  await tx.execute(sql`delete from ${core.workItems} where org_id = ${orgId}`);
   // 站内通知：通知引用领域事件与成员，偏好、关注、扫码 state 引用成员，游标与企业微信应用只引用组织
   for (const table of [core.memberNotifications, core.memberNotificationPrefs, core.subscriptions, core.notificationCursors, core.wecomBindStates, core.wecomApps]) {
     await tx.execute(sql`delete from ${table} where org_id = ${orgId}`);
@@ -118,6 +122,8 @@ export async function writeImport(
           order by e.occurred_at desc, e.id desc limit 1
           on conflict (org_id) do nothing`,
     );
+    // 旧系统没有「跟进」：按当前状态类别回填加入跟进的时间，规则与迁移 0020 相同
+    await core.backfillTrackedSinceTx(tx, org.id!);
   });
   // 数据库提交后再写文件：键由来源确定，重复导入覆盖同一个文件。旧附件文件已在计划阶段校验过，这里只复制计划接受的文件
   let filesWritten = 0;

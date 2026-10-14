@@ -70,7 +70,7 @@ export async function createBlocker(
 export async function resolveBlocker(db: Db, actor: Actor, blockerId: string): Promise<BlockerView> {
   return withOrg(db, actor.orgId, async (tx) => {
     const [cur] = await tx.select().from(blockers).where(eq(blockers.id, blockerId)).for('update');
-    if (!cur) throw new AppError('not_found', '阻塞项不存在');
+    if (!cur || !cur.requirementId) throw new AppError('not_found', '阻塞项不存在');
     const req = await loadRequirement(tx, cur.requirementId);
     await requireProductRole(tx, actor, req.productId, 'editor');
     if (cur.status === 'resolved') throw new AppError('invalid', '该阻塞项已解除');
