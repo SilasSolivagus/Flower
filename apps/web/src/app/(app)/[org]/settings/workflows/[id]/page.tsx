@@ -26,6 +26,8 @@ export default function WorkflowEditorPage() {
   const wf = useWorkflow(org, id);
   const productId = wf.data?.definition.productId ?? undefined;
   const fields = useFields(org, productId);
+  // 流程条件只能引用作用于需求的字段（工作项的「工作类型」不参与流程）
+  const requirementFields = useMemo(() => fields.data?.filter((f) => f.appliesTo === 'requirement'), [fields.data]);
   const tags = useFunctionTags(org);
   const members = useMembers(org);
   const [draft, setDraft] = useState<WorkflowBody | null>(null);
@@ -35,10 +37,10 @@ export default function WorkflowEditorPage() {
   if (current && !draft) setDraft(current.body);
 
   const issues = useMemo(() => {
-    if (!draft || !fields.data) return [];
-    const r = validateWorkflowBody(draft, { fieldKeys: fields.data.map((f) => f.key) });
+    if (!draft || !requirementFields) return [];
+    const r = validateWorkflowBody(draft, { fieldKeys: requirementFields.map((f) => f.key) });
     return r.ok ? [] : r.issues;
-  }, [draft, fields.data]);
+  }, [draft, requirementFields]);
 
   const publish = useApiMutation(
     (note: string) => api<{ version: WorkflowVersion }>(`/orgs/${org}/workflows/${id}/versions`, { method: 'POST', body: { body: draft, note } }),
@@ -115,13 +117,13 @@ export default function WorkflowEditorPage() {
               <CheckItems body={draft} tags={tags.data ?? []} members={members.data ?? []} onChange={setDraft} />
             </TabsContent>
             <TabsContent value="gates">
-              <ActionGate body={draft} fields={fields.data ?? []} onChange={setDraft} />
+              <ActionGate body={draft} fields={requirementFields ?? []} onChange={setDraft} />
             </TabsContent>
           </div>
         </Tabs>
         <FlowPreview body={draft} selected={selected} onSelect={setSelected} />
       </div>
-      <ConditionSheet body={draft} fields={fields.data ?? []} selected={selected} onChange={setDraft} onClose={() => setSelected(null)} />
+      <ConditionSheet body={draft} fields={requirementFields ?? []} selected={selected} onChange={setDraft} onClose={() => setSelected(null)} />
     </>
   );
 }
