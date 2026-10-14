@@ -32,6 +32,7 @@ const BACKFILL = readFileSync(new URL('../migrations/0020_p3c1_tracking.sql', im
   .map((s) => s.trim())
   .filter(Boolean)
   .slice(1);
+if (BACKFILL.length !== 3) throw new Error(`迁移 0020 应在开启 RLS 之后有 3 段语句，实际 ${BACKFILL.length}`);
 const runMigrationBackfill = async () => {
   for (const s of BACKFILL) await t.adminDb.execute(sql.raw(s));
 };
