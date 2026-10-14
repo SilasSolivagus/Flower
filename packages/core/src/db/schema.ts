@@ -44,7 +44,12 @@ const createdAt = () => ts('created_at').notNull().defaultNow();
 const orgRef = () => uuid('org_id').notNull().references(() => organizations.id);
 
 export type AccountPreferences = { theme?: 'light' | 'dark' | 'system'; locale?: string; timezone?: string };
-export type OrgSettings = { timezone?: string; structureLevelNames?: string[] };
+/** tracking：跟进的老化阈值（P3-C1），缺省或无效时取默认值，见 tracking/aging.ts 的 trackingSettingsOf。 */
+export type OrgSettings = {
+  timezone?: string;
+  structureLevelNames?: string[];
+  tracking?: { warnDays?: number; alertDays?: number; staleUpdateDays?: number };
+};
 
 // ---------- 全局表（无 RLS） ----------
 
