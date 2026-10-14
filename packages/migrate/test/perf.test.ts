@@ -52,8 +52,12 @@ describe('性能测量', () => {
       '看板：产品，近 180 天',
       '看板：产品，按迭代（最近开始的迭代）',
       '看板：组织汇总，近 90 天',
+      '跟进：全部在手',
+      '跟进：含最近 30 天完成',
+      '跟进：按产品',
+      '跟进：按负责人（在手最多的人）',
     ]);
     const result = await measure(cases, 2);
-    expect(result).toHaveLength(20);
+    expect(result).toHaveLength(24);
   });
 });
