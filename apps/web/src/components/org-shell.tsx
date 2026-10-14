@@ -12,6 +12,7 @@ import {
   Home,
   LayoutGrid,
   List,
+  ListChecks,
   RefreshCw,
   SlidersHorizontal,
   Tag,
@@ -46,6 +47,7 @@ const ICONS: Record<NavIcon, typeof Home> = {
   building: Building2,
   bell: Bell,
   chart: ChartColumn,
+  checklist: ListChecks,
 };
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {

@@ -1,6 +1,6 @@
 import type { OrgRole } from '@/lib/types';
 
-export type NavIcon = 'home' | 'grid' | 'list' | 'cycle' | 'review' | 'doc' | 'users' | 'tag' | 'box' | 'flow' | 'sliders' | 'bot' | 'building' | 'bell' | 'chart';
+export type NavIcon = 'home' | 'grid' | 'list' | 'cycle' | 'review' | 'doc' | 'users' | 'tag' | 'box' | 'flow' | 'sliders' | 'bot' | 'building' | 'bell' | 'chart' | 'checklist';
 export type NavItem = { key: string; label: string; href?: string; icon: NavIcon };
 
 export const isOrgAdminRole = (role: OrgRole): boolean => role === 'owner' || role === 'admin';
@@ -15,6 +15,7 @@ const SETTINGS: Array<[string, string, NavIcon]> = [
   ['agents', 'Agent 与 Token', 'bot'],
   ['notifications', '推送', 'bell'],
   ['dashboard', '看板', 'chart'],
+  ['tracking', '跟进', 'checklist'],
   ['general', '组织信息', 'building'],
 ];
 
@@ -25,6 +26,7 @@ export function buildNav(org: string, orgRole: OrgRole): { main: NavItem[]; sett
       { key: 'overview', label: '概览', href: `/${org}/overview`, icon: 'grid' },
       { key: 'product-dashboard', label: '看板', href: `/${org}/dashboard`, icon: 'chart' },
       { key: 'requirements', label: '需求', href: `/${org}/requirements`, icon: 'list' },
+      { key: 'work-tracking', label: '跟进', href: `/${org}/tracking`, icon: 'checklist' },
       { key: 'iterations', label: '迭代', href: `/${org}/iterations`, icon: 'cycle' },
       { key: 'reviews', label: '评审', href: `/${org}/reviews`, icon: 'review' },
       { key: 'documents', label: '文档', href: `/${org}/documents`, icon: 'doc' },
@@ -45,6 +47,8 @@ export function activeNavKey(pathname: string, org: string): string {
   if (/^\/overview(\/|$)/.test(rest)) return 'overview';
   // 主导航「看板」与组织设置「看板」（键 dashboard）同名，主导航用另一个键，避免两项同时高亮
   if (/^\/dashboard(\/|$)/.test(rest)) return 'product-dashboard';
+  // 主导航「跟进」与组织设置「跟进」（键 tracking）同名，主导航用另一个键；工作项详情也高亮「跟进」
+  if (/^\/(tracking|work-items)(\/|$)/.test(rest)) return 'work-tracking';
   // 通知页不对应导航项（铃铛在顶栏）；不能返回 notifications，那是组织设置「推送」的键
   if (/^\/notifications(\/|$)/.test(rest)) return 'inbox';
   const m = /^\/settings\/([^/]+)/.exec(rest);

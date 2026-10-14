@@ -51,10 +51,12 @@ import type {
   ProductMemberRole as CoreProductMemberRole,
   ProductRole as CoreProductRole,
   ProductView,
+  ProgressView as CoreProgressView,
   ReleaseView,
   RequirementDetail as CoreRequirementDetail,
   RequirementList as CoreRequirementList,
   RequirementListItem as CoreRequirementListItem,
+  RequirementTracking as CoreRequirementTracking,
   RevisionDiff as CoreRevisionDiff,
   RevisionListItem,
   ReviewFilterState as CoreReviewFilterState,
@@ -71,9 +73,12 @@ import type {
   TemplateView,
   TokenScope as CoreTokenScope,
   TokenView,
+  TrackingList as CoreTrackingList,
+  TrackingSettings as CoreTrackingSettings,
   Workbench as CoreWorkbench,
   WecomAppSettings as CoreWecomAppSettings,
   WecomImportResult as CoreWecomImportResult,
+  WorkItemDetail as CoreWorkItemDetail,
   WorkflowBody as CoreWorkflowBody,
   WorkflowDefinitionView,
   WorkflowVersionView,
@@ -176,3 +181,11 @@ export type PersonalChannelSetting = CorePersonalChannelSetting;
 export type ProductDashboard = Jsonify<CoreProductDashboard>;
 export type OrgDashboard = Jsonify<CoreOrgDashboard>;
 export type DashboardCards = ProductDashboard['cards'];
+
+export type TrackingList = Jsonify<CoreTrackingList>;
+export type TrackingItem = TrackingList['items'][number];
+export type TrackingSettings = CoreTrackingSettings;
+export type RequirementTracking = Jsonify<CoreRequirementTracking>;
+export type WorkItemDetail = Jsonify<CoreWorkItemDetail>;
+export type ProgressEntry = Jsonify<CoreProgressView>;
+export type ProgressSubjectType = 'requirement' | 'work_item';
