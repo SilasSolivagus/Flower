@@ -29,7 +29,7 @@ const uuid = z.string().uuid();
 
 function subjectParam(c: Context): SubscriptionSubject {
   const type = z.enum(SUBSCRIPTION_SUBJECT_TYPES).safeParse(c.req.param('type'));
-  if (!type.success) throw new AppError('invalid', '只能关注需求或 PRD');
+  if (!type.success) throw new AppError('invalid', '只能关注需求、PRD 或工作项');
   return { type: type.data, id: idParam(c, 'id', '关注的对象不存在') };
 }
 
@@ -85,6 +85,9 @@ export function registerMemberNotificationRoutes(app: App, deps: ApiDeps): void 
 
   // @ 候选成员
   app.get('/orgs/:org/products/:id/mention-members', async (c) => c.json({ members: await listMentionMembers(deps.db, c.get('actor'), idParam(c, 'id', '产品不存在')) }));
+
+  // 组织级 @ 候选成员（不关联产品的工作项）；访客 403
+  app.get('/orgs/:org/mention-members', async (c) => c.json({ members: await listMentionMembers(deps.db, c.get('actor'), null) }));
 
   // 个人提醒通道（产品）与个人通知邮件通道（组织）
   app.get('/orgs/:org/products/:id/personal-channel', async (c) => c.json(await getPersonalChannel(deps.db, c.get('actor'), idParam(c, 'id', '产品不存在'))));

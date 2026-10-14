@@ -26,6 +26,7 @@ import { registerTaskRoutes } from './routes/tasks';
 import { registerTemplateRoutes } from './routes/templates';
 import { registerWecomCallbackRoute, registerWecomRoutes } from './routes/wecom';
 import { registerWorkbenchRoutes } from './routes/workbench';
+import { registerTrackingRoutes } from './routes/tracking';
 
 /**
  * notify：推送的密钥、对外网址与发送器；tickApi：是否开放手动驱动后台发送的接口（FLOWER_NOTIFY_TICK_API=1）；
@@ -67,6 +68,7 @@ export function createApi(deps: ApiDeps): App {
   registerReviewRoutes(app, deps);
   registerDashboardRoutes(app, deps);
   registerWorkbenchRoutes(app, deps);
+  registerTrackingRoutes(app, deps);
   registerDocumentRoutes(app, deps);
   registerTemplateRoutes(app, deps);
   registerLinkRoutes(app, deps);
