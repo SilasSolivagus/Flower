@@ -61,6 +61,7 @@ export * from './tracking/backfill';
 export * from './tracking/aging';
 export * from './tracking/access';
 export * from './tracking/requirement-tracking';
+export * from './tracking/work-items';
 export * from './storage';
 export * from './documents/templates';
 export * from './documents/attachments';

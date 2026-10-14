@@ -102,6 +102,15 @@ export function classifyTarget(target: string): WikiTarget {
 
 export const taskDisplayKey = (productKey: string, number: number): string => `${productKey}-T-${number}`;
 
+/** 工作项编号（P3-C1）：按组织连续编号，不带产品前缀。 */
+export const workItemDisplayKey = (number: number): string => `W-${number}`;
+
+/** 解析 `W-n`（不区分大小写，忽略首尾空白）；不是工作项编号时返回 null。 */
+export function parseWorkItemKey(key: string): number | null {
+  const m = /^W-(\d{1,9})$/i.exec(key.trim());
+  return m ? Number(m[1]) : null;
+}
+
 export function parseTaskKey(key: string): { productKey: string; number: number } | null {
   const m = TASK_RE.exec(key.trim());
   return m ? { productKey: m[1]!.toUpperCase(), number: Number(m[2]) } : null;
