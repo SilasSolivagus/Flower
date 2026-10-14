@@ -6,6 +6,7 @@ import {
   getOrgDashboard,
   getProductDashboard,
   getRequirementByKey,
+  getTracking,
   getWorkbench,
   listIterations,
   listMemberTasks,
@@ -68,6 +69,11 @@ export async function buildPerfCases(db: Db, actor: Actor, productId: string): P
   const recent = iterationList
     .filter((it) => it.type === 'regular' && it.product?.id === productId && it.status !== 'canceled' && it.startDate <= today)
     .sort((a, b) => b.startDate.localeCompare(a.startDate))[0];
+  // 跟进按负责人：在手条目最多的负责人
+  const tracked = await getTracking(db, actor);
+  const trackedOwners = new Map<string, number>();
+  for (const item of tracked.items) if (item.owner) trackedOwners.set(item.owner.id, (trackedOwners.get(item.owner.id) ?? 0) + 1);
+  const topTracked = [...trackedOwners.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
   return [
     { name: '列表：默认第 1 页', run: () => listRequirements(db, actor, productId, {}) },
     { name: '列表：第 5 页', run: () => listRequirements(db, actor, productId, { page: 5 }) },
@@ -95,5 +101,9 @@ export async function buildPerfCases(db: Db, actor: Actor, productId: string): P
       run: () => (recent ? getProductDashboard(db, actor, productId, { range: { kind: 'iteration', iterationId: recent.id } }) : Promise.resolve(null)),
     },
     { name: '看板：组织汇总，近 90 天', run: () => getOrgDashboard(db, actor, { range: { kind: 'days', days: 90 } }) },
+    { name: '跟进：全部在手', run: () => getTracking(db, actor) },
+    { name: '跟进：含最近 30 天完成', run: () => getTracking(db, actor, { includeDone: true }) },
+    { name: '跟进：按产品', run: () => getTracking(db, actor, { productId }) },
+    { name: '跟进：按负责人（在手最多的人）', run: () => (topTracked ? getTracking(db, actor, { ownerId: topTracked }) : Promise.resolve(null)) },
   ];
 }

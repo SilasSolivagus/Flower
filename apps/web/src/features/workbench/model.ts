@@ -4,6 +4,11 @@ type Org = Workbench['orgs'][number];
 
 export const requirementHref = (org: Pick<Org, 'slug'>, displayKey: string): string => `/${org.slug}/requirements/${displayKey}`;
 
+/** 「我负责的」与「等我跟进」的一行：需求去需求详情，工作项去工作项详情。 */
+export function subjectHref(x: { org: Pick<Org, 'slug'>; kind: 'requirement' | 'work_item'; displayKey: string }): string {
+  return x.kind === 'work_item' ? `/${x.org.slug}/work-items/${x.displayKey}` : requirementHref(x.org, x.displayKey);
+}
+
 /** 任务行的链接：挂了需求的去需求详情，否则去所在迭代的甘特页签。 */
 export function taskHref(t: Workbench['tasks']['items'][number]): string {
   if (t.requirement) return requirementHref(t.org, t.requirement.displayKey);

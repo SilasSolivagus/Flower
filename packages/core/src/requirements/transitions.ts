@@ -6,6 +6,7 @@ import { withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
+import { autoTrackTx } from '../tracking/requirement-tracking';
 import { requirementCheckStates } from './check-views';
 import { assertCheckState, type SignInput, writeSignoff, writeSingleCheck } from './check-writes';
 import { effectiveFields, loadRequirementForUpdate, productWorkflowBody } from './context';
@@ -73,6 +74,7 @@ export async function transitionRequirement(
       actor,
       payload: { changes: [{ field: 'stateKey', old: cur.stateKey, new: input.to }], forced: !!input.force, reason: input.force ? reason : null },
     });
+    await autoTrackTx(tx, actor, cur, target.category, now);
     return { stateKey: input.to };
   });
 }

@@ -48,6 +48,8 @@ import type {
   Product,
   ProductDashboard,
   ProductMemberRole,
+  ProgressEntry,
+  ProgressSubjectType,
   Release,
   RequirementComment,
   RequirementDetail,
@@ -58,8 +60,11 @@ import type {
   Subscription,
   TaskDetail,
   Token,
+  TrackingList,
+  TrackingSettings,
   WecomAppSettings,
   Workbench,
+  WorkItemDetail,
   WorkflowDefinition,
   WorkflowVersion,
 } from './types';
@@ -87,6 +92,10 @@ export const qk = {
   reviews: (o: string, productId: string, query: string) => ['org', o, 'requirements', 'reviews', productId, query] as const,
   productDashboard: (o: string, productId: string, query: string) => ['org', o, 'dashboard', 'product', productId, query] as const,
   orgDashboard: (o: string, query: string) => ['org', o, 'dashboard', 'org', query] as const,
+  tracking: (o: string, query: string) => ['org', o, 'tracking', 'list', query] as const,
+  trackingSettings: (o: string) => ['org', o, 'tracking', 'settings'] as const,
+  workItem: (o: string, key: string) => ['org', o, 'tracking', 'work-item', key] as const,
+  progress: (o: string, type: string, id: string) => ['org', o, 'tracking', 'progress', type, id] as const,
   nodes: (o: string, productId: string) => ['org', o, 'product', productId, 'nodes'] as const,
   iterations: (o: string, productId: string) => ['org', o, 'iterations', 'product', productId] as const,
   iterationList: (o: string) => ['org', o, 'iterations', 'list'] as const,
@@ -276,6 +285,31 @@ export const useOrgDashboard = (o: string, query: string) =>
     placeholderData: keepPreviousData,
   });
 
+/** 跟进相关查询的公共前缀：需求跟进设置、工作项、进展记录、阈值变化后统一失效。 */
+export const trackingKeys = (o: string) => ['org', o, 'tracking'] as const;
+
+export const useTracking = (o: string, query: string) =>
+  useQuery({
+    queryKey: qk.tracking(o, query),
+    queryFn: () => api<{ tracking: TrackingList }>(`/orgs/${o}/tracking${query ? `?${query}` : ''}`),
+    select: (d) => d.tracking,
+    placeholderData: keepPreviousData,
+  });
+
+export const useTrackingSettings = (o: string) =>
+  useQuery({ queryKey: qk.trackingSettings(o), queryFn: () => api<{ settings: TrackingSettings }>(`/orgs/${o}/tracking-settings`), select: (d) => d.settings });
+
+export const useWorkItem = (o: string, key: string) =>
+  useQuery({ queryKey: qk.workItem(o, key), queryFn: () => api<{ workItem: WorkItemDetail }>(`/orgs/${o}/work-items/${encodeURIComponent(key)}`), select: (d) => d.workItem });
+
+export const useProgress = (o: string, type: ProgressSubjectType, id: string | undefined) =>
+  useQuery({
+    queryKey: qk.progress(o, type, id ?? ''),
+    queryFn: () => api<{ progress: ProgressEntry[] }>(`/orgs/${o}/${type === 'requirement' ? 'requirements' : 'work-items'}/${id}/progress`),
+    select: (d) => d.progress,
+    enabled: !!id,
+  });
+
 export const useNodes = (o: string, productId: string | undefined) =>
   useQuery({
     queryKey: qk.nodes(o, productId ?? ''),
@@ -455,7 +489,7 @@ export const useNotificationPages = (o: string, query: string) =>
     initialPageParam: '',
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });
-export const useSubscription = (o: string, type: 'requirement' | 'document', id: string | undefined) =>
+export const useSubscription = (o: string, type: 'requirement' | 'document' | 'work_item', id: string | undefined) =>
   useQuery({
     queryKey: qk.subscription(o, type, id ?? ''),
     queryFn: () => api<{ subscription: Subscription }>(`/orgs/${o}/subscriptions/${type}/${id}`),
@@ -464,13 +498,13 @@ export const useSubscription = (o: string, type: 'requirement' | 'document', id:
   });
 export const useNotificationSettings = (o: string) =>
   useQuery({ queryKey: qk.notificationSettings(o), queryFn: () => api<{ settings: NotificationSettings }>(`/orgs/${o}/me/notification-settings`), select: (d) => d.settings });
-/** @ 补全与成员标签用的成员列表；productId 为空时不请求。 */
-export const useMentionMembers = (o: string, productId: string | undefined) =>
+/** @ 补全与成员标签用的成员列表；productId 为 null 时取组织级（不关联产品的工作项），为 undefined 时不请求。 */
+export const useMentionMembers = (o: string, productId: string | null | undefined) =>
   useQuery({
-    queryKey: qk.mentionMembers(o, productId ?? ''),
-    queryFn: () => api<{ members: MentionMember[] }>(`/orgs/${o}/products/${productId}/mention-members`),
+    queryKey: qk.mentionMembers(o, productId ?? 'org'),
+    queryFn: () => api<{ members: MentionMember[] }>(productId ? `/orgs/${o}/products/${productId}/mention-members` : `/orgs/${o}/mention-members`),
     select: (d) => d.members,
-    enabled: !!productId,
+    enabled: productId !== undefined,
     staleTime: 60_000,
   });
 export const useWecomApp = (o: string) => useQuery({ queryKey: qk.wecomApp(o), queryFn: () => api<{ settings: WecomAppSettings }>(`/orgs/${o}/wecom-app`), select: (d) => d.settings });

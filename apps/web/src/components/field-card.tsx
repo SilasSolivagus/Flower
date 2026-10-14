@@ -28,6 +28,7 @@ export function FieldCard({ org, field, editable, productId }: { org: string; fi
         <span className="font-mono text-xs text-muted-foreground">{field.key}</span>
         <span className="text-xs text-muted-foreground">{field.cardinality === 'multi' ? '多选' : '单选'}</span>
         {field.productId && <span className="text-xs text-primary">产品覆盖</span>}
+        {field.appliesTo === 'work_item' && <span className="text-xs text-muted-foreground">作用于工作项</span>}
       </div>
       {!editable ? (
         <p className="text-[13px] text-muted-foreground">

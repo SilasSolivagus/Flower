@@ -8,18 +8,31 @@ import { Input } from '@/components/ui/input';
 import { formatDate } from '@/features/requirements/format';
 import { activePeople, canListMembers, pickerOptions } from '@/features/members/model';
 import { api } from '@/lib/api';
-import { iterationKeys, requirementKeys, useApiMutation, useMembers, useOrg } from '@/lib/queries';
+import { useApiMutation, useMembers, useOrg } from '@/lib/queries';
 import type { RequirementDetail } from '@/lib/types';
 
-export function Blockers({ org, requirement: r }: { org: string; requirement: RequirementDetail }) {
-  const canEdit = r.myRole !== 'viewer';
+type BlockerItem = RequirementDetail['blockers'][number];
+
+/** 阻塞项区块，需求与工作项共用：新增接口路径、可写权限、刷新的查询键由调用方传入，解除走组织级 /blockers/:id/resolve。 */
+export function BlockerList({
+  org,
+  blockers,
+  canEdit,
+  addPath,
+  invalidate,
+}: {
+  org: string;
+  blockers: BlockerItem[];
+  canEdit: boolean;
+  addPath: string;
+  invalidate: ReadonlyArray<readonly unknown[]>;
+}) {
   const orgQ = useOrg(org);
   const members = useMembers(org, canEdit && canListMembers(orgQ.data?.me));
   const [description, setDescription] = useState('');
   const [owner, setOwner] = useState<string | null>(null);
-  const invalidate = [requirementKeys(org), iterationKeys(org)];
   const add = useApiMutation(
-    () => api(`/orgs/${org}/requirements/${r.id}/blockers`, { method: 'POST', body: { description, ownerMemberId: owner } }),
+    () => api(addPath, { method: 'POST', body: { description, ownerMemberId: owner } }),
     {
       invalidate,
       silentError: true,
@@ -31,9 +44,9 @@ export function Blockers({ org, requirement: r }: { org: string; requirement: Re
     },
   );
   const resolve = useApiMutation((id: string) => api(`/orgs/${org}/blockers/${id}/resolve`, { method: 'POST' }), { invalidate, success: '已解除' });
-  if (!canEdit && r.blockers.length === 0) return null;
-  const active = r.blockers.filter((b) => b.status === 'active');
-  const resolved = r.blockers.filter((b) => b.status === 'resolved');
+  if (!canEdit && blockers.length === 0) return null;
+  const active = blockers.filter((b) => b.status === 'active');
+  const resolved = blockers.filter((b) => b.status === 'resolved');
   const people = activePeople(members.data ?? []);
 
   return (

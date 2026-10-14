@@ -9,6 +9,7 @@ describe('buildNav', () => {
       ['概览', '/acme/overview'],
       ['看板', '/acme/dashboard'],
       ['需求', '/acme/requirements'],
+      ['跟进', '/acme/tracking'],
       ['迭代', '/acme/iterations'],
       ['评审', '/acme/reviews'],
       ['文档', '/acme/documents'],
@@ -23,6 +24,7 @@ describe('buildNav', () => {
       '/acme/settings/agents',
       '/acme/settings/notifications',
       '/acme/settings/dashboard',
+      '/acme/settings/tracking',
       '/acme/settings/general',
     ]);
   });
@@ -53,5 +55,8 @@ describe('buildNav', () => {
     expect(activeNavKey('/acme/settings/dashboard', 'acme')).toBe('dashboard');
     expect(activeNavKey('/acme/notifications', 'acme')).toBe('inbox');
     expect(activeNavKey('/acme/dashboard', 'acme')).toBe('product-dashboard');
+    expect(activeNavKey('/acme/tracking', 'acme')).toBe('work-tracking');
+    expect(activeNavKey('/acme/work-items/W-3', 'acme')).toBe('work-tracking');
+    expect(activeNavKey('/acme/settings/tracking', 'acme')).toBe('tracking');
   });
 });

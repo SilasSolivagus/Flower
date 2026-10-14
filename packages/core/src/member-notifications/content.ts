@@ -1,10 +1,24 @@
 import { and, eq, isNull } from 'drizzle-orm';
 import { baseProductRole } from '../access/permissions';
-import { comments, documents, domainEvents, functionTags, memberFunctionTags, members, productMembers, products, requirements, subscriptions, tasks } from '../db/schema';
+import {
+  comments,
+  documents,
+  domainEvents,
+  functionTags,
+  memberFunctionTags,
+  members,
+  productMembers,
+  products,
+  progressUpdates,
+  requirements,
+  subscriptions,
+  tasks,
+  workItems,
+} from '../db/schema';
 import type { Tx } from '../db/tx';
 import type { DocumentStatus } from '../documents/constants';
 import { DOCUMENT_STATUS_LABELS, documentDisplayKey } from '../documents/markdown';
-import { plainMentions, taskDisplayKey } from '../links/syntax';
+import { plainMentions, taskDisplayKey, workItemDisplayKey } from '../links/syntax';
 import { MEMBER_NOTIFICATION_RANK, type MemberNotificationKind, type NotificationSubjectType } from '../notifications/constants';
 import { productWorkflowBody } from '../requirements/context';
 import type { CheckState } from '../requirements/labels';
@@ -13,7 +27,8 @@ import { type CheckItem, reviewStarted } from '../requirements/workflow-runtime'
 import { checkSnapshots, documentSnapshots, waitingFor } from '../reviews/snapshot';
 
 export type EventRow = typeof domainEvents.$inferSelect;
-export type NotificationSubject = { type: NotificationSubjectType; id: string; productId: string; title: string; url: string };
+/** productId 为空：不关联产品的工作项（收件人排除访客）。 */
+export type NotificationSubject = { type: NotificationSubjectType; id: string; productId: string | null; title: string; url: string };
 export type Candidate = { memberId: string; kind: MemberNotificationKind; body: string };
 export type EventPlan = { subject: NotificationSubject; candidates: Candidate[]; autoSubscribe: string[] };
 type Change = { field: string; old: unknown; new: unknown };
@@ -35,6 +50,10 @@ export const HANDLED_EVENT_TYPES: ReadonlySet<string> = new Set([
   'check_item.signed',
   'task.created',
   'task.updated',
+  'work_item.created',
+  'work_item.updated',
+  'progress.created',
+  'progress.updated',
 ]);
 
 const TITLE_MAX = 120;
@@ -46,6 +65,8 @@ const idList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is 
 const asId = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
 /** 变化前后的值：数组用顿号连接，空值为「空」。 */
 const shown = (v: unknown): string => (Array.isArray(v) ? (v.length ? v.join('、') : '空') : v === null || v === undefined || v === '' ? '空' : String(v));
+/** 进展记录指定跟进人时的说明：有下一步时带上下一步。 */
+const followerBody = (nextStep: string | null): string => (nextStep ? `你是下一步跟进人：${clip(nextStep, EXCERPT_MAX)}` : '你是下一步跟进人');
 
 /** 每人只取排名最高的一种（同一种以先出现的为准）；操作人本人不通知。 */
 export function pickRecipients(candidates: Candidate[], actorMemberId: string | null): Map<string, Candidate> {
@@ -95,12 +116,22 @@ export async function subjectTx(tx: Tx, slug: string, type: string, id: string):
     const k = taskDisplayKey(x.key, x.number);
     return { type: 'task', id, productId: x.productId, title: clip(`${k} ${x.title}`, TITLE_MAX), url: `/${slug}/tasks/${k}` };
   }
+  if (type === 'work_item') {
+    const [w] = await tx
+      .select({ productId: workItems.productId, number: workItems.number, title: workItems.title, productDeletedAt: products.deletedAt })
+      .from(workItems)
+      .leftJoin(products, eq(products.id, workItems.productId))
+      .where(and(eq(workItems.id, id), isNull(workItems.deletedAt)));
+    if (!w || w.productDeletedAt) return null;
+    const k = workItemDisplayKey(w.number);
+    return { type: 'work_item', id, productId: w.productId, title: clip(`${k} ${w.title}`, TITLE_MAX), url: `/${slug}/work-items/${k}` };
+  }
   return null;
 }
 
-/** 未取消关注的关注者（只有需求与 PRD 可以关注）。 */
+/** 未取消关注的关注者（需求、PRD 与工作项可以关注）。 */
 async function followersTx(tx: Tx, subject: NotificationSubject): Promise<string[]> {
-  if (subject.type !== 'requirement' && subject.type !== 'document') return [];
+  if (subject.type !== 'requirement' && subject.type !== 'document' && subject.type !== 'work_item') return [];
   const rows = await tx
     .select({ memberId: subscriptions.memberId })
     .from(subscriptions)
@@ -110,7 +141,9 @@ async function followersTx(tx: Tx, subject: NotificationSubject): Promise<string
 
 /** 等这个需求或 PRD 签字的成员：与工作台同一个 waitingFor，只取本人规则（不含代签）。PRD 只在进入评审时调用。 */
 async function signersTx(tx: Tx, subject: NotificationSubject): Promise<Candidate[]> {
-  const body = await productWorkflowBody(tx, subject.productId);
+  // 只用于需求与 PRD，二者总属于某个产品
+  const productId = subject.productId!;
+  const body = await productWorkflowBody(tx, productId);
   const scope = subject.type === 'requirement' ? 'requirement' : 'document';
   const items = body.checkItems.filter((c) => c.scope === scope);
   if (!items.some((c) => c.type === 'signoff')) return [];
@@ -121,7 +154,7 @@ async function signersTx(tx: Tx, subject: NotificationSubject): Promise<Candidat
     .from(members)
     .where(and(eq(members.status, 'active'), eq(members.kind, 'human')));
   const tags = await tx.select({ memberId: memberFunctionTags.memberId, tagId: memberFunctionTags.tagId }).from(memberFunctionTags);
-  const roles = await tx.select({ memberId: productMembers.memberId, role: productMembers.role }).from(productMembers).where(eq(productMembers.productId, subject.productId));
+  const roles = await tx.select({ memberId: productMembers.memberId, role: productMembers.role }).from(productMembers).where(eq(productMembers.productId, productId));
   const roleOf = new Map(roles.map((r) => [r.memberId, r.role]));
   const out: Candidate[] = [];
   for (const p of people) {
@@ -183,7 +216,7 @@ export async function planEventTx(tx: Tx, ev: EventRow, slug: string): Promise<E
     }
     case 'requirement.state_changed': {
       const ch = changeOf(p, 'stateKey');
-      const wf = await productWorkflowBody(tx, subject.productId);
+      const wf = await productWorkflowBody(tx, subject.productId!);
       const name = (k: unknown) => wf.states.find((s) => s.key === k)?.label ?? shown(k);
       await notifyFollowers(`把状态从「${name(ch?.old)}」改为「${name(ch?.new)}」`);
       break;
@@ -219,7 +252,7 @@ export async function planEventTx(tx: Tx, ev: EventRow, slug: string): Promise<E
       const ch = changeOf(p, 'state');
       const itemKey = typeof p.itemKey === 'string' ? p.itemKey : null;
       if (subject.type !== 'requirement' || !ch || !itemKey) break;
-      const wf = await productWorkflowBody(tx, subject.productId);
+      const wf = await productWorkflowBody(tx, subject.productId!);
       const items = wf.checkItems.filter((c) => c.scope === 'requirement');
       const snap = (await checkSnapshots(tx, wf, [subject.id])).get(subject.id)!;
       if (reviewJustStarted(items, snap.states, itemKey, ch.old as CheckState)) candidates.push(...(await signersTx(tx, subject)));
@@ -231,6 +264,31 @@ export async function planEventTx(tx: Tx, ev: EventRow, slug: string): Promise<E
     case 'task.updated':
       add([asId(changeOf(p, 'assigneeMemberId')?.new)], 'assigned', '把任务指派给你');
       break;
+    case 'work_item.created':
+      assign(asId(p.ownerMemberId), '把工作项指派给你');
+      mention(idList(p.mentionedMemberIds), '在工作项描述中 @ 了你');
+      break;
+    case 'work_item.updated':
+      assign(asId(changeOf(p, 'ownerMemberId')?.new), '把工作项指派给你');
+      mention(idList(p.mentionedMemberIds), '在工作项描述中 @ 了你');
+      break;
+    case 'progress.created': {
+      const progressId = asId(p.progressId);
+      const [row] = progressId
+        ? await tx.select({ body: progressUpdates.body, nextStep: progressUpdates.nextStep }).from(progressUpdates).where(eq(progressUpdates.id, progressId))
+        : [];
+      add([asId(p.followerMemberId)], 'assigned', followerBody(row?.nextStep ?? null));
+      await notifyFollowers(`写了进展：${clip(plainMentions(row?.body ?? '').replace(/\s+/g, ' ').trim(), EXCERPT_MAX)}`);
+      break;
+    }
+    case 'progress.updated': {
+      const ch = changeOf(p, 'followerMemberId');
+      if (!ch) break;
+      const progressId = asId(p.progressId);
+      const [row] = progressId ? await tx.select({ nextStep: progressUpdates.nextStep }).from(progressUpdates).where(eq(progressUpdates.id, progressId)) : [];
+      add([asId(ch.new)], 'assigned', followerBody(row?.nextStep ?? null));
+      break;
+    }
   }
   return { subject, candidates, autoSubscribe };
 }

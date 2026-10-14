@@ -15,6 +15,7 @@ import { type Tx, withOrg } from '../db/tx';
 import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
+import { autoTrackTx } from '../tracking/requirement-tracking';
 import { relinkDangling, syncSourceLinks } from '../links/links';
 import { mentionedMemberIds, newMentionIds } from '../links/syntax';
 import { assertAssignableMember, type EffectiveField, effectiveFields, loadRequirement, memberNames, productWorkflowBody } from './context';
@@ -265,6 +266,8 @@ export async function createRequirement(
       actor,
       payload: { number: row!.number, title, ownerMemberId: row!.ownerMemberId, mentionedMemberIds: mentionedMemberIds(description) },
     });
+    const initialCategory = body.states.find((s) => s.key === body.initial)?.category ?? 'backlog';
+    await autoTrackTx(tx, actor, row!, initialCategory, row!.createdAt);
     const [item] = await hydrateList(tx, seq!.key, [row!]);
     return item!;
   });

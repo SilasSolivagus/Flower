@@ -44,7 +44,12 @@ const createdAt = () => ts('created_at').notNull().defaultNow();
 const orgRef = () => uuid('org_id').notNull().references(() => organizations.id);
 
 export type AccountPreferences = { theme?: 'light' | 'dark' | 'system'; locale?: string; timezone?: string };
-export type OrgSettings = { timezone?: string; structureLevelNames?: string[] };
+/** tracking：跟进的老化阈值（P3-C1），缺省或无效时取默认值，见 tracking/aging.ts 的 trackingSettingsOf。 */
+export type OrgSettings = {
+  timezone?: string;
+  structureLevelNames?: string[];
+  tracking?: { warnDays?: number; alertDays?: number; staleUpdateDays?: number };
+};
 
 // ---------- 全局表（无 RLS） ----------
 
@@ -103,6 +108,8 @@ export const organizations = pgTable('organizations', {
   settings: jsonb('settings').$type<OrgSettings>().notNull().default({}),
   /** 个人通知的邮件通道（P3-B1）；通道删除时置空。 */
   personalEmailChannelId: uuid('personal_email_channel_id').references((): AnyPgColumn => notificationChannels.id, { onDelete: 'set null' }),
+  /** 工作项编号计数（P3-C1），显示为 W-n。 */
+  workItemSeq: integer('work_item_seq').notNull().default(0),
   createdAt: createdAt(),
   deletedAt: ts('deleted_at'),
 });
@@ -265,7 +272,8 @@ export const fieldDefinitions = pgTable(
     label: text('label').notNull(),
     cardinality: text('cardinality', { enum: ['single', 'multi'] }).notNull(),
     builtin: boolean('builtin').notNull().default(false),
-    appliesTo: text('applies_to').notNull().default('requirement'),
+    /** 字段作用的对象（P3-C1 起生效）：需求或工作项。 */
+    appliesTo: text('applies_to', { enum: ['requirement', 'work_item'] }).notNull().default('requirement'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -400,6 +408,15 @@ export const requirements = pgTable(
     iterationId: uuid('iteration_id').references(() => iterations.id),
     changeDocumentId: uuid('change_document_id').references((): AnyPgColumn => documents.id),
     legacyMeta: jsonb('legacy_meta').$type<Record<string, unknown>>(),
+    /** 加入跟进的时间（P3-C1）：第一次进入未开始、进行中类别时自动填写，手动移出时清空，上线或取消后保留。 */
+    trackedSince: ts('tracked_since'),
+    /** 手动移出跟进后为 true，阻止再次自动加入；手动加入时置回 false。 */
+    trackingOptedOut: boolean('tracking_opted_out').notNull().default(false),
+    /** 预计上线日期。 */
+    expectedDate: date('expected_date', { mode: 'string' }),
+    /** 暂停中时非空，恢复时清空；暂停与恢复另记领域事件，用来计算扣除暂停的停留天数。 */
+    pausedAt: ts('paused_at'),
+    pauseReason: text('pause_reason'),
     createdBy: memberRef('created_by'),
     createdAt: createdAt(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
@@ -439,7 +456,7 @@ export const fieldValues = pgTable(
   {
     id: id(),
     orgId: orgRef(),
-    entityType: text('entity_type', { enum: ['requirement'] }).notNull(),
+    entityType: text('entity_type', { enum: ['requirement', 'work_item'] }).notNull(),
     entityId: uuid('entity_id').notNull(),
     fieldId: uuid('field_id').notNull().references(() => fieldDefinitions.id),
     optionId: uuid('option_id').notNull().references(() => fieldOptions.id),
@@ -502,14 +519,20 @@ export const blockers = pgTable(
   {
     id: id(),
     orgId: orgRef(),
-    requirementId: uuid('requirement_id').notNull().references(() => requirements.id),
+    /** 挂在需求或工作项上（P3-C1），二者恰有一个非空。 */
+    requirementId: uuid('requirement_id').references(() => requirements.id),
+    workItemId: uuid('work_item_id').references((): AnyPgColumn => workItems.id),
     description: text('description').notNull(),
     status: text('status', { enum: ['active', 'resolved'] }).notNull().default('active'),
     ownerMemberId: memberRef('owner_member_id'),
     createdAt: createdAt(),
     resolvedAt: ts('resolved_at'),
   },
-  (t) => [index('blockers_requirement').on(t.requirementId)],
+  (t) => [
+    index('blockers_requirement').on(t.requirementId),
+    index('blockers_work_item').on(t.workItemId),
+    check('blockers_subject', sql`(${t.requirementId} is null) <> (${t.workItemId} is null)`),
+  ],
 );
 
 export const checkItemResults = pgTable(
@@ -1050,4 +1073,63 @@ export const wecomBindStates = pgTable(
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('wecom_bind_states_hash').on(t.stateHash)],
+);
+
+// ---------- P3-C1：工作跟进 ----------
+
+export const WORK_ITEM_STATUSES = ['active', 'done', 'canceled'] as const;
+
+/** 不占需求编号的工作（技术支持、协调对接等），按组织编号 W-n，可选关联一个产品。 */
+export const workItems = pgTable(
+  'work_items',
+  {
+    id: id(),
+    orgId: orgRef(),
+    productId: uuid('product_id').references(() => products.id),
+    number: integer('number').notNull(),
+    title: text('title').notNull(),
+    /** Markdown，可以 @ 成员。 */
+    description: text('description').notNull().default(''),
+    ownerMemberId: memberRef('owner_member_id'),
+    status: text('status', { enum: WORK_ITEM_STATUSES }).notNull().default('active'),
+    startedOn: date('started_on', { mode: 'string' }),
+    expectedDate: date('expected_date', { mode: 'string' }),
+    /** 进入 done 的时间；改回其他状态时清空。 */
+    doneAt: ts('done_at'),
+    pausedAt: ts('paused_at'),
+    pauseReason: text('pause_reason'),
+    createdBy: memberRef('created_by'),
+    createdAt: createdAt(),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+    deletedAt: ts('deleted_at'),
+  },
+  (t) => [
+    uniqueIndex('work_items_org_number').on(t.orgId, t.number),
+    index('work_items_owner').on(t.ownerMemberId),
+    index('work_items_product').on(t.productId),
+  ],
+);
+
+/** 进展记录：挂在需求或工作项上（恰有一个非空），列表显示最新一条的进展、下一步与跟进人。 */
+export const progressUpdates = pgTable(
+  'progress_updates',
+  {
+    id: id(),
+    orgId: orgRef(),
+    requirementId: uuid('requirement_id').references(() => requirements.id),
+    workItemId: uuid('work_item_id').references(() => workItems.id),
+    body: text('body').notNull(),
+    nextStep: text('next_step'),
+    followerMemberId: memberRef('follower_member_id'),
+    authorMemberId: memberRef('author_member_id'),
+    createdAt: createdAt(),
+    editedAt: ts('edited_at'),
+    deletedAt: ts('deleted_at'),
+  },
+  (t) => [
+    check('progress_updates_subject', sql`(${t.requirementId} is null) <> (${t.workItemId} is null)`),
+    index('progress_updates_requirement').on(t.requirementId, t.createdAt),
+    index('progress_updates_work_item').on(t.workItemId, t.createdAt),
+    index('progress_updates_follower').on(t.followerMemberId),
+  ],
 );

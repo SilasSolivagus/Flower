@@ -1,21 +1,30 @@
-import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import { productRoleOf, visibleProductIds } from '../access/permissions';
 import type { Db } from '../db/client';
-import { checkItemResults, commentReads, comments, documents, iterations, products, requirements, tasks } from '../db/schema';
+import { checkItemResults, commentReads, comments, documents, iterations, products, progressUpdates, requirements, tasks, workItems } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import { documentDisplayKey } from '../documents/markdown';
 import type { Actor } from '../domain-types';
 import { type StateInfo, stateInfoByProduct, stateOf } from '../iterations/iterations';
+import { workItemDisplayKey } from '../links/syntax';
 import { memberNames, productWorkflowBody } from '../requirements/context';
 import { displayKey } from '../requirements/requirements';
 import { checkSnapshots, documentSnapshots, signerIdentity, waitingFor } from '../reviews/snapshot';
 import { hydrateTasks, orgToday, type TaskStatus } from '../tasks/tasks';
 import { listMyOrganizations } from '../tenancy/orgs';
+import { canViewUnlinked } from '../tracking/access';
+import { latestProgressTx } from '../tracking/tracking';
 
 export const WORKBENCH_LIMIT = 100;
 
+/** 工作项在「我负责的」里显示的状态（只列进行中的）。 */
+const WORK_ITEM_STATE: StateInfo = { label: '进行中', color: '#f59e0b', category: 'started' };
+
 export type WorkbenchOrg = { id: string; slug: string; name: string };
-export type WorkbenchRequirement = { org: WorkbenchOrg; id: string; displayKey: string; title: string; state: StateInfo; updatedAt: Date };
+/** 「我负责的」一行：需求或进行中的工作项（P3-C1）。 */
+export type WorkbenchRequirement = { org: WorkbenchOrg; kind: 'requirement' | 'work_item'; id: string; displayKey: string; title: string; state: StateInfo; updatedAt: Date };
+/** 「等我跟进」一行：我是最新一条进展记录的跟进人。at 为该进展的时间。 */
+export type WorkbenchFollowUp = { org: WorkbenchOrg; kind: 'requirement' | 'work_item'; id: string; displayKey: string; title: string; nextStep: string | null; at: Date };
 export type WorkbenchTask = {
   org: WorkbenchOrg;
   id: string;
@@ -59,8 +68,9 @@ export type Workbench = {
   tasks: WorkbenchSection<WorkbenchTask>;
   signatures: WorkbenchSection<WorkbenchSignature>;
   unread: WorkbenchSection<WorkbenchUnread>;
+  following: WorkbenchSection<WorkbenchFollowUp>;
 };
-type OrgPart = { owned: WorkbenchRequirement[]; tasks: WorkbenchTask[]; signatures: WorkbenchSignature[]; unread: WorkbenchUnread[] };
+type OrgPart = { owned: WorkbenchRequirement[]; tasks: WorkbenchTask[]; signatures: WorkbenchSignature[]; unread: WorkbenchUnread[]; following: WorkbenchFollowUp[] };
 
 function section<T>(list: T[], compare: (a: T, b: T) => number): WorkbenchSection<T> {
   return { total: list.length, items: [...list].sort(compare).slice(0, WORKBENCH_LIMIT) };
@@ -108,7 +118,8 @@ async function unreadComments(tx: Tx, actor: Actor, visible: string[], { type, t
 async function orgPart(db: Db, actor: Actor, org: WorkbenchOrg, today: string | undefined): Promise<OrgPart> {
   return withOrg(db, actor.orgId, async (tx) => {
     const visible = [...(await visibleProductIds(tx, actor))];
-    if (visible.length === 0) return { owned: [], tasks: [], signatures: [], unread: [] };
+    const unlinked = canViewUnlinked(actor);
+    if (visible.length === 0 && !unlinked) return { owned: [], tasks: [], signatures: [], unread: [], following: [] };
     const day = today ?? (await orgToday(tx, actor.orgId));
     const prods = await tx.select({ id: products.id, key: products.key }).from(products).where(inArray(products.id, visible));
     const keyOf = new Map(prods.map((p) => [p.id, p.key]));
@@ -119,14 +130,22 @@ async function orgPart(db: Db, actor: Actor, org: WorkbenchOrg, today: string | 
       return category !== 'completed' && category !== 'canceled';
     };
 
-    // 我负责的未完成需求（状态类别按产品工作流判断）
+    // 我负责的未完成需求（状态类别按产品工作流判断）与进行中的工作项（关联产品时须能看到该产品）
     const ownedRows = await tx
       .select()
       .from(requirements)
       .where(and(eq(requirements.ownerMemberId, actor.memberId), isNull(requirements.deletedAt), inArray(requirements.productId, visible)));
-    const owned = ownedRows
-      .filter(isOpen)
-      .map((r) => ({ org, id: r.id, displayKey: keyFor(r), title: r.title, state: stateOf(info, r.productId, r.stateKey), updatedAt: r.updatedAt }));
+    const workScope = or(inArray(workItems.productId, visible), unlinked ? isNull(workItems.productId) : sql`false`);
+    const myWork = await tx
+      .select()
+      .from(workItems)
+      .where(and(eq(workItems.ownerMemberId, actor.memberId), eq(workItems.status, 'active'), isNull(workItems.deletedAt), workScope));
+    const owned: WorkbenchRequirement[] = [
+      ...ownedRows
+        .filter(isOpen)
+        .map((r) => ({ org, kind: 'requirement' as const, id: r.id, displayKey: keyFor(r), title: r.title, state: stateOf(info, r.productId, r.stateKey), updatedAt: r.updatedAt })),
+      ...myWork.map((w) => ({ org, kind: 'work_item' as const, id: w.id, displayKey: workItemDisplayKey(w.number), title: w.title, state: WORK_ITEM_STATE, updatedAt: w.updatedAt })),
+    ];
 
     // 指派给我的未完成任务，排除已取消或已删除迭代里的
     const taskRows = await tx
@@ -251,7 +270,42 @@ async function orgPart(db: Db, actor: Actor, org: WorkbenchOrg, today: string | 
       })),
     ];
 
-    return { owned, tasks: myTasks, signatures, unread };
+    // 等我跟进：每个对象最新一条未删除的进展，跟进人是我，且对象仍在跟进中（需求跟进中、工作项进行中）
+    const mine = await tx
+      .selectDistinct({ requirementId: progressUpdates.requirementId, workItemId: progressUpdates.workItemId })
+      .from(progressUpdates)
+      .where(and(eq(progressUpdates.followerMemberId, actor.memberId), isNull(progressUpdates.deletedAt)));
+    const mineReq = mine.flatMap((m) => (m.requirementId ? [m.requirementId] : []));
+    const mineWork = mine.flatMap((m) => (m.workItemId ? [m.workItemId] : []));
+    const latest = await latestProgressTx(tx, mineReq, mineWork);
+    const mineLatest = (ids: string[]) => ids.flatMap((id) => (latest.get(id)?.followerMemberId === actor.memberId ? [latest.get(id)!] : []));
+    const following: WorkbenchFollowUp[] = [];
+    const reqLatest = mineLatest(mineReq);
+    if (reqLatest.length) {
+      const rows = await tx
+        .select()
+        .from(requirements)
+        .where(and(inArray(requirements.id, reqLatest.map((p) => p.requirementId!)), isNull(requirements.deletedAt), inArray(requirements.productId, visible), isNotNull(requirements.trackedSince)));
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      for (const p of reqLatest) {
+        const r = byId.get(p.requirementId!);
+        if (r && isOpen(r)) following.push({ org, kind: 'requirement', id: r.id, displayKey: keyFor(r), title: r.title, nextStep: p.nextStep, at: p.createdAt });
+      }
+    }
+    const workLatest = mineLatest(mineWork);
+    if (workLatest.length) {
+      const rows = await tx
+        .select()
+        .from(workItems)
+        .where(and(inArray(workItems.id, workLatest.map((p) => p.workItemId!)), isNull(workItems.deletedAt), eq(workItems.status, 'active'), workScope));
+      const byId = new Map(rows.map((w) => [w.id, w]));
+      for (const p of workLatest) {
+        const w = byId.get(p.workItemId!);
+        if (w) following.push({ org, kind: 'work_item', id: w.id, displayKey: workItemDisplayKey(w.number), title: w.title, nextStep: p.nextStep, at: p.createdAt });
+      }
+    }
+
+    return { owned, tasks: myTasks, signatures, unread, following };
   });
 }
 
@@ -273,5 +327,6 @@ export async function getWorkbench(db: Db, accountId: string, opts: { today?: st
     tasks: section(parts.flatMap((p) => p.tasks), (a, b) => (a.planStart ?? '9999-12-31').localeCompare(b.planStart ?? '9999-12-31')),
     signatures: section(parts.flatMap((p) => p.signatures), (a, b) => a.displayKey.localeCompare(b.displayKey, 'zh-CN', { numeric: true })),
     unread: section(parts.flatMap((p) => p.unread), (a, b) => b.lastAt.getTime() - a.lastAt.getTime()),
+    following: section(parts.flatMap((p) => p.following), (a, b) => a.at.getTime() - b.at.getTime()),
   };
 }

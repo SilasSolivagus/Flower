@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { requirementHref, showOrgBadge, signatureHref, taskHref, unreadHref } from './model';
+import { requirementHref, showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref } from './model';
 
 describe('工作台链接', () => {
   const org = { id: 'o1', slug: 'acme', name: '测试组织' };
@@ -26,5 +26,10 @@ describe('工作台链接', () => {
     const u = { org, title: 't', unread: 1, lastAt: '2026-10-09T00:00:00.000Z' };
     expect(unreadHref({ ...u, requirementId: 'r1', documentId: null, displayKey: 'PAN-1' })).toBe('/acme/requirements/PAN-1');
     expect(unreadHref({ ...u, requirementId: null, documentId: 'd1', displayKey: 'PAN-PRD-1' })).toBe('/acme/documents/PAN-PRD-1');
+  });
+
+  it('我负责的与等我跟进：需求去需求详情，工作项去工作项详情', () => {
+    expect(subjectHref({ org, kind: 'requirement', displayKey: 'PAN-3' })).toBe('/acme/requirements/PAN-3');
+    expect(subjectHref({ org, kind: 'work_item', displayKey: 'W-2' })).toBe('/acme/work-items/W-2');
   });
 });

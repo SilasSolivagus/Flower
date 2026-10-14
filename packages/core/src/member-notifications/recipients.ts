@@ -8,9 +8,9 @@ export type Recipient = { id: string; displayName: string; email: string | null;
 
 /**
  * 能收到某产品通知的成员：在职的真人成员，且按组织角色与产品角色能看到该产品（与 productRoleOf 同一口径，不含 Token 范围）。
- * 产品已删除时没有人；productId 为空（组织级，如系统告警）时不看产品。
+ * 产品已删除时没有人；productId 为空（组织级，如系统告警、不关联产品的工作项）时不看产品；excludeGuests 时排除访客。
  */
-export async function eligibleMembersTx(tx: Tx, productId: string | null, ids: string[]): Promise<Map<string, Recipient>> {
+export async function eligibleMembersTx(tx: Tx, productId: string | null, ids: string[], opts: { excludeGuests?: boolean } = {}): Promise<Map<string, Recipient>> {
   const unique = [...new Set(ids)];
   if (unique.length === 0) return new Map();
   if (productId) {
@@ -28,5 +28,10 @@ export async function eligibleMembersTx(tx: Tx, productId: string | null, ids: s
         .where(and(eq(productMembers.productId, productId), inArray(productMembers.memberId, unique)))
     : [];
   const roleOf = new Map(roles.map((r) => [r.memberId, r.role]));
-  return new Map(rows.filter((m) => !productId || baseProductRole(m.orgRole, roleOf.get(m.id) ?? null) !== null).map((m) => [m.id, m]));
+  return new Map(
+    rows
+      .filter((m) => !productId || baseProductRole(m.orgRole, roleOf.get(m.id) ?? null) !== null)
+      .filter((m) => !opts.excludeGuests || m.orgRole !== 'guest')
+      .map((m) => [m.id, m]),
+  );
 }

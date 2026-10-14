@@ -27,9 +27,16 @@ describe('组织', () => {
     expect(defs).toHaveLength(1);
     expect(defs[0]?.currentVersionId).toBeTruthy();
     const fields = await withOrg(t.db, org.id, (tx) => tx.select().from(fieldDefinitions));
-    expect(fields.map((f) => f.key).sort()).toEqual(['line', 'platform', 'priority', 'source']);
+    expect(fields.map((f) => f.key).sort()).toEqual(['line', 'platform', 'priority', 'source', 'type', 'work_type']);
     const opts = await withOrg(t.db, org.id, (tx) => tx.select().from(fieldOptions));
-    expect(opts.sort((a, b) => a.sort - b.sort).map((o) => o.label)).toEqual(['P0', 'P1', 'P2', 'P3']);
+    const labelsOf = (key: string) =>
+      opts
+        .filter((o) => o.fieldId === fields.find((f) => f.key === key)!.id)
+        .sort((a, b) => a.sort - b.sort)
+        .map((o) => o.label);
+    expect(labelsOf('priority')).toEqual(['P0', 'P1', 'P2', 'P3']);
+    expect(labelsOf('type')).toEqual(['新功能', '体验优化', '线上问题']);
+    expect(labelsOf('work_type')).toEqual(['技术支持', '协调对接']);
     const tags = await withOrg(t.db, org.id, (tx) => tx.select().from(functionTags));
     expect(tags.sort((a, b) => a.sort - b.sort).map((x) => x.name)).toEqual(['产品经理', '设计', '开发', '测试']);
   });

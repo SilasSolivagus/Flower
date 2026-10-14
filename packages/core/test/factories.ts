@@ -2,6 +2,7 @@ import type { AccountView } from '../src/auth/accounts';
 import type { Db } from '../src/db/client';
 import type { WorkflowBody } from '../src/definitions/workflow-schema';
 import type { Actor } from '../src/domain-types';
+import { createWorkflowTemplate, setProductWorkflowVersion } from '../src/definitions/workflows';
 import { initializeInstance } from '../src/setup/instance';
 import { type OrgView, resolveActor } from '../src/tenancy/orgs';
 import { createPlaceholderMember } from '../src/tenancy/members';
@@ -121,4 +122,25 @@ export function prdWorkflow(designTagId: string): WorkflowBody {
       },
     ],
   };
+}
+
+/**
+ * 工作跟进测试用的流程：收集（backlog）、设计中（unstarted）、开发中（started）、已上线（completed）、已取消（canceled），
+ * 任意状态之间可以流转；initial 为初始状态。
+ */
+export function trackingWorkflow(initial = 'backlog'): WorkflowBody {
+  const states: WorkflowBody['states'] = [
+    { key: 'backlog', label: '收集', color: '#94a3b8', order: 1, group: '', category: 'backlog' },
+    { key: 'design', label: '设计中', color: '#60a5fa', order: 2, group: '', category: 'unstarted' },
+    { key: 'dev', label: '开发中', color: '#f59e0b', order: 3, group: '', category: 'started' },
+    { key: 'done', label: '已上线', color: '#10b981', order: 4, group: '', category: 'completed' },
+    { key: 'dropped', label: '已取消', color: '#9ca3af', order: 5, group: '', category: 'canceled' },
+  ];
+  return { states, initial, transitions: states.map((s) => ({ from: '*', to: s.key, conditions: [] })), actionGates: [], checkItems: [] };
+}
+
+/** 给产品换上 trackingWorkflow。 */
+export async function applyTrackingWorkflow(db: Db, owner: Actor, productId: string, initial = 'backlog'): Promise<void> {
+  const wf = await createWorkflowTemplate(db, owner, { name: `跟进流程（${initial}）`, body: trackingWorkflow(initial) });
+  await setProductWorkflowVersion(db, owner, productId, wf.version.id);
 }

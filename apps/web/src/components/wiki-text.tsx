@@ -43,13 +43,14 @@ export function LinkChip({ org, card, target, label }: { org: string; card: Link
   );
 }
 
-/** 纯文本（需求描述、评论）的显示：[[ ]] 渲染为链接卡，@ 渲染为成员标签，其余原样（保留换行）。 */
+/** 纯文本（需求描述、评论、工作项描述）的显示：[[ ]] 渲染为链接卡，@ 渲染为成员标签，其余原样（保留换行）。links 为 false 或 productId 为 null 时 [[ ]] 按原文显示。 */
 export function WikiText({
   org,
   text,
   cards,
   productKey,
   productId,
+  links = true,
   as: Tag = 'p',
   className,
 }: {
@@ -57,8 +58,10 @@ export function WikiText({
   text: string;
   cards: LinkCard[];
   productKey: string;
-  /** 正文所在产品：用来取成员的当前姓名与能否看到该产品。 */
-  productId: string;
+  /** 正文所在产品：用来取成员的当前姓名与能否看到该产品；null 为组织级（不关联产品的工作项）。 */
+  productId: string | null;
+  /** 是否把 [[ ]] 渲染为链接卡，默认 true；工作项描述传 false。 */
+  links?: boolean;
   as?: 'p' | 'span';
   className?: string;
 }) {
@@ -69,7 +72,11 @@ export function WikiText({
         s.kind === 'text' ? (
           <Fragment key={i}>{s.text}</Fragment>
         ) : s.kind === 'link' ? (
-          <LinkChip key={i} org={org} card={cardFor(cards, s.link.target, productKey)} target={s.link.target} label={s.link.label} />
+          !links || productId === null ? (
+            <Fragment key={i}>{s.link.raw}</Fragment>
+          ) : (
+            <LinkChip key={i} org={org} card={cardFor(cards, s.link.target, productKey)} target={s.link.target} label={s.link.label} />
+          )
         ) : (
           <MentionChip key={i} mention={s.mention} member={members.data ? (members.data.find((m) => m.id === s.mention.memberId) ?? null) : undefined} />
         ),

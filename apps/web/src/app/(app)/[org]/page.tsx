@@ -5,7 +5,7 @@ import { type ReactNode, useId } from 'react';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
-import { requirementHref, showOrgBadge, signatureHref, taskHref, unreadHref } from '@/features/workbench/model';
+import { showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref } from '@/features/workbench/model';
 import { useWorkbench } from '@/lib/queries';
 import type { Workbench } from '@/lib/types';
 
@@ -33,16 +33,28 @@ function Sections({ data }: { data: Workbench }) {
   const badge = showOrgBadge(data.orgs);
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-      <Section title="我负责的需求" total={data.owned.total} shown={data.owned.items.length} empty="没有进行中的需求">
+      <Section title="我负责的需求与工作项" total={data.owned.total} shown={data.owned.items.length} empty="没有进行中的需求与工作项">
         {data.owned.items.map((r) => (
           <li key={r.id}>
-            <Link href={requirementHref(r.org, r.displayKey)} className={ROW}>
+            <Link href={subjectHref(r)} className={ROW}>
               <OrgBadge show={badge} name={r.org.name} />
               <span className="font-mono text-muted-foreground">{r.displayKey}</span>
               <span className="flex-1 truncate">{r.title}</span>
               <span className="text-xs" style={{ color: r.state.color }}>
                 {r.state.label}
               </span>
+            </Link>
+          </li>
+        ))}
+      </Section>
+      <Section title="等我跟进" total={data.following.total} shown={data.following.items.length} empty="没有等你跟进的条目">
+        {data.following.items.map((f) => (
+          <li key={f.id}>
+            <Link href={subjectHref(f)} className={ROW}>
+              <OrgBadge show={badge} name={f.org.name} />
+              <span className="font-mono text-muted-foreground">{f.displayKey}</span>
+              <span className="flex-1 truncate">{f.title}</span>
+              {f.nextStep && <span className="max-w-48 truncate text-xs text-muted-foreground">{f.nextStep}</span>}
             </Link>
           </li>
         ))}
@@ -99,7 +111,7 @@ export default function WorkbenchPage() {
   else body = <Skeleton className="h-64" />;
   return (
     <>
-      <PageHeader title="工作台" description="汇总你在所有组织里负责的需求、指派给你的任务、等你签字的检查项和未读评论。" />
+      <PageHeader title="工作台" description="汇总你在所有组织里负责的需求与工作项、等你跟进的条目、指派给你的任务、等你签字的检查项和未读评论。" />
       {body}
     </>
   );

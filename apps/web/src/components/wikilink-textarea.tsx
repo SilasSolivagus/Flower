@@ -11,8 +11,13 @@ const DEBOUNCE_MS = 150;
 
 type Props = Omit<ComponentProps<typeof Textarea>, 'value' | 'onChange'> & {
   org: string;
-  /** 来源所在产品：[[ 补全按它决定本产品优先与是否带产品前缀；@ 补全按它标出看不到该产品的成员。 */
-  productId: string;
+  /**
+   * 来源所在产品：[[ 补全按它决定本产品优先与是否带产品前缀；@ 补全按它标出看不到该产品的成员。
+   * 为 null 时（不关联产品的工作项）@ 取组织级成员（访客标为看不到）。
+   */
+  productId: string | null;
+  /** 是否做 [[ ]] 补全，默认 true；工作项描述传 false（工作项不支持双链）。productId 为 null 时也不做。 */
+  links?: boolean;
   value: string;
   onValueChange: (value: string) => void;
   /** 补全列表的打开状态变化：用于宿主把 Esc 只关掉列表、不关掉外层对话框。 */
@@ -26,13 +31,13 @@ type Option = { key: string; kind: string; main: string; mono: boolean; title: s
  * 纯文本输入框加补全：[[ 按编号前缀或标题搜索（防抖 150ms）；@ 按姓名或邮箱在本组织成员里筛选。
  * 上下键选择、回车插入、Esc 关闭；输入法组字时回车不插入。
  */
-export function WikilinkTextarea({ org, productId, value, onValueChange, onOpenChange, onKeyDown, onBlur, className, ...rest }: Props) {
+export function WikilinkTextarea({ org, productId, links = true, value, onValueChange, onOpenChange, onKeyDown, onBlur, className, ...rest }: Props) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const listId = useId();
   const [caret, setCaret] = useState(0);
   const [dismissed, setDismissed] = useState<number | null>(null);
   const [active, setActive] = useState(0);
-  const wiki = activeWikiQuery(value, caret);
+  const wiki = links && productId ? activeWikiQuery(value, caret) : null;
   const mention = wiki ? null : activeMentionQuery(value, caret);
   const start = wiki?.start ?? mention?.start ?? null;
   const open = start !== null && dismissed !== start;
@@ -53,7 +58,7 @@ export function WikilinkTextarea({ org, productId, value, onValueChange, onOpenC
     return () => clearTimeout(timer);
   }, [query]);
 
-  const search = useLinkSearch(org, productId, debouncedQuery, open && wiki !== null);
+  const search = useLinkSearch(org, productId ?? '', debouncedQuery, open && wiki !== null);
   const members = useMentionMembers(org, productId);
   const options: Option[] = !open
     ? []

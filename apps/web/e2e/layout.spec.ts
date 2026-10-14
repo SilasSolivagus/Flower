@@ -72,6 +72,7 @@ test('工作台：800px 下四个区块单列排列、标题不被挤没；1440p
 
   await login(page, OWNER.email, OWNER.password);
   const owned = page.getByRole('region', { name: /我负责的需求/ });
+  const following = page.getByRole('region', { name: /等我跟进/ });
   const tasks = page.getByRole('region', { name: /我的任务/ });
   const sign = page.getByRole('region', { name: /等我签字/ });
 
@@ -79,12 +80,13 @@ test('工作台：800px 下四个区块单列排列、标题不被挤没；1440p
   await page.goto('/acme');
   await expect(sign.getByRole('link')).toHaveCount(2);
   const a = (await owned.boundingBox())!;
-  const b = (await tasks.boundingBox())!;
+  const b = (await following.boundingBox())!;
   expect(b.y).toBeGreaterThanOrEqual(a.y + a.height);
   for (const title of await sign.getByText(LONG, { exact: true }).all()) expect((await title.boundingBox())!.width).toBeGreaterThanOrEqual(200);
   await expectNoPageOverflow(page);
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect.poll(async () => Math.abs((await owned.boundingBox())!.y - (await tasks.boundingBox())!.y)).toBeLessThan(1);
+  await expect.poll(async () => Math.abs((await owned.boundingBox())!.y - (await following.boundingBox())!.y)).toBeLessThan(1);
+  await expect.poll(async () => Math.abs((await tasks.boundingBox())!.y - (await sign.boundingBox())!.y)).toBeLessThan(1);
   await expectNoPageOverflow(page);
 });

@@ -60,7 +60,9 @@ async function processEventTx(tx: Tx, ev: EventRow, slug: string): Promise<{ cre
   const plan = await planEventTx(tx, ev, slug);
   if (!plan) return { created: 0, outbound: [] };
   const chosen = pickRecipients(plan.candidates, ev.actorMemberId);
-  const eligible = await eligibleMembersTx(tx, plan.subject.productId, [...chosen.keys(), ...plan.autoSubscribe]);
+  // 不关联产品的工作项：任何非访客成员都能看到，访客看不到
+  const excludeGuests = plan.subject.type === 'work_item' && plan.subject.productId === null;
+  const eligible = await eligibleMembersTx(tx, plan.subject.productId, [...chosen.keys(), ...plan.autoSubscribe], { excludeGuests });
   const recipients = [...chosen.values()].filter((c) => eligible.has(c.memberId));
   const prefs = await prefsForTx(tx, recipients.map((c) => c.memberId));
   const [actor] = ev.actorMemberId ? await tx.select({ name: members.displayName }).from(members).where(eq(members.id, ev.actorMemberId)) : [];
@@ -104,7 +106,7 @@ async function processEventTx(tx: Tx, ev: EventRow, slug: string): Promise<{ cre
     }
   }
   const type = plan.subject.type;
-  if (type === 'requirement' || type === 'document') {
+  if (type === 'requirement' || type === 'document' || type === 'work_item') {
     await autoSubscribeTx(tx, ev.orgId, { type, id: plan.subject.id }, plan.autoSubscribe.filter((id) => eligible.has(id)));
   }
   return { created, outbound };

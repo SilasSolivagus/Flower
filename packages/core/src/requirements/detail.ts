@@ -26,6 +26,7 @@ import { AppError } from '../errors';
 import { joinIterationUnmet } from '../iterations/membership';
 import { type LinkCard, linkCardsFor, sourceKey } from '../links/cards';
 import { taskDisplayKey } from '../links/syntax';
+import { type RequirementTracking, trackingView } from '../tracking/requirement-tracking';
 import { buildCheckItemViews, type CheckItemView, requirementCheckStates } from './check-views';
 import { effectiveFields, memberNames, productWorkflowBody } from './context';
 import { displayKey, hydrateList, type MemberRef, type OptionRef, type RequirementListItem } from './requirements';
@@ -56,6 +57,8 @@ export type RequirementDetail = RequirementListItem & {
   releases: Array<{ id: string; versionName: string; platform: OptionRef | null; status: 'planned' | 'released'; releasedAt: Date | null }>;
   tasks: Array<{ id: string; displayKey: string; title: string; assignee: MemberRef | null; status: 'todo' | 'doing' | 'done'; planStart: string | null; planDays: number | null }>;
   aliases: string[];
+  /** 跟进：加入时间、是否跟进中、预计上线日期、暂停（P3-C1）。 */
+  tracking: RequirementTracking;
 };
 
 async function resolveKey(tx: Tx, key: string): Promise<typeof requirements.$inferSelect> {
@@ -212,6 +215,7 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
         planDays: x.planDays,
       })),
       aliases: aliasRows.map((a) => a.alias).sort(),
+      tracking: trackingView(row, body.states.find((s) => s.key === row.stateKey)?.category ?? 'backlog'),
     };
   });
 }

@@ -10,6 +10,7 @@ import { createDocument } from '../src/documents/documents';
 import type { Actor } from '../src/domain-types';
 import { createIteration, setIterationStatus } from '../src/iterations/iterations';
 import { setRequirementIteration } from '../src/iterations/membership';
+import { isNotifiableEventType } from '../src/notifications/constants';
 import { createChannel } from '../src/notifications/channels';
 import { DASHBOARD_IMAGE_MAX_BYTES, FONT_MISSING, fontDir, wecomImagePayload } from '../src/notifications/dashboard-image';
 import { listDeliveries } from '../src/notifications/deliveries';
@@ -88,7 +89,7 @@ describe('事件消息的数据', () => {
     await setRequirementIteration(t.db, owner, req.id, { iterationId: i2.id });
     const events = await t.adminDb.select().from(domainEvents).where(eq(domainEvents.subjectId, req.id)).orderBy(domainEvents.occurredAt);
     const tones: string[] = [];
-    for (const ev of events.filter((e) => e.type !== 'requirement.field_changed' || (e.payload.changes as Array<{ field: string }>)[0]?.field === 'priority')) {
+    for (const ev of events.filter((e) => isNotifiableEventType(e.type) && (e.type !== 'requirement.field_changed' || (e.payload.changes as Array<{ field: string }>)[0]?.field === 'priority'))) {
       const d = await withOrg(t.db, owner.orgId, async (tx) => eventMessageDataTx(tx, ev.id, await orgContextTx(tx, owner.orgId, TEST_DEPS.publicUrl)));
       tones.push(`${d.event.label}${d.changes.map((c) => ` ${c.old}→${c.new}`).join('')}:${d.event.tone}`);
     }

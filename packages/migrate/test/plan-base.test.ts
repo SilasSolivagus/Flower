@@ -47,6 +47,10 @@ describe('导入计划：基础部分', () => {
     expect(opt('priority')).toEqual(['P0', 'P1', 'P2', 'P3', '绿色通道']);
     expect(opt('platform')).toEqual(expect.arrayContaining(['PC客户端', '移动端', 'Web端', '小程序', '鸿蒙']));
     expect(opt('line')).toEqual(['功能', '商业']);
+    expect(opt('type')).toEqual(['新功能', '体验优化', '线上问题']);
+    expect(opt('work_type')).toEqual(['技术支持', '协调对接']);
+    expect(rows.fieldDefinitions.find((f) => f.key === 'work_type')).toMatchObject({ appliesTo: 'work_item', builtin: true });
+    expect(rows.fieldDefinitions.find((f) => f.key === 'priority')).toMatchObject({ appliesTo: 'requirement' });
   });
 
   it('结构树第一层来自业务域对照表', () => {

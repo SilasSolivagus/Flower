@@ -6,6 +6,7 @@ import {
   addRequirementComment,
   attachments,
   apiTokens,
+  blockers,
   comments,
   createDocument,
   createLocalStorage,
@@ -38,17 +39,19 @@ import {
   notificationDigestItems,
   notificationRules,
   notificationSchedules,
+  progressUpdates,
   readAttachment,
   requirements,
   resolveActor,
   subscriptions,
   tasks,
   wecomApps,
+  workItems,
   workflowDefinitions,
 } from '@flower/core';
 import { createTestDb } from '@flower/core/testing';
 import { seedInstance } from '@flower/core/testing/factories';
-import { and, desc, eq, isNotNull } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildImportPlan } from '../src/plan';
 import type { ImportOptions } from '../src/plan-types';
@@ -130,6 +133,11 @@ describe('写入数据库', () => {
     await t.adminDb.insert(subscriptions).values({ orgId: actor.orgId, memberId: actor.memberId, subjectType: 'requirement', subjectId: created.id, source: 'manual' });
     await t.adminDb.insert(wecomApps).values({ orgId: actor.orgId, corpId: 'ww1', agentId: '1', secret: 'v1:x', secretHint: '****' });
 
+    const [wi] = await t.adminDb.insert(workItems).values({ orgId: actor.orgId, number: 1, title: '导入后工作项', createdBy: actor.memberId }).returning();
+    await t.adminDb.insert(progressUpdates).values({ orgId: actor.orgId, workItemId: wi!.id, body: '工作项进展', authorMemberId: actor.memberId });
+    await t.adminDb.insert(progressUpdates).values({ orgId: actor.orgId, requirementId: created.id, body: '需求进展', authorMemberId: actor.memberId });
+    await t.adminDb.insert(blockers).values({ orgId: actor.orgId, workItemId: wi!.id, description: '工作项阻塞' });
+
     await writeImport(t.adminDb, plan, { replace: true });
 
     const after = (await resolveActor(t.db, opts.owner!.accountId, 'pan123'))!;
@@ -146,6 +154,8 @@ describe('写入数据库', () => {
       expect(await t.adminDb.select().from(table)).toEqual([]);
     }
     for (const table of [memberNotifications, subscriptions, wecomApps]) expect(await t.adminDb.select().from(table)).toEqual([]);
+    for (const table of [workItems, progressUpdates]) expect(await t.adminDb.select().from(table)).toEqual([]);
+    expect(await t.adminDb.select().from(blockers).where(isNotNull(blockers.workItemId))).toEqual([]);
     const [cursor] = await t.adminDb.select().from(notificationCursors).where(eq(notificationCursors.orgId, after.orgId));
     const [latest] = await t.adminDb.select({ id: domainEvents.id }).from(domainEvents).where(eq(domainEvents.orgId, after.orgId)).orderBy(desc(domainEvents.occurredAt), desc(domainEvents.id)).limit(1);
     expect(cursor!.lastEventId).toBe(latest!.id);
@@ -263,6 +273,21 @@ describe('写入数据库', () => {
     const schedules = await listSchedules(t.db, actor);
     expect(schedules.every((s) => s.nextRunAt === null)).toBe(true);
     expect(await t.adminDb.select().from(notificationDeliveries)).toHaveLength(2);
+  });
+
+  it('导入后为处于未开始、进行中类别的需求回填加入跟进的时间', async () => {
+    const [row] = (await t.adminDb.execute(sql`
+      with st as (
+        select p.id as product_id, s->>'key' as key, s->>'category' as category
+        from products p join organizations o on o.id = p.org_id and o.slug = 'pan123'
+        join workflow_versions v on v.id = p.workflow_version_id, jsonb_array_elements(v.body->'states') s
+      )
+      select count(*) filter (where st.category in ('unstarted', 'started'))::int as expected,
+             count(r.tracked_since)::int as tracked
+      from requirements r join st on st.product_id = r.product_id and st.key = r.state_key
+      where r.deleted_at is null`)) as unknown as [{ expected: number; tracked: number }];
+    expect(row.expected).toBeGreaterThan(0);
+    expect(row.tracked).toBe(row.expected);
   });
 });
 
