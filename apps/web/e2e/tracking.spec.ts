@@ -181,6 +181,10 @@ test('需求详情：跟进区块加入与移出、预计上线日期、暂停�
   await panel.getByRole('button', { name: '恢复' }).click();
   await expect(panel).not.toContainText('已暂停');
 
+  await page.getByLabel('写评论').fill('未发送的草稿');
+  await page.getByRole('tab', { name: '进展记录' }).click();
+  await page.getByRole('tab', { name: '评论' }).click();
+  await expect(page.getByLabel('写评论')).toHaveValue('未发送的草稿');
   await page.getByRole('tab', { name: '进展记录' }).click();
   const progress = page.getByRole('region', { name: /^进展记录/ });
   await progress.getByRole('button', { name: '写进展' }).click();

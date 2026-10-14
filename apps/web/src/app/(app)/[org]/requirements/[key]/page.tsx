@@ -123,10 +123,10 @@ export default function RequirementPage() {
               <TabsTrigger value="comments">评论</TabsTrigger>
               <TabsTrigger value="progress">进展记录</TabsTrigger>
             </TabsList>
-            <TabsContent value="comments">
+            <TabsContent value="comments" forceMount className="data-[state=inactive]:hidden">
               <Comments org={org} requirementId={r.id} productId={r.productId} productKey={r.productKey} />
             </TabsContent>
-            <TabsContent value="progress">
+            <TabsContent value="progress" forceMount className="data-[state=inactive]:hidden">
               <ProgressList
                 org={org}
                 target={{ type: 'requirement', id: r.id, displayKey: r.displayKey, title: r.title, expectedDate: r.tracking.expectedDate, canEditDate: canEdit }}

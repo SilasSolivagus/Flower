@@ -169,6 +169,7 @@ describe('工作项接口', () => {
     expect(members.status).toBe(200);
     expect(members.body.members.find((m: { id: string }) => m.id === ids.guest).canSeeProduct).toBe(false);
     expect((await call(app, 'GET', '/orgs/acme/mention-members', who.guest!)).status).toBe(403);
+    expect((await call(app, 'GET', '/orgs/acme/mention-members', who.panToken!)).status).toBe(403);
   });
 });
 
