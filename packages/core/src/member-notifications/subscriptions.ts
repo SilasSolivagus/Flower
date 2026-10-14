@@ -7,20 +7,27 @@ import type { Actor } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
 import type { SubscriptionSource, SubscriptionSubjectType } from '../notifications/constants';
+import { loadWorkItemTx, requireWorkItemAccess } from '../tracking/access';
 
 export type SubscriptionSubject = { type: SubscriptionSubjectType; id: string };
 export type SubscriptionView = { following: boolean; source: SubscriptionSource | null; reason: string | null };
 
 const S = subscriptions;
 
-/** 关注对象的产品与负责人；不存在或已删除时报「不存在」。 */
-async function loadSubjectTx(tx: Tx, s: SubscriptionSubject): Promise<{ productId: string; ownerMemberId: string | null }> {
+/** 关注对象的产品与负责人，并确认操作者能看到它；不存在、已删除或看不到时报「不存在」。 */
+async function loadVisibleSubjectTx(tx: Tx, actor: Actor, s: SubscriptionSubject): Promise<{ productId: string | null; ownerMemberId: string | null }> {
+  if (s.type === 'work_item') {
+    const item = await loadWorkItemTx(tx, s.id);
+    await requireWorkItemAccess(tx, actor, item, 'view');
+    return { productId: item.productId, ownerMemberId: item.ownerMemberId };
+  }
   if (s.type === 'requirement') {
     const [r] = await tx
       .select({ productId: requirements.productId, ownerMemberId: requirements.ownerMemberId })
       .from(requirements)
       .where(and(eq(requirements.id, s.id), isNull(requirements.deletedAt)));
     if (!r) throw new AppError('not_found', '需求不存在');
+    await requireProductRole(tx, actor, r.productId, 'viewer');
     return r;
   }
   const [d] = await tx
@@ -28,6 +35,7 @@ async function loadSubjectTx(tx: Tx, s: SubscriptionSubject): Promise<{ productI
     .from(documents)
     .where(and(eq(documents.id, s.id), isNull(documents.deletedAt)));
   if (!d) throw new AppError('not_found', 'PRD 不存在');
+  await requireProductRole(tx, actor, d.productId, 'viewer');
   return d;
 }
 
@@ -35,6 +43,7 @@ async function loadSubjectTx(tx: Tx, s: SubscriptionSubject): Promise<{ productI
 async function reasonTx(tx: Tx, memberId: string, s: SubscriptionSubject, source: SubscriptionSource, ownerMemberId: string | null): Promise<string> {
   if (source === 'manual') return '你手动关注了';
   if (ownerMemberId === memberId) return '你是负责人';
+  if (s.type === 'work_item') return '你曾负责或被 @';
   if (s.type === 'requirement') {
     const [a] = await tx
       .select({ id: requirementAssignments.id })
@@ -63,8 +72,7 @@ async function viewTx(tx: Tx, memberId: string, s: SubscriptionSubject, ownerMem
 
 export async function getSubscription(db: Db, actor: Actor, s: SubscriptionSubject): Promise<SubscriptionView> {
   return withOrg(db, actor.orgId, async (tx) => {
-    const subj = await loadSubjectTx(tx, s);
-    await requireProductRole(tx, actor, subj.productId, 'viewer');
+    const subj = await loadVisibleSubjectTx(tx, actor, s);
     return viewTx(tx, actor.memberId, s, subj.ownerMemberId);
   });
 }
@@ -73,8 +81,7 @@ export async function getSubscription(db: Db, actor: Actor, s: SubscriptionSubje
 export async function setSubscription(db: Db, actor: Actor, s: SubscriptionSubject, following: boolean): Promise<SubscriptionView> {
   if (actor.tokenScope?.access === 'read') throw new AppError('forbidden', '只读 Token 不能修改关注');
   return withOrg(db, actor.orgId, async (tx) => {
-    const subj = await loadSubjectTx(tx, s);
-    await requireProductRole(tx, actor, subj.productId, 'viewer');
+    const subj = await loadVisibleSubjectTx(tx, actor, s);
     const now = new Date();
     await tx
       .insert(S)

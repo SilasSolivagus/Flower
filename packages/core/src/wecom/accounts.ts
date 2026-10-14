@@ -7,6 +7,7 @@ import type { Actor } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
 import { recordEvent } from '../events';
 import { WECOM_USERID_RE } from '../notifications/constants';
+import { canViewUnlinked } from '../tracking/access';
 
 export const WECOM_USERID_FORMAT = '企业微信账号格式不正确：1–64 位字母、数字或 _ . @ -';
 const MAX_CSV_CHARS = 200_000;
@@ -156,16 +157,20 @@ export async function applyWecomImport(db: Db, actor: Actor, csv: string): Promi
 
 export type MentionMember = { id: string; displayName: string; email: string | null; status: 'active' | 'left'; wecomBound: boolean; canSeeProduct: boolean };
 
-/** 组织的全部真人成员（含已离开，用于显示灰色原名）；能否看到该产品按组织角色与产品角色计算。访客调用时不返回邮箱。 */
-export async function listMentionMembers(db: Db, actor: Actor, productId: string): Promise<MentionMember[]> {
+/**
+ * 组织的全部真人成员（含已离开，用于显示灰色原名）；能否看到该产品按组织角色与产品角色计算。
+ * productId 为 null 时用于不关联产品的工作项：能看到 = 在职的非访客；访客不能读取（403）。访客调用时不返回邮箱。
+ */
+export async function listMentionMembers(db: Db, actor: Actor, productId: string | null): Promise<MentionMember[]> {
   return withOrg(db, actor.orgId, async (tx) => {
-    await requireProductRole(tx, actor, productId, 'viewer');
+    if (productId) await requireProductRole(tx, actor, productId, 'viewer');
+    else if (!canViewUnlinked(actor)) throw new AppError('forbidden', '访客无权查看此内容');
     const rows = await tx
       .select({ id: members.id, displayName: members.displayName, email: members.email, status: members.status, orgRole: members.orgRole, wecomUserid: members.wecomUserid })
       .from(members)
       .where(eq(members.kind, 'human'))
       .orderBy(asc(members.displayName));
-    const roles = await tx.select({ memberId: productMembers.memberId, role: productMembers.role }).from(productMembers).where(eq(productMembers.productId, productId));
+    const roles = productId ? await tx.select({ memberId: productMembers.memberId, role: productMembers.role }).from(productMembers).where(eq(productMembers.productId, productId)) : [];
     const roleOf = new Map(roles.map((r) => [r.memberId, r.role]));
     const hideEmail = actor.orgRole === 'guest';
     return rows.map((m) => ({
@@ -174,7 +179,7 @@ export async function listMentionMembers(db: Db, actor: Actor, productId: string
       email: hideEmail ? null : m.email,
       status: m.status,
       wecomBound: m.wecomUserid !== null,
-      canSeeProduct: m.status === 'active' && baseProductRole(m.orgRole, roleOf.get(m.id) ?? null) !== null,
+      canSeeProduct: m.status === 'active' && (productId ? baseProductRole(m.orgRole, roleOf.get(m.id) ?? null) !== null : m.orgRole !== 'guest'),
     }));
   });
 }

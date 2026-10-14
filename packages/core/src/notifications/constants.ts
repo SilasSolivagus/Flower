@@ -93,10 +93,10 @@ export const MEMBER_NOTIFICATION_KIND_LABELS: Record<MemberNotificationKind, str
 /** 同一事件同一人只发一条，取排名最高的一种；系统告警没有事件，不参与比较。 */
 export const MEMBER_NOTIFICATION_RANK: Record<MemberNotificationKind, number> = { mentioned: 4, assigned: 3, signoff_due: 2, followed_change: 1, system_alert: 0 };
 
-export const NOTIFICATION_SUBJECT_TYPES = ['requirement', 'document', 'task', 'schedule'] as const;
+export const NOTIFICATION_SUBJECT_TYPES = ['requirement', 'document', 'task', 'schedule', 'work_item'] as const;
 export type NotificationSubjectType = (typeof NOTIFICATION_SUBJECT_TYPES)[number];
 /** 可以关注的对象。 */
-export const SUBSCRIPTION_SUBJECT_TYPES = ['requirement', 'document'] as const;
+export const SUBSCRIPTION_SUBJECT_TYPES = ['requirement', 'document', 'work_item'] as const;
 export type SubscriptionSubjectType = (typeof SUBSCRIPTION_SUBJECT_TYPES)[number];
 export const SUBSCRIPTION_SOURCES = ['auto', 'manual'] as const;
 export type SubscriptionSource = (typeof SUBSCRIPTION_SOURCES)[number];
