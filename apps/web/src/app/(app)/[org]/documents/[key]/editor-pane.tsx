@@ -14,7 +14,7 @@ import { type SelectionAnchor, selectionAnchor } from '@/features/documents/edit
 import { uploadDataImages } from '@/features/documents/import';
 import { editorAnchors, findSectionIndex, type SaveState, saveStateLabel } from '@/features/documents/model';
 import { ApiError, api, apiUpload } from '@/lib/api';
-import { linkKeys, qk, useApiMutation, useDocumentComments, useDocumentLinks, useMentionMembers } from '@/lib/queries';
+import { briefKeys, linkKeys, qk, useApiMutation, useDocumentComments, useDocumentLinks, useMentionMembers } from '@/lib/queries';
 import type { Attachment, DocumentDetail, LinkSuggestion } from '@/lib/types';
 import { AnchorCommentDialog } from './comments';
 
@@ -114,7 +114,7 @@ export function EditorPane({
       }))),
     {
       silentError: true,
-      invalidate: [qk.documentRevisions(org, doc.id), linkKeys(org)],
+      invalidate: [qk.documentRevisions(org, doc.id), linkKeys(org), briefKeys(org)],
       // 只把这次保存的结果写进缓存里的详情，不重新拉取整篇正文
       onSuccess: (r) =>
         qc.setQueryData<{ document: DocumentDetail }>(qk.document(org, doc.displayKey), (old) =>
