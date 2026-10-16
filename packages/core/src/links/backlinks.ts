@@ -3,7 +3,7 @@ import { productRoleOf, visibleProductIds } from '../access/permissions';
 import type { Db } from '../db/client';
 import { comments, documents, entityLinks, products, requirements, tasks } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
-import { documentDisplayKey } from '../documents/markdown';
+import { documentKeyOf } from '../documents/markdown';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { loadVisibleIteration } from '../iterations/iterations';
@@ -77,7 +77,7 @@ export async function listBacklinks(db: Db, actor: Actor, target: { type: Backli
     }
     for (const d of docRows) {
       if (!(await canSee(d.productId))) continue;
-      const key = documentDisplayKey(keyOf.get(d.productId)!, d.number);
+      const key = documentKeyOf(d.kind, keyOf.get(d.productId)!, d.number);
       heads.set(`document:${d.id}`, { kind: 'document', id: d.id, displayKey: key, title: d.title, href: `documents/${key}` });
     }
     const groups = new Map<string, BacklinkGroup>();

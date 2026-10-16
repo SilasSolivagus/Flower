@@ -71,6 +71,8 @@ export * from './storage';
 export * from './documents/templates';
 export * from './documents/attachments';
 export * from './documents/documents';
+export * from './documents/brief-header';
+export * from './documents/briefs';
 export * from './documents/comments';
 export * from './documents/coverage';
 export * from './documents/checks';

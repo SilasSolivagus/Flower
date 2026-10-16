@@ -3,7 +3,7 @@ import { productRoleOf, visibleProductIds } from '../access/permissions';
 import type { Db } from '../db/client';
 import { documentRevisions, documents, entityLinks, iterations, products, requirements, structureNodes, tasks } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
-import { DOCUMENT_STATUS_LABELS, documentDisplayKey, normalizeHeading, splitSections } from '../documents/markdown';
+import { DOCUMENT_STATUS_LABELS, documentDisplayKey, documentKeyOf, normalizeHeading, splitSections } from '../documents/markdown';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { ITERATION_STATUS_LABELS, stateInfoByProduct, stateOf } from '../iterations/iterations';
@@ -73,7 +73,7 @@ async function loadTargets(tx: Tx, rows: LinkRow[]): Promise<Map<string, Target>
     const revs = revIds.length > 0 ? await tx.select({ id: documentRevisions.id, snapshot: documentRevisions.snapshot }).from(documentRevisions).where(inArray(documentRevisions.id, revIds)) : [];
     const headingsOf = new Map(revs.map((v) => [v.id, splitSections(v.snapshot.markdown).flatMap((s) => (s.heading ? [normalizeHeading(s.heading)] : []))]));
     for (const d of ds) {
-      const key = documentDisplayKey(keyOf.get(d.productId)!, d.number);
+      const key = documentKeyOf(d.kind, keyOf.get(d.productId)!, d.number);
       out.set(`document:${d.id}`, {
         productId: d.productId,
         numbered: true,

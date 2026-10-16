@@ -3,7 +3,7 @@ import { productRoleOf, visibleProductIds } from '../access/permissions';
 import type { Db } from '../db/client';
 import { checkItemResults, commentReads, comments, documents, iterations, products, progressUpdates, requirements, tasks, workItems } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
-import { documentDisplayKey } from '../documents/markdown';
+import { documentDisplayKey, documentKeyOf } from '../documents/markdown';
 import type { Actor } from '../domain-types';
 import { type StateInfo, stateInfoByProduct, stateOf } from '../iterations/iterations';
 import { workItemDisplayKey } from '../links/syntax';
@@ -248,7 +248,10 @@ async function orgPart(db: Db, actor: Actor, org: WorkbenchOrg, today: string | 
       }
     }
 
-    // 我负责的、或我评论过的需求与 PRD 上别人发的、我还没读的评论
+    // 我负责的、或我评论过的需求与 PRD 上别人发的、我还没读的评论（简报也算文档，编号按类型显示）
+    const docUnread = await unreadComments(tx, actor, visible, { type: 'document', table: documents });
+    const docKinds = docUnread.length > 0 ? await tx.select({ id: documents.id, kind: documents.kind }).from(documents).where(inArray(documents.id, docUnread.map((u) => u.id))) : [];
+    const kindOf = new Map(docKinds.map((d) => [d.id, d.kind]));
     const unread: WorkbenchUnread[] = [
       ...(await unreadComments(tx, actor, visible, { type: 'requirement', table: requirements })).map((u) => ({
         org,
@@ -259,11 +262,11 @@ async function orgPart(db: Db, actor: Actor, org: WorkbenchOrg, today: string | 
         unread: u.unread,
         lastAt: u.lastAt,
       })),
-      ...(await unreadComments(tx, actor, visible, { type: 'document', table: documents })).map((u) => ({
+      ...docUnread.map((u) => ({
         org,
         requirementId: null,
         documentId: u.id,
-        displayKey: documentDisplayKey(keyOf.get(u.productId)!, u.number),
+        displayKey: documentKeyOf(kindOf.get(u.id)!, keyOf.get(u.productId)!, u.number),
         title: u.title,
         unread: u.unread,
         lastAt: u.lastAt,
