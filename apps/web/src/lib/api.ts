@@ -44,6 +44,22 @@ export async function apiUpload<T>(path: string, file: Blob, filename: string): 
   return send<T>(path, { method: 'POST', body: form });
 }
 
+/** 读取文本响应（如简报的 Markdown 上下文）。出错时与 api 一样抛 ApiError。 */
+export async function apiText(path: string): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(`/api/v1${path}`, { credentials: 'same-origin' });
+  } catch {
+    throw new ApiError(0, 'network', NETWORK_ERROR_MESSAGE, null);
+  }
+  if (!res.ok) {
+    const data = (await res.json().catch(() => null)) as { error?: { code?: string; message?: string; details?: unknown } } | null;
+    const e = data?.error;
+    throw new ApiError(res.status, e?.code ?? 'internal', e?.message ?? '服务暂时不可用，请稍后重试', e?.details ?? null);
+  }
+  return res.text();
+}
+
 /** 「条件未满足」类错误的 details.unmet；其他形状返回空数组。 */
 export function unmetFrom(details: unknown): string[] {
   const list = (details as { unmet?: unknown } | null)?.unmet;

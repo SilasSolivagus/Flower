@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -17,17 +18,33 @@ import { Textarea } from '@/components/ui/textarea';
 import { sectionsFromBody } from '@/features/documents/model';
 import { api } from '@/lib/api';
 import { templateKeys, useApiMutation, useTemplates } from '@/lib/queries';
-import type { DocumentTemplate, TemplateSection } from '@/lib/types';
+import type { DocumentTemplate, TemplateKind, TemplateSection } from '@/lib/types';
 
-function TemplateDialog({ org, productId, template, onClose }: { org: string; productId: string | null; template: DocumentTemplate | null; onClose: () => void }) {
+const KIND_LABEL: Record<TemplateKind, string> = { change: 'PRD 模板', brief: '简报模板' };
+const KINDS: TemplateKind[] = ['change', 'brief'];
+
+function TemplateDialog({
+  org,
+  productId,
+  kind,
+  template,
+  onClose,
+}: {
+  org: string;
+  productId: string | null;
+  kind: TemplateKind;
+  template: DocumentTemplate | null;
+  onClose: () => void;
+}) {
   const [name, setName] = useState(template?.name ?? '');
   const [body, setBody] = useState(template?.body ?? '');
+  const [guidance, setGuidance] = useState(template?.guidance ?? '');
   const [sections, setSections] = useState<TemplateSection[]>(template?.sections ?? []);
   const save = useApiMutation(
     () =>
       template
-        ? api(`/orgs/${org}/templates/${template.id}`, { method: 'PATCH', body: { name, body, sections } })
-        : api(`/orgs/${org}/templates`, { method: 'POST', body: { productId, name, body, sections } }),
+        ? api(`/orgs/${org}/templates/${template.id}`, { method: 'PATCH', body: { name, body, sections, guidance } })
+        : api(`/orgs/${org}/templates`, { method: 'POST', body: { productId, kind, name, body, sections, guidance } }),
     { silentError: true, invalidate: [templateKeys(org)], success: '已保存模板', onSuccess: onClose },
   );
   const update = (i: number, patch: Partial<TemplateSection>) => setSections((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)));
@@ -40,6 +57,11 @@ function TemplateDialog({ org, productId, template, onClose }: { org: string; pr
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="tpl-name">模板名称</Label>
           <Input id="tpl-name" maxLength={50} value={name} onChange={(e) => setName(e.target.value)} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="tpl-guidance">模板说明</Label>
+          <Textarea id="tpl-guidance" className="min-h-20 text-[13px]" maxLength={2000} value={guidance} onChange={(e) => setGuidance(e.target.value)} />
+          <span className="text-xs text-muted-foreground">选填。显示在用这份模板写的文档的编辑器上方。</span>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="tpl-body">模板正文</Label>
@@ -58,7 +80,9 @@ function TemplateDialog({ org, productId, template, onClose }: { org: string; pr
               </Button>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">提交评审时检查必填小节：标题存在，且内容不只是模板原文。</p>
+          <p className="text-xs text-muted-foreground">
+            {kind === 'brief' ? '简报的必填小节用于「写 PRD 闸口」第 1 项（第 1–14 节）；闸口只作提示，不限制改状态。' : '提交评审时检查必填小节：标题存在，且内容不只是模板原文。'}
+          </p>
           <ul className="flex flex-col gap-2">
             {sections.map((s, i) => (
               <li key={i} className="flex flex-wrap items-center gap-2">
@@ -89,23 +113,39 @@ function TemplateDialog({ org, productId, template, onClose }: { org: string; pr
   );
 }
 
-/** 文档模板列表与编辑。productId 为 null 时是组织模板（组织管理员），否则是该产品的覆盖模板（产品管理员）。 */
+function scopeNote(productId: string | null, kind: TemplateKind): string {
+  if (!productId) return kind === 'brief' ? '组织内所有产品新建简报时可用；产品管理员可以在产品设置里用同名模板覆盖。' : '组织内所有产品可用；产品管理员可以在产品设置里用同名模板覆盖。';
+  return kind === 'brief' ? '只用于本产品。与组织模板同名时，新建简报用本产品的版本。' : '只用于本产品。与组织模板同名时，新建 PRD 用本产品的版本。';
+}
+
+/** 文档模板列表与编辑，用「模板类型」切换 PRD 模板与简报模板。productId 为 null 时是组织模板（组织管理员），否则是该产品的覆盖模板（产品管理员）。 */
 export function TemplateEditor({ org, productId }: { org: string; productId: string | null }) {
-  const list = useTemplates(org, productId ? { productId } : {});
+  const [kind, setKind] = useState<TemplateKind>('change');
+  const list = useTemplates(org, productId ? { productId, kind } : { kind });
   const [editing, setEditing] = useState<DocumentTemplate | 'new' | null>(null);
   const invalidate = [templateKeys(org)];
-  const preset = useApiMutation(() => api(`/orgs/${org}/templates/preset`, { method: 'POST' }), { invalidate, success: '已添加预置模板' });
+  const preset = useApiMutation(() => api(`/orgs/${org}/templates/preset?kind=${kind}`, { method: 'POST' }), { invalidate, success: '已添加预置模板' });
   const toggle = useApiMutation((t: DocumentTemplate) => api(`/orgs/${org}/templates/${t.id}`, { method: 'PATCH', body: { active: !t.active } }), { invalidate });
-  if (list.isError) return <QueryError error={list.error} noAccessMessage="没有查看模板的权限。" retryMessage="加载模板失败，请重试。" onRetry={() => list.refetch()} />;
-  if (!list.data) return <Skeleton className="h-32" />;
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[13px] text-muted-foreground">
-          {productId ? '只用于本产品。与组织模板同名时，新建 PRD 用本产品的版本。' : '组织内所有产品可用；产品管理员可以在产品设置里用同名模板覆盖。'}
-        </p>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <Select value={kind} onValueChange={(v) => v && setKind(v as TemplateKind)}>
+            <SelectTrigger className="h-8 w-32" aria-label="模板类型">
+              <SelectValue>{KIND_LABEL[kind]}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {KINDS.map((k) => (
+                <SelectItem key={k} value={k}>
+                  {KIND_LABEL[k]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[13px] text-muted-foreground">{scopeNote(productId, kind)}</p>
+        </div>
         <div className="flex gap-2">
-          {!productId && list.data.length === 0 && (
+          {!productId && list.data?.length === 0 && (
             <Button variant="outline" disabled={preset.isPending} onClick={() => preset.mutate(undefined)}>
               添加预置模板
             </Button>
@@ -113,8 +153,16 @@ export function TemplateEditor({ org, productId }: { org: string; productId: str
           <Button onClick={() => setEditing('new')}>新建模板</Button>
         </div>
       </div>
-      {list.data.length === 0 ? (
-        <EmptyState icon={FileText} title="还没有模板" description={productId ? '没有覆盖时使用组织模板。' : '可以先添加与旧 PRD 一致的预置模板。'} />
+      {list.isError ? (
+        <QueryError error={list.error} noAccessMessage="没有查看模板的权限。" retryMessage="加载模板失败，请重试。" onRetry={() => list.refetch()} />
+      ) : !list.data ? (
+        <Skeleton className="h-32" />
+      ) : list.data.length === 0 ? (
+        <EmptyState
+          icon={FileText}
+          title="还没有模板"
+          description={productId ? '没有覆盖时使用组织模板。' : kind === 'brief' ? '可以添加预置的需求简报模板。' : '可以先添加与旧 PRD 一致的预置模板。'}
+        />
       ) : (
         <div className="overflow-x-auto rounded-md border bg-card">
           <Table>
@@ -152,7 +200,16 @@ export function TemplateEditor({ org, productId }: { org: string; productId: str
           </Table>
         </div>
       )}
-      {editing && <TemplateDialog key={editing === 'new' ? 'new' : editing.id} org={org} productId={productId} template={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <TemplateDialog
+          key={editing === 'new' ? `new-${kind}` : editing.id}
+          org={org}
+          productId={productId}
+          kind={kind}
+          template={editing === 'new' ? null : editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
     </div>
   );
 }
