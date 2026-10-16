@@ -3,6 +3,7 @@ import { productRoleOf } from '../access/permissions';
 import type { Db } from '../db/client';
 import {
   blockers,
+  documentBriefs,
   documents,
   entityAliases,
   fieldDefinitions,
@@ -20,7 +21,8 @@ import {
 } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { DocumentStatus } from '../documents/constants';
-import { documentDisplayKey, prdCheckState } from '../documents/markdown';
+import { briefGatesTx } from '../documents/briefs';
+import { briefDisplayKey, documentDisplayKey, prdCheckState } from '../documents/markdown';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { joinIterationUnmet } from '../iterations/membership';
@@ -48,6 +50,8 @@ export type RequirementDetail = RequirementListItem & {
   changeDocument: { id: string; displayKey: string; title: string; status: DocumentStatus; source: 'native' | 'external' } | null;
   /** 所挂 PRD 上作用于 PRD 的检查项（覆盖的需求共享）。 */
   documentCheckItems: CheckItemView[];
+  /** 所挂的需求简报（P3-C2）与闸口进度。 */
+  brief: { id: string; displayKey: string; title: string; status: DocumentStatus; gate: { passed: number; total: number } } | null;
   transitions: TransitionOption[];
   joinIterationUnmet: UnmetCondition[];
   history: Array<{ from: string | null; to: string; actor: MemberRef | null; forced: boolean; reason: string | null; at: Date }>;
@@ -125,6 +129,14 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
     const taskRows = await tx.select().from(tasks).where(eq(tasks.requirementId, row.id)).orderBy(asc(tasks.planStart), asc(tasks.createdAt));
     const aliasRows = await tx.select({ alias: entityAliases.alias }).from(entityAliases).where(eq(entityAliases.entityId, row.id));
     const [docRow] = row.changeDocumentId ? await tx.select().from(documents).where(and(eq(documents.id, row.changeDocumentId), isNull(documents.deletedAt))) : [];
+    const [briefRow] = row.briefDocumentId
+      ? await tx
+          .select({ doc: documents, header: documentBriefs })
+          .from(documents)
+          .innerJoin(documentBriefs, eq(documentBriefs.documentId, documents.id))
+          .where(and(eq(documents.id, row.briefDocumentId), isNull(documents.deletedAt)))
+      : [];
+    const briefGate = briefRow ? (await briefGatesTx(tx, [briefRow])).get(briefRow.doc.id)! : null;
 
     const names = await memberNames(tx, [
       ...history.map((h) => h.actorMemberId),
@@ -186,6 +198,16 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
       checkItems,
       changeDocument: docRow ? { id: docRow.id, displayKey: documentDisplayKey(product!.key, docRow.number), title: docRow.title, status: docRow.status, source: docRow.source } : null,
       documentCheckItems,
+      brief:
+        briefRow && briefGate
+          ? {
+              id: briefRow.doc.id,
+              displayKey: briefDisplayKey(product!.key, briefRow.doc.number),
+              title: briefRow.doc.title,
+              status: briefRow.doc.status,
+              gate: { passed: briefGate.passed, total: briefGate.total },
+            }
+          : null,
       transitions: availableTransitions(body, row.stateKey, ctx, lookup),
       joinIterationUnmet: await joinIterationUnmet(tx, body, row),
       history: history.map((h) => ({ from: h.fromState, to: h.toState, actor: ref(h.actorMemberId), forced: h.forced, reason: h.reason, at: h.at })),
