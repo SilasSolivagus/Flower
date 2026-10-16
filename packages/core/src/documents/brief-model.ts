@@ -197,6 +197,31 @@ export type BriefContext = {
 const cell = (s: string): string => s.replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ').trim() || '—';
 const linkText = (l: BriefRelatedLink): string => `${l.kind === 'wiki' ? `[[${l.target}]]` : l.url}${l.note ? ` ${l.note}` : ''}`;
 
+/** 把正文标题整体下移，使最浅的标题落在 ### 及以下，保持在导出的「## 正文」之下；围栏代码块内的行不动。 */
+function demoteHeadings(markdown: string): string {
+  const lines = markdown.split('\n');
+  let fence = false;
+  const isHeading = (l: string): RegExpMatchArray | null => (fence ? null : l.match(/^(#{1,6})\s/));
+  let min = 7;
+  for (const l of lines) {
+    if (/^\s*(```|~~~)/.test(l)) fence = !fence;
+    else min = Math.min(min, isHeading(l)?.[1]!.length ?? 7);
+  }
+  if (min > 6) return markdown;
+  const shift = Math.max(0, 3 - min);
+  fence = false;
+  return lines
+    .map((l) => {
+      if (/^\s*(```|~~~)/.test(l)) {
+        fence = !fence;
+        return l;
+      }
+      const m = isHeading(l);
+      return m ? `${'#'.repeat(Math.min(6, m[1]!.length + shift))}${l.slice(m[1]!.length)}` : l;
+    })
+    .join('\n');
+}
+
 export function briefContextMarkdown(ctx: BriefContext): string {
   const b = ctx.brief;
   const rows: Array<[string, string]> = [
@@ -219,6 +244,6 @@ export function briefContextMarkdown(ctx: BriefContext): string {
     const tail = i.auto ? (i.passed ? '' : `：${i.reasons.join('；')}`) : i.checkedBy ? `（人工确认：${i.checkedBy.displayName}，${i.checkedAt}）` : '（人工确认）';
     out.push(`- [${i.passed ? 'x' : ' '}] ${i.no}. ${i.label}${tail}`);
   }
-  out.push('', '## 正文', '', ctx.markdown.trim());
+  out.push('', '## 正文', '', demoteHeadings(ctx.markdown.trim()));
   return `${out.join('\n')}\n`;
 }

@@ -179,7 +179,9 @@ describe('上下文 Markdown', () => {
     expect(out).toContain('- [ ] 1. 第 1~14 节没有空白，不涉及的都写了理由：「1. 问题与目标」还没有填写；');
     expect(out).toContain('- [x] 7. 第 8 节的每条现状都有代码证据和核对日期\n');
     expect(out).toContain('- [ ] 2. 第 1 节的问题有数字支撑（第 2 节）（人工确认）');
-    expect(out.endsWith('## 正文\n\n## 1. 问题与目标\n\n正文\n')).toBe(true);
+    expect(out.endsWith('## 正文\n\n### 1. 问题与目标\n\n正文\n')).toBe(true);
+    const deep = briefContextMarkdown({ ...ctx, markdown: '# 总标题\n\n```\n## 代码里的\n```\n\n## 二级\n\n###### 六级\n' });
+    expect(deep).toContain('## 正文\n\n### 总标题\n\n```\n## 代码里的\n```\n\n#### 二级\n\n###### 六级\n');
     expect(briefContextMarkdown({ ...ctx, requirements: [] })).toContain('## 覆盖的需求\n\n没有覆盖需求\n');
   });
 });

@@ -1,21 +1,21 @@
 import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
 import { atLeast, productRoleOf, requireProductRole, visibleProductIds } from '../access/permissions';
 import type { Db } from '../db/client';
-import { documentBriefs, documentRevisions, documents, documentTemplates, functionTags, products, requirements } from '../db/schema';
+import { documentBriefs, documentRevisions, documents, documentTemplates, functionTags, members, products, requirements } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError } from '../errors';
 import { recordEvent } from '../events';
-import { assertAssignableMember, memberNames } from '../requirements/context';
-import { assertTitle, type MemberRef } from '../requirements/requirements';
+import { assertAssignableMember, memberNames, productWorkflowBody } from '../requirements/context';
+import { assertTitle, type MemberRef, productKeyOf, displayKey as requirementDisplayKey } from '../requirements/requirements';
 import { orgToday } from '../tasks/tasks';
-import type { BriefRow } from './brief-header';
-import { type BriefGate, evaluateBriefGate } from './brief-model';
+import { type BriefRow, briefHeaderTx } from './brief-header';
+import { type BriefContext, type BriefGate, briefToPrdMarkdown, evaluateBriefGate } from './brief-model';
 import { BRIEF_GATE_ITEMS, BRIEF_TEMPLATE } from './brief-template';
-import type { BriefRelatedLink, DocumentStatus } from './constants';
-import { linkBriefRequirementsTx } from './coverage';
-import { type DocumentDetail, documentDetailInTx, type DocumentRow, insertNativeDocumentTx } from './documents';
-import { briefDisplayKey, fillTemplate, normalizeExternalUrl } from './markdown';
+import type { BriefRelatedLink, BriefStatus, DocumentStatus } from './constants';
+import { linkBriefRequirementsTx, linkRequirementsTx } from './coverage';
+import { type DocumentDetail, documentDetailInTx, documentMarkdownTx, type DocumentRow, insertNativeDocumentTx, MAX_MARKDOWN_CHARS, setDocumentStatusTx } from './documents';
+import { briefDisplayKey, DOCUMENT_STATUS_LABELS, documentDisplayKey, fillTemplate, normalizeExternalUrl } from './markdown';
 import { effectiveTemplates, loadUsableTemplate } from './templates';
 
 /** 取简报文档与头部（lock 时两行都 FOR UPDATE）；不是简报、已删除或没有头部时按「简报不存在」处理。 */
@@ -256,5 +256,142 @@ export async function listBriefs(db: Db, actor: Actor, filter: BriefFilter = {})
         updatedAt: doc.updatedAt,
       };
     });
+  });
+}
+
+export type BriefConvertResult = {
+  document: DocumentDetail;
+  /** 已挂在其他 PRD 上、没有被新 PRD 覆盖的需求。 */
+  skipped: Array<{ id: string; displayKey: string; title: string; documentKey: string }>;
+};
+
+/**
+ * 转 PRD（设计 §3.6）：按第 18 节对应表生成变更 PRD 草稿（不套模板，负责人为在职的真人作者），覆盖简报覆盖的、还没挂 PRD 的需求，
+ * 简报改为已转 PRD 并记录转出的 PRD。已转过且原 PRD 仍在时，不带 again 返回 409；带 again 生成新草稿，原 PRD 保留。
+ * 锁顺序：简报 → 新 PRD → 需求（与关联需求一致）。
+ */
+export async function convertBriefToPrd(db: Db, actor: Actor, id: string, input: { again?: boolean } = {}): Promise<BriefConvertResult> {
+  return withOrg(db, actor.orgId, async (tx) => {
+    const { doc, header } = await loadBriefTx(tx, id, { lock: true });
+    await briefRoleTx(tx, actor, doc, 'editor');
+    if (doc.status === 'discarded') throw new AppError('invalid', '已废弃的简报不能转 PRD');
+    const productKey = await productKeyOf(tx, doc.productId);
+    const briefKey = briefDisplayKey(productKey, doc.number);
+    if (header.convertedDocumentId && !input.again) {
+      const [prev] = await tx
+        .select({ number: documents.number })
+        .from(documents)
+        .where(and(eq(documents.id, header.convertedDocumentId), isNull(documents.deletedAt)));
+      if (prev) {
+        const documentKey = documentDisplayKey(productKey, prev.number);
+        throw new AppError('conflict', `这份简报已转为 ${documentKey}`, { documentKey });
+      }
+    }
+    const markdown = briefToPrdMarkdown({ briefKey, markdown: await documentMarkdownTx(tx, doc) });
+    if (markdown.length > MAX_MARKDOWN_CHARS) throw new AppError('invalid', `生成的 PRD 超过 ${MAX_MARKDOWN_CHARS} 个字符，请先精简简报正文`);
+    const [author] = header.authorMemberId
+      ? await tx.select({ kind: members.kind, status: members.status }).from(members).where(eq(members.id, header.authorMemberId))
+      : [];
+    const ownerMemberId = author?.kind === 'human' && author.status === 'active' ? header.authorMemberId : null;
+    const prd = await insertNativeDocumentTx(tx, actor, {
+      productId: doc.productId,
+      kind: 'change',
+      title: doc.title,
+      status: 'draft',
+      ownerMemberId,
+      templateId: null,
+      markdown,
+      summary: `由简报 ${briefKey} 生成`,
+    });
+    const prdKey = documentDisplayKey(productKey, prd.number);
+    await recordEvent(tx, {
+      orgId: actor.orgId,
+      productId: doc.productId,
+      type: 'document.created',
+      subjectType: 'document',
+      subjectId: prd.id,
+      actor,
+      payload: { number: prd.number, title: prd.title, source: 'native', externalUrl: null, templateId: null, ownerMemberId, fromBriefId: doc.id },
+    });
+    const covered = await tx
+      .select()
+      .from(requirements)
+      .where(and(eq(requirements.briefDocumentId, doc.id), isNull(requirements.deletedAt)))
+      .orderBy(asc(requirements.number));
+    const taken = covered.filter((r) => r.changeDocumentId);
+    const takenDocs = taken.length > 0 ? await tx.select({ id: documents.id, number: documents.number }).from(documents).where(inArray(documents.id, taken.map((r) => r.changeDocumentId!))) : [];
+    const numberOf = new Map(takenDocs.map((d) => [d.id, d.number]));
+    const skipped = taken.map((r) => ({
+      id: r.id,
+      displayKey: requirementDisplayKey(productKey, r.number),
+      title: r.title,
+      documentKey: documentDisplayKey(productKey, numberOf.get(r.changeDocumentId!) ?? 0),
+    }));
+    const free = covered.filter((r) => !r.changeDocumentId).map((r) => r.id);
+    if (free.length > 0) await linkRequirementsTx(tx, actor, prd.id, free);
+    const now = new Date();
+    await tx.update(documentBriefs).set({ convertedDocumentId: prd.id, updatedAt: now }).where(eq(documentBriefs.documentId, doc.id));
+    if (doc.status !== 'converted') await setDocumentStatusTx(tx, actor, doc, 'converted');
+    else await tx.update(documents).set({ updatedAt: now }).where(eq(documents.id, doc.id));
+    await recordEvent(tx, {
+      orgId: actor.orgId,
+      productId: doc.productId,
+      type: 'brief.converted',
+      subjectType: 'document',
+      subjectId: doc.id,
+      actor,
+      payload: {
+        documentId: prd.id,
+        documentKey: prdKey,
+        skipped: skipped.map((s) => s.displayKey),
+        changes: [{ field: 'convertedDocumentId', old: header.convertedDocumentId, new: prd.id }],
+      },
+    });
+    return { document: await documentDetailInTx(tx, actor, prd.id), skipped };
+  });
+}
+
+/** Agent 上下文（设计 §3.7）：查看权限即可，只读 Token 可读。 */
+export async function getBriefContext(db: Db, actor: Actor, id: string): Promise<BriefContext> {
+  return withOrg(db, actor.orgId, async (tx) => {
+    const b = await loadBriefTx(tx, id);
+    await briefRoleTx(tx, actor, b.doc, 'viewer');
+    const [product] = await tx.select({ key: products.key, name: products.name }).from(products).where(eq(products.id, b.doc.productId));
+    const h = await briefHeaderTx(tx, b.header);
+    const gate = (await briefGatesTx(tx, [b])).get(id)!;
+    const reqs = await tx
+      .select()
+      .from(requirements)
+      .where(and(eq(requirements.briefDocumentId, id), isNull(requirements.deletedAt)))
+      .orderBy(asc(requirements.number));
+    // 有需求的产品一定有流程；没有需求时不读流程（产品可能还没指定流程）
+    const states = reqs.length > 0 ? (await productWorkflowBody(tx, b.doc.productId)).states : [];
+    return {
+      brief: {
+        id,
+        displayKey: briefDisplayKey(product!.key, b.doc.number),
+        title: b.doc.title,
+        status: b.doc.status as BriefStatus,
+        statusLabel: DOCUMENT_STATUS_LABELS[b.doc.status],
+        product: product!,
+        version: h.version,
+        requester: h.requester?.displayName ?? null,
+        decider: h.decider?.displayName ?? null,
+        author: h.author?.displayName ?? null,
+        participants: h.participantTags.map((x) => x.name),
+        relatedLinks: h.relatedLinks,
+        convertedDocument: h.convertedDocument
+          ? { displayKey: h.convertedDocument.displayKey, title: h.convertedDocument.title, statusLabel: DOCUMENT_STATUS_LABELS[h.convertedDocument.status] }
+          : null,
+        updatedAt: b.doc.updatedAt.toISOString(),
+      },
+      requirements: reqs.map((r) => ({
+        displayKey: requirementDisplayKey(product!.key, r.number),
+        title: r.title,
+        state: states.find((s) => s.key === r.stateKey)?.label ?? r.stateKey,
+      })),
+      gate,
+      markdown: await documentMarkdownTx(tx, b.doc),
+    };
   });
 }
