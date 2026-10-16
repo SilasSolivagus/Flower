@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
 import { atLeast, productRoleOf, requireProductRole, visibleProductIds } from '../access/permissions';
 import type { Db } from '../db/client';
 import { documentBriefs, documentRevisions, documents, documentTemplates, functionTags, products, requirements } from '../db/schema';
@@ -232,7 +232,7 @@ export async function listBriefs(db: Db, actor: Actor, filter: BriefFilter = {})
       .innerJoin(documentBriefs, eq(documentBriefs.documentId, documents.id))
       .innerJoin(products, eq(products.id, documents.productId))
       .where(and(...conds))
-      .orderBy(desc(documents.updatedAt), desc(documents.number));
+      .orderBy(desc(documents.updatedAt), asc(products.key), desc(documents.number));
     if (rows.length === 0) return [];
     const gates = await briefGatesTx(tx, rows);
     const counts = await tx

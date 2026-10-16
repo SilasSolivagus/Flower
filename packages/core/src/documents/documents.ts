@@ -331,6 +331,7 @@ export async function insertNativeDocumentTx(
       templateId: input.templateId,
       status: input.status,
       createdBy: actor.memberId,
+      updatedAt: new Date(),
     })
     .returning();
   const rev = await writeRevision(tx, actor, row!, { title: input.title, markdown }, { summary: input.summary, allowMerge: false });

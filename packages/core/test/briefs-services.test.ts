@@ -1,15 +1,14 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { domainEvents, requirements } from '../src/db/schema';
+import { documents, domainEvents, requirements } from '../src/db/schema';
 import { createBrief, getBriefGate, listBriefs, setBriefGateCheck, updateBrief } from '../src/documents/briefs';
-import { linkDocumentRequirements, unlinkDocumentRequirement } from '../src/documents/coverage';
+import { linkDocumentRequirements, linkRequirementsTx, unlinkDocumentRequirement } from '../src/documents/coverage';
 import { createDocument, getDocumentByKey, saveDocumentContent, transitionDocument, updateDocument } from '../src/documents/documents';
 import { addAffectedNode } from '../src/documents/affected';
 import { setDocumentCheckItemState, signDocumentCheckItem } from '../src/documents/checks';
 import { getMergePlan } from '../src/documents/merge';
 import type { Actor } from '../src/domain-types';
 import { withOrg } from '../src/db/tx';
-import { linkRequirementsTx } from '../src/documents/coverage';
 import { mentionMarkup } from '../src/links/syntax';
 import { createRequirement } from '../src/requirements/requirements';
 import { createFunctionTag, deleteFunctionTag, listFunctionTags } from '../src/tenancy/function-tags';
@@ -169,6 +168,11 @@ describe('简报列表', () => {
   it('按可见产品过滤；按产品、状态、决策人筛选；带覆盖需求数、闸口进度与决策人；按更新时间倒序', async () => {
     const other = await createBrief(t.db, owner, docProduct, { title: '别的产品的简报' });
     expect(other.displayKey).toBe('DOC-B-1');
+    const at = (key: string, ms: number) => t.adminDb.update(documents).set({ updatedAt: new Date(ms) }).where(eq(documents.id, key));
+    const idOf = async (k: string) => (await getDocumentByKey(t.db, owner, k)).id;
+    await at(other.id, 3000);
+    await at(await idOf('PAN-B-1'), 2000);
+    await at(await idOf('PAN-B-2'), 1000);
     const all = await listBriefs(t.db, owner);
     expect(all.map((x) => x.displayKey)).toEqual(['DOC-B-1', 'PAN-B-1', 'PAN-B-2']);
     expect(all.find((x) => x.displayKey === 'PAN-B-1')).toMatchObject({
