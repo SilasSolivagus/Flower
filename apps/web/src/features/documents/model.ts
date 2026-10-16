@@ -11,6 +11,9 @@ export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
   discarded: '#5c6570',
   active: '#1e8a5a',
   archived: '#8a9199',
+  discussing: '#2f6fd6',
+  ready: '#1f6f54',
+  converted: '#0f766e',
 };
 
 export const PROVIDER_LABEL: Record<ExternalProvider, string> = {

@@ -1,6 +1,6 @@
 import { diffLines } from 'diff';
 import type { CheckState } from '../requirements/labels';
-import type { DocumentStatus, ExternalProvider, RevisionSnapshot, TemplateSection } from './constants';
+import type { BriefStatus, DocumentKind, DocumentStatus, ExternalProvider, RevisionSnapshot, TemplateSection } from './constants';
 
 export * from './constants';
 
@@ -15,6 +15,9 @@ export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
   discarded: '已废弃',
   active: '使用中',
   archived: '已归档',
+  discussing: '讨论中',
+  ready: '可写 PRD',
+  converted: '已转 PRD',
 };
 
 export const documentDisplayKey = (productKey: string, number: number): string => `${productKey}-PRD-${number}`;
@@ -24,7 +27,19 @@ export function parseDocumentKey(key: string): { productKey: string; number: num
   return m ? { productKey: m[1]!, number: Number(m[2]) } : null;
 }
 
-/** 可流转的目标状态。launched → merged 只由合入自动完成，这里没有。模块文档在使用中与已归档之间切换。 */
+/** 简报编号（P3-C2）：按产品单独编号。 */
+export const briefDisplayKey = (productKey: string, number: number): string => `${productKey}-B-${number}`;
+
+export function parseBriefKey(key: string): { productKey: string; number: number } | null {
+  const m = /^([A-Z][A-Z0-9]{1,9})-B-(\d{1,9})$/.exec(key.trim());
+  return m ? { productKey: m[1]!, number: Number(m[2]) } : null;
+}
+
+/** 文档的显示编号：简报为 `{产品}-B-n`，变更 PRD 与模块文档为 `{产品}-PRD-n`。 */
+export const documentKeyOf = (kind: DocumentKind, productKey: string, number: number): string =>
+  kind === 'brief' ? briefDisplayKey(productKey, number) : documentDisplayKey(productKey, number);
+
+/** 变更 PRD 与模块文档可流转的目标状态。launched → merged 只由合入自动完成，这里没有。模块文档在使用中与已归档之间切换。简报见 BRIEF_TRANSITIONS。 */
 export const DOCUMENT_TRANSITIONS: Record<DocumentStatus, DocumentStatus[]> = {
   draft: ['review', 'discarded'],
   review: ['draft', 'approved', 'discarded'],
@@ -34,9 +49,26 @@ export const DOCUMENT_TRANSITIONS: Record<DocumentStatus, DocumentStatus[]> = {
   discarded: ['draft'],
   active: ['archived'],
   archived: ['active'],
+  discussing: [],
+  ready: [],
+  converted: [],
 };
 
-export const canTransition = (from: DocumentStatus, to: DocumentStatus): boolean => DOCUMENT_TRANSITIONS[from].includes(to);
+/** 简报的流转：闸口不限制改状态；已转 PRD 只由「转 PRD」进入，转过之后可以退回讨论中继续改。 */
+export const BRIEF_TRANSITIONS: Record<BriefStatus, BriefStatus[]> = {
+  discussing: ['ready', 'discarded'],
+  ready: ['discussing', 'discarded'],
+  converted: ['discussing', 'discarded'],
+  discarded: ['discussing'],
+};
+
+/** 按文档类型取可流转的目标状态。 */
+export function documentTransitions(kind: DocumentKind, status: DocumentStatus): DocumentStatus[] {
+  if (kind === 'brief') return BRIEF_TRANSITIONS[status as BriefStatus] ?? [];
+  return DOCUMENT_TRANSITIONS[status];
+}
+
+export const canTransition = (from: DocumentStatus, to: DocumentStatus, kind: DocumentKind = 'change'): boolean => documentTransitions(kind, from).includes(to);
 
 /** 「PRD」检查项跟随 PRD 状态的结果（设计 §3）。 */
 export function prdCheckState(status: DocumentStatus): CheckState {
