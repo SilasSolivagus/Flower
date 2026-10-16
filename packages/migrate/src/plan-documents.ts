@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { type CheckState, type DocumentStatus, IMAGE_MAX_BYTES, IMAGE_TYPES, type ImageMime, PRESET_TEMPLATE, prdCheckState, sniffImage } from '@flower/core';
+import { BRIEF_TEMPLATE, type CheckState, type DocumentStatus, IMAGE_MAX_BYTES, IMAGE_TYPES, type ImageMime, PRESET_TEMPLATE, prdCheckState, sniffImage } from '@flower/core';
 import type { PrdAttachment, PrdPage } from './legacy-types';
 import type { PlanContext } from './plan-types';
 
@@ -75,6 +75,19 @@ export function buildDocumentTemplates(ctx: PlanContext): void {
     name: PRESET_TEMPLATE.name,
     body: PRESET_TEMPLATE.body,
     sections: PRESET_TEMPLATE.sections,
+    active: true,
+    createdAt: ctx.asOfTime,
+    updatedAt: ctx.asOfTime,
+  });
+  ctx.rows.documentTemplates.push({
+    id: ctx.id('template', 'preset-brief'),
+    orgId: ctx.orgId,
+    productId: null,
+    kind: 'brief',
+    name: BRIEF_TEMPLATE.name,
+    body: BRIEF_TEMPLATE.body,
+    sections: BRIEF_TEMPLATE.sections,
+    guidance: BRIEF_TEMPLATE.guidance,
     active: true,
     createdAt: ctx.asOfTime,
     updatedAt: ctx.asOfTime,
