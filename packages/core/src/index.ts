@@ -7,6 +7,8 @@ export * from './domain-types';
 export * from './db/schema';
 export * from './documents/markdown';
 export * from './documents/module-sections';
+export * from './documents/brief-template';
+export * from './documents/brief-model';
 export * from './links/syntax';
 export * from './links/links';
 export * from './links/cards';
