@@ -18,7 +18,17 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import type { TokenScope } from '../domain-types';
-import { AFFECTED_CHANGE_TYPES, DOCUMENT_KINDS, DOCUMENT_STATUSES, EXTERNAL_PROVIDERS, MERGE_STATUSES, type RevisionSnapshot, type TemplateSection } from '../documents/constants';
+import {
+  AFFECTED_CHANGE_TYPES,
+  type BriefGateCheck,
+  type BriefRelatedLink,
+  DOCUMENT_KINDS,
+  DOCUMENT_STATUSES,
+  EXTERNAL_PROVIDERS,
+  MERGE_STATUSES,
+  type RevisionSnapshot,
+  type TemplateSection,
+} from '../documents/constants';
 import { newId } from '../ids';
 import { LINK_ORIGINS, LINK_SOURCE_TYPES, LINK_TARGET_TYPES } from '../links/syntax';
 import {
@@ -127,6 +137,8 @@ export const products = pgTable(
     requirementSeq: integer('requirement_seq').notNull().default(0),
     documentSeq: integer('document_seq').notNull().default(0),
     taskSeq: integer('task_seq').notNull().default(0),
+    /** 简报编号计数（P3-C2），显示为 {产品}-B-n；变更 PRD 与模块文档共用 documentSeq。 */
+    briefSeq: integer('brief_seq').notNull().default(0),
     /** 个人提醒通道（P3-B1）：对本产品可用、已启用的企业微信机器人通道；通道删除时置空。 */
     personalChannelId: uuid('personal_channel_id').references((): AnyPgColumn => notificationChannels.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
@@ -407,6 +419,8 @@ export const requirements = pgTable(
     nodeId: uuid('node_id').references(() => structureNodes.id),
     iterationId: uuid('iteration_id').references(() => iterations.id),
     changeDocumentId: uuid('change_document_id').references((): AnyPgColumn => documents.id),
+    /** 所挂的需求简报（P3-C2）：一份简报覆盖多条需求，每条需求最多挂一份。 */
+    briefDocumentId: uuid('brief_document_id').references((): AnyPgColumn => documents.id),
     legacyMeta: jsonb('legacy_meta').$type<Record<string, unknown>>(),
     /** 加入跟进的时间（P3-C1）：第一次进入未开始、进行中类别时自动填写，手动移出时清空，上线或取消后保留。 */
     trackedSince: ts('tracked_since'),
@@ -429,6 +443,7 @@ export const requirements = pgTable(
     index('requirements_owner').on(t.ownerMemberId),
     index('requirements_iteration').on(t.iterationId),
     index('requirements_change_document').on(t.changeDocumentId),
+    index('requirements_brief_document').on(t.briefDocumentId),
   ],
 );
 
@@ -656,10 +671,12 @@ export const documentTemplates = pgTable(
     id: id(),
     orgId: orgRef(),
     productId: uuid('product_id').references(() => products.id),
-    kind: text('kind', { enum: ['change', 'module'] }).notNull().default('change'),
+    kind: text('kind', { enum: ['change', 'module', 'brief'] }).notNull().default('change'),
     name: text('name').notNull(),
     body: text('body').notNull().default(''),
     sections: jsonb('sections').$type<TemplateSection[]>().notNull().default([]),
+    /** 模板说明（P3-C2）：显示在用这份模板写的文档的编辑器上方。 */
+    guidance: text('guidance').notNull().default(''),
     active: boolean('active').notNull().default(true),
     createdAt: createdAt(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
@@ -696,7 +713,9 @@ export const documents = pgTable(
     deletedAt: ts('deleted_at'),
   },
   (t) => [
-    uniqueIndex('documents_product_number').on(t.productId, t.number),
+    // 简报按产品单独编号（brief_seq），与变更 PRD、模块文档（document_seq）互不占号
+    uniqueIndex('documents_product_number').on(t.productId, t.number).where(sql`${t.kind} <> 'brief'`),
+    uniqueIndex('documents_product_brief_number').on(t.productId, t.number).where(sql`${t.kind} = 'brief'`),
     uniqueIndex('documents_product_url').on(t.productId, t.externalUrlKey).where(sql`${t.externalUrlKey} is not null and ${t.deletedAt} is null`),
     index('documents_product_updated').on(t.productId, t.updatedAt.desc()),
     check('documents_external', sql`${t.source} <> 'external' or (${t.externalUrl} is not null and ${t.externalUrlKey} is not null and ${t.currentRevisionId} is null)`),
@@ -722,6 +741,31 @@ export const documentRevisions = pgTable(
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },
   (t) => [uniqueIndex('document_revisions_doc_version').on(t.documentId, t.version)],
+);
+
+/** 需求简报的头部信息（P3-C2），与简报文档一对一。 */
+export const documentBriefs = pgTable(
+  'document_briefs',
+  {
+    documentId: uuid('document_id')
+      .primaryKey()
+      .references((): AnyPgColumn => documents.id),
+    orgId: orgRef(),
+    /** 自由填写，如 v0.1；修订历史仍自动记录。 */
+    version: text('version').notNull().default('v0.1'),
+    requesterMemberId: memberRef('requester_member_id'),
+    deciderMemberId: memberRef('decider_member_id'),
+    authorMemberId: memberRef('author_member_id'),
+    /** 参与方：组织职能标签。 */
+    participantTagIds: jsonb('participant_tag_ids').$type<string[]>().notNull().default([]),
+    relatedLinks: jsonb('related_links').$type<BriefRelatedLink[]>().notNull().default([]),
+    /** 闸口人工项的勾选记录。 */
+    gateChecks: jsonb('gate_checks').$type<BriefGateCheck[]>().notNull().default([]),
+    /** 最近一次转出的变更 PRD。 */
+    convertedDocumentId: uuid('converted_document_id').references((): AnyPgColumn => documents.id),
+    updatedAt: ts('updated_at').notNull().defaultNow(),
+  },
+  (t) => [index('document_briefs_converted').on(t.convertedDocumentId)],
 );
 
 export const attachments = pgTable(
