@@ -1,6 +1,7 @@
 import {
   type Actor,
   type Db,
+  getBriefContext,
   getIterationGantt,
   getIterationScope,
   getOrgDashboard,
@@ -8,6 +9,7 @@ import {
   getRequirementByKey,
   getTracking,
   getWorkbench,
+  listBriefs,
   listIterations,
   listMemberTasks,
   listRequirementComments,
@@ -74,6 +76,8 @@ export async function buildPerfCases(db: Db, actor: Actor, productId: string): P
   const trackedOwners = new Map<string, number>();
   for (const item of tracked.items) if (item.owner) trackedOwners.set(item.owner.id, (trackedOwners.get(item.owner.id) ?? 0) + 1);
   const topTracked = [...trackedOwners.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  // 简报上下文：最近更新的一份（导入的数据没有简报时为空，用例直接返回）
+  const latestBrief = (await listBriefs(db, actor))[0]?.id;
   return [
     { name: '列表：默认第 1 页', run: () => listRequirements(db, actor, productId, {}) },
     { name: '列表：第 5 页', run: () => listRequirements(db, actor, productId, { page: 5 }) },
@@ -105,5 +109,7 @@ export async function buildPerfCases(db: Db, actor: Actor, productId: string): P
     { name: '跟进：含最近 30 天完成', run: () => getTracking(db, actor, { includeDone: true }) },
     { name: '跟进：按产品', run: () => getTracking(db, actor, { productId }) },
     { name: '跟进：按负责人（在手最多的人）', run: () => (topTracked ? getTracking(db, actor, { ownerId: topTracked }) : Promise.resolve(null)) },
+    { name: '简报：列表（全部产品）', run: () => listBriefs(db, actor) },
+    { name: '简报：上下文（最近更新的简报）', run: () => (latestBrief ? getBriefContext(db, actor, latestBrief) : Promise.resolve(null)) },
   ];
 }
