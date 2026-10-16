@@ -17,12 +17,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  type BriefListFilter,
+  briefFilterToSearch,
+  briefsHref,
   type DocumentListFilter,
   documentFilterToApiQuery,
   documentFilterToSearch,
   documentHref,
   documentView,
   moduleDocsHref,
+  parseBriefFilter,
   parseDocumentFilter,
   sourceLabel,
 } from '@/features/documents/model';
@@ -30,16 +34,20 @@ import { activePeople, canListMembers, pickerOptions } from '@/features/members/
 import { formatDateTime } from '@/features/requirements/format';
 import { useDocuments, useMembers, useOrg, useProducts } from '@/lib/queries';
 import type { DocumentStatus } from '@/lib/types';
+import { BriefsTab } from './briefs-tab';
+import { CreateBriefDialog } from './create-brief-dialog';
 import { CreateDocumentDialog } from './create-dialog';
 import { ModuleDocsTab } from './module-docs-tab';
 
 const ALL = '__all';
+const VIEW_LABEL = { change: '变更 PRD', modules: '模块文档', briefs: '简报' } as const;
 
 function DocumentsPage() {
   const { org } = useParams<{ org: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
   const filter = useMemo(() => parseDocumentFilter(new URLSearchParams(searchParams.toString())), [searchParams]);
+  const briefFilter = useMemo(() => parseBriefFilter(new URLSearchParams(searchParams.toString())), [searchParams]);
   const orgQ = useOrg(org);
   const products = useProducts(org);
   const product = products.data?.find((p) => p.key === filter.product) ?? products.data?.[0];
@@ -47,6 +55,7 @@ function DocumentsPage() {
   const view = documentView(new URLSearchParams(searchParams.toString()));
   const list = useDocuments(org, view === 'change' ? product?.id : undefined, documentFilterToApiQuery(filter));
   const [creating, setCreating] = useState(false);
+  const [creatingBrief, setCreatingBrief] = useState(false);
   const [q, setQ] = useState(filter.q);
   // 地址栏里的 q 变化时（前进后退）同步到输入框；在渲染期间调整
   const [syncedQ, setSyncedQ] = useState(filter.q);
@@ -58,6 +67,10 @@ function DocumentsPage() {
     const qs = documentFilterToSearch({ ...filter, product: product?.key ?? filter.product, ...patch });
     router.replace(qs ? `?${qs}` : '?', { scroll: false });
   };
+  const setBriefFilter = (patch: Partial<BriefListFilter>) => {
+    router.replace(`?${briefFilterToSearch({ ...briefFilter, product: product?.key ?? briefFilter.product, ...patch })}`, { scroll: false });
+  };
+  const hrefFor = (v: string, key: string) => (v === 'modules' ? moduleDocsHref(org, key) : v === 'briefs' ? briefsHref(org, key) : `/${org}/documents?product=${key}`);
 
   if (products.isError) return <QueryError error={products.error} noAccessMessage="你没有查看产品的权限。" retryMessage="加载产品失败，请重试。" onRetry={() => products.refetch()} />;
   if (!products.data) return <Skeleton className="h-64" />;
@@ -65,7 +78,7 @@ function DocumentsPage() {
     return (
       <>
         <PageHeader title="文档" />
-        <EmptyState icon={FileText} title="还没有产品" description="PRD 挂在产品下。请组织管理员先在「组织设置 / 产品」中创建产品。" />
+        <EmptyState icon={FileText} title="还没有产品" description="PRD 与简报挂在产品下。请组织管理员先在「组织设置 / 产品」中创建产品。" />
       </>
     );
   }
@@ -77,14 +90,11 @@ function DocumentsPage() {
     <>
       <PageHeader
         title="文档"
-        description={`${product.name} · ${view === 'modules' ? '模块文档' : '变更 PRD'}`}
+        description={`${product.name} · ${VIEW_LABEL[view]}`}
         actions={
           <>
             {products.data.length > 1 && (
-              <Select
-                value={product.key}
-                onValueChange={(key) => router.replace(view === 'modules' ? moduleDocsHref(org, key) : `?${documentFilterToSearch({ ...filter, product: key })}`)}
-              >
+              <Select value={product.key} onValueChange={(key) => router.replace(view === 'change' ? `?${documentFilterToSearch({ ...filter, product: key })}` : hrefFor(view, key))}>
                 <SelectTrigger className="h-8 w-40" aria-label="产品">
                   <SelectValue />
                 </SelectTrigger>
@@ -98,17 +108,21 @@ function DocumentsPage() {
               </Select>
             )}
             {canCreate && view === 'change' && <Button onClick={() => setCreating(true)}>新建 PRD</Button>}
+            {canCreate && view === 'briefs' && <Button onClick={() => setCreatingBrief(true)}>新建简报</Button>}
           </>
         }
       />
-      <Tabs value={view} onValueChange={(v) => router.replace(v === 'modules' ? moduleDocsHref(org, product.key) : `/${org}/documents?product=${product.key}`)}>
+      <Tabs value={view} onValueChange={(v) => router.replace(hrefFor(v, product.key))}>
         <TabsList>
           <TabsTrigger value="change">变更 PRD</TabsTrigger>
           <TabsTrigger value="modules">模块文档</TabsTrigger>
+          <TabsTrigger value="briefs">简报</TabsTrigger>
         </TabsList>
       </Tabs>
       {view === 'modules' ? (
         <ModuleDocsTab org={org} product={product} focusNodeId={searchParams.get('node')} />
+      ) : view === 'briefs' ? (
+        <BriefsTab org={org} product={product} filter={briefFilter} onFilter={setBriefFilter} members={members.data} />
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-2">
@@ -209,6 +223,7 @@ function DocumentsPage() {
         </>
       )}
       <CreateDocumentDialog org={org} productId={product.id} open={creating} onOpenChange={setCreating} />
+      <CreateBriefDialog org={org} productId={product.id} open={creatingBrief} onOpenChange={setCreatingBrief} />
     </>
   );
 }
