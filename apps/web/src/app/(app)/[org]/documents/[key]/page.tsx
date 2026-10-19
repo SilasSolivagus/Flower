@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useRef, useState } from 'react';
 import { Backlinks } from '@/components/backlinks';
@@ -8,12 +9,13 @@ import { FollowButton } from '@/components/follow-button';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
-import { moduleDocsHref } from '@/features/documents/model';
+import { briefsHref, documentHref, moduleDocsHref } from '@/features/documents/model';
 import { useMarkNotificationsRead } from '@/features/member-notifications/use-mark-read';
 import { api } from '@/lib/api';
 import { documentKeys, useApiMutation, useDocument } from '@/lib/queries';
 import type { DocumentDetail } from '@/lib/types';
 import { ImportDialog } from '../import-dialog';
+import { BriefSidePanel } from './brief-side-panel';
 import { DocumentComments } from './comments';
 import { EditorPane, type EditorPaneHandle } from './editor-pane';
 import { ExternalCard } from './external-card';
@@ -53,7 +55,7 @@ function DocumentPage() {
   );
 
   if (!d && q.isError) {
-    return <QueryError error={q.error} noAccessMessage="PRD 不存在，或你没有查看它所在产品的权限。" retryMessage="加载 PRD 失败，请重试。" onRetry={() => q.refetch()} />;
+    return <QueryError error={q.error} noAccessMessage="文档不存在，或你没有查看它所在产品的权限。" retryMessage="加载文档失败，请重试。" onRetry={() => q.refetch()} />;
   }
   if (!d) return <Skeleton className="h-64" />;
   // 已归档的模块文档不能改标题、不能导入（服务端同样拒绝）
@@ -68,19 +70,35 @@ function DocumentPage() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: '文档', href: d.kind === 'module' ? moduleDocsHref(org, d.productKey, d.node?.id) : `/${org}/documents?product=${d.productKey}` }, { label: d.displayKey }]}
+        crumbs={[{ label: '文档', href: d.kind === 'module' ? moduleDocsHref(org, d.productKey, d.node?.id) : d.kind === 'brief' ? briefsHref(org, d.productKey) : `/${org}/documents?product=${d.productKey}` }, { label: d.displayKey }]}
         title={<EditableTitle displayKey={d.displayKey} title={d.title} canEdit={canEdit} onSubmit={(title, close) => patch.mutate({ title }, { onSuccess: close })} />}
         actions={<FollowButton org={org} type="document" id={d.id} />}
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-w-0 flex-col gap-4">
-          {d.source === 'native' ? <EditorPane key={`${d.id}:${epoch}`} ref={editor} org={org} doc={d} onReload={() => void reload()} section={searchParams.get('section')} activeCommentId={focus?.id ?? null} onAnchorClick={(id) => setFocus((f) => ({ id, seq: (f?.seq ?? 0) + 1 }))} /> : <ExternalCard org={org} doc={d} onConvert={() => setConverting(true)} />}
+          {d.templateGuidance && (
+            <section aria-label="模板说明" className="whitespace-pre-wrap rounded-md border bg-muted/40 px-4 py-3 text-[13px] leading-6 text-muted-foreground">
+              {d.templateGuidance}
+            </section>
+          )}
+          {d.sourceBrief && (
+            <p role="note" aria-label="来源简报" className="text-[13px] text-muted-foreground">
+              由简报{' '}
+              <Link href={documentHref(org, d.sourceBrief.displayKey)} className="font-mono hover:underline">
+                {d.sourceBrief.displayKey}
+              </Link>{' '}
+              生成
+            </p>
+          )}
+          {d.source === 'native' ? <EditorPane key={`${d.id}:${epoch}`} ref={editor} org={org} doc={d} onReload={() => void reload()} section={searchParams.get('section')} sectionSeq={searchParams.get('at')} activeCommentId={focus?.id ?? null} onAnchorClick={(id) => setFocus((f) => ({ id, seq: (f?.seq ?? 0) + 1 }))} /> : <ExternalCard org={org} doc={d} onConvert={() => setConverting(true)} />}
           <DocumentComments org={org} doc={d} focus={focus} />
           <Backlinks org={org} type="document" id={d.id} />
           {d.kind === 'module' && <MergeRecords org={org} doc={d} />}
         </div>
         {d.kind === 'module' ? (
           <ModuleSidePanel org={org} doc={d} onReload={() => void reload()} saveEditor={saveEditor} />
+        ) : d.kind === 'brief' ? (
+          <BriefSidePanel org={org} doc={d} onReload={() => void reload()} saveEditor={saveEditor} />
         ) : (
           <SidePanel org={org} doc={d} onReload={() => void reload()} saveEditor={saveEditor} />
         )}

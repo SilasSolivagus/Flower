@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { fieldDefinitions, fieldOptions, functionTags, workflowDefinitions, workflowVersions } from '../db/schema';
 import type { Tx } from '../db/tx';
-import { insertPresetTemplate } from '../documents/templates';
+import { insertPresetBriefTemplate, insertPresetTemplate } from '../documents/templates';
 import type { WorkflowBody } from './workflow-schema';
 
 export const DEFAULT_LEVEL_NAMES = ['业务域', '模块', '功能点'];
@@ -98,5 +98,6 @@ export async function seedOrgDefaults(
 
   await tx.insert(functionTags).values(DEFAULT_FUNCTION_TAGS.map((tag, i) => ({ orgId, ...tag, sort: i })));
   await insertPresetTemplate(tx, orgId);
+  await insertPresetBriefTemplate(tx, orgId);
   return { workflowDefinitionId: def!.id, workflowVersionId: ver!.id };
 }

@@ -58,6 +58,8 @@ export async function deleteOrgData(tx: Tx, orgId: string): Promise<void> {
   await tx.execute(sql`delete from ${core.iterationScopeSnapshots} where org_id = ${orgId}`);
   await tx.execute(sql`delete from ${core.documentAffectedNodes} where org_id = ${orgId}`);
   await tx.execute(sql`delete from ${core.entityLinks} where org_id = ${orgId}`);
+  // 需求简报：头部表引用文档与成员，要在文档与成员之前删；需求上的 brief_document_id 随需求一起删
+  await tx.execute(sql`delete from ${core.documentBriefs} where org_id = ${orgId}`);
   // 工作跟进：进展记录引用需求、工作项与成员；挂在工作项上的阻塞项引用工作项；工作项引用产品与成员
   await tx.execute(sql`delete from ${core.progressUpdates} where org_id = ${orgId}`);
   await tx.execute(sql`delete from ${core.blockers} where org_id = ${orgId} and work_item_id is not null`);

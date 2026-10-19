@@ -8,6 +8,8 @@ import type {
   AffectedNodes,
   BacklinkGroup,
   BacklinkTargetType,
+  BriefGate,
+  BriefListItem,
   ChannelOption,
   DocumentComment,
   DocumentDetail,
@@ -59,6 +61,7 @@ import type {
   StructureNode,
   Subscription,
   TaskDetail,
+  TemplateKind,
   Token,
   TrackingList,
   TrackingSettings,
@@ -115,6 +118,8 @@ export const qk = {
   affectedNodes: (o: string, id: string) => ['org', o, 'documents', 'affected', id] as const,
   mergePlan: (o: string, id: string) => ['org', o, 'documents', 'merge', id] as const,
   mergeRecords: (o: string, id: string) => ['org', o, 'documents', 'merge-records', id] as const,
+  briefs: (o: string, query: string) => ['org', o, 'briefs', 'list', query] as const,
+  briefGate: (o: string, id: string) => ['org', o, 'briefs', 'gate', id] as const,
   templates: (o: string, scope: string) => ['org', o, 'templates', scope] as const,
   backlinks: (o: string, type: string, id: string) => ['org', o, 'links', 'backlinks', type, id] as const,
   documentLinks: (o: string, id: string) => ['org', o, 'links', 'document', id] as const,
@@ -329,6 +334,13 @@ export const useProductIterations = (o: string, productId: string | undefined) =
 export const documentKeys = (o: string) => ['org', o, 'documents'] as const;
 export const templateKeys = (o: string) => ['org', o, 'templates'] as const;
 
+/** 简报列表与闸口的公共前缀：正文保存、头部、覆盖需求、勾选与转 PRD 之后统一失效。 */
+export const briefKeys = (o: string) => ['org', o, 'briefs'] as const;
+export const useBriefs = (o: string, query: string, enabled = true) =>
+  useQuery({ queryKey: qk.briefs(o, query), queryFn: () => api<{ briefs: BriefListItem[] }>(`/orgs/${o}/briefs?${query}`), select: (d) => d.briefs, enabled });
+export const useBriefGate = (o: string, id: string) =>
+  useQuery({ queryKey: qk.briefGate(o, id), queryFn: () => api<{ gate: BriefGate }>(`/orgs/${o}/briefs/${id}/gate`), select: (d) => d.gate });
+
 export const useDocuments = (o: string, productId: string | undefined, query: string) =>
   useQuery({
     queryKey: qk.documents(o, productId ?? '', query),
@@ -380,10 +392,13 @@ export const useMergePlan = (o: string, id: string | undefined) =>
   });
 export const useMergeRecords = (o: string, id: string) =>
   useQuery({ queryKey: qk.mergeRecords(o, id), queryFn: () => api<{ records: MergeRecord[] }>(`/orgs/${o}/documents/${id}/merge-records`), select: (d) => d.records });
-export const useTemplates = (o: string, opts: { productId?: string; usable?: boolean }, enabled = true) =>
+export const useTemplates = (o: string, opts: { productId?: string; usable?: boolean; kind?: TemplateKind }, enabled = true) =>
   useQuery({
-    queryKey: qk.templates(o, `${opts.productId ?? 'org'}:${opts.usable ? 'usable' : 'all'}`),
-    queryFn: () => api<{ templates: DocumentTemplate[] }>(`/orgs/${o}/templates?${new URLSearchParams({ ...(opts.productId ? { product: opts.productId } : {}), ...(opts.usable ? { usable: '1' } : {}) })}`),
+    queryKey: qk.templates(o, `${opts.productId ?? 'org'}:${opts.usable ? 'usable' : 'all'}:${opts.kind ?? 'change'}`),
+    queryFn: () =>
+      api<{ templates: DocumentTemplate[] }>(
+        `/orgs/${o}/templates?${new URLSearchParams({ ...(opts.productId ? { product: opts.productId } : {}), ...(opts.usable ? { usable: '1' } : {}), kind: opts.kind ?? 'change' })}`,
+      ),
     select: (d) => d.templates,
     enabled,
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DocumentComment, StructureNode } from '@/lib/types';
-import { base64ToBytes, CHANGE_TYPE_LABEL, clipContext, countRemoteImages, documentFilterToApiQuery, documentFilterToSearch, documentHref, documentView, domainOptions, editorAnchors, featureOptions, findDataImages, findSectionIndex, groupThreads, importSummary, locateAnchorRange, MERGE_STATUS_LABEL, moduleDocsHref, moduleOptions, parseDocumentFilter, parseRequirementKeys, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
+import { base64ToBytes, briefFilterToApiQuery, briefFilterToSearch, briefsHref, CHANGE_TYPE_LABEL, clipContext, convertMessage, countRemoteImages, DOCUMENT_STATUS_COLOR, documentFilterToApiQuery, documentFilterToSearch, documentHref, documentView, domainOptions, editorAnchors, featureOptions, findDataImages, findSectionIndex, gateLabel, groupThreads, importSummary, invalidRequirementKeys, locateAnchorRange, MERGE_STATUS_LABEL, moduleDocsHref, moduleOptions, parseBriefFilter, parseDocumentFilter, parseRelatedInput, parseRequirementKeys, relatedLinkHref, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
 
 describe('PRD 列表筛选', () => {
   it('地址栏 ↔ 筛选；无效的状态与来源被忽略', () => {
@@ -26,6 +26,9 @@ describe('详情页辅助', () => {
   it('需求编号：逗号、顿号、空白分隔，转大写、去重，丢弃不合法的写法', () => {
     expect(parseRequirementKeys(' pan-1，PAN-2、PAN-1  x-y PAN-03 ')).toEqual(['PAN-1', 'PAN-2', 'PAN-03']);
     expect(parseRequirementKeys('')).toEqual([]);
+    expect(invalidRequirementKeys(' pan-1，PAN12、x-y ')).toEqual(['PAN12', 'x-y']);
+    expect(invalidRequirementKeys('PAN-1, PAN-2')).toEqual([]);
+    expect(invalidRequirementKeys('  ')).toEqual([]);
   });
 
   it('保存状态文字', () => {
@@ -169,5 +172,48 @@ describe('声明影响的选项', () => {
       { id: 'd1', path: '存储' },
       { id: 'd2', path: '会员' },
     ]);
+  });
+});
+
+describe('简报列表与链接', () => {
+  it('页签由地址栏决定；地址栏 ↔ 筛选；无效状态被忽略；接口查询带产品 id', () => {
+    expect(documentView(new URLSearchParams('view=briefs'))).toBe('briefs');
+    expect(documentView(new URLSearchParams('view=bogus'))).toBe('change');
+    expect(briefsHref('acme', 'PAN')).toBe('/acme/documents?product=PAN&view=briefs');
+    const f = parseBriefFilter(new URLSearchParams('product=PAN&view=briefs&status=ready&decider=m1'));
+    expect(f).toEqual({ product: 'PAN', status: 'ready', decider: 'm1' });
+    expect(parseBriefFilter(new URLSearchParams('status=draft')).status).toBe('');
+    expect(briefFilterToSearch(f)).toBe('product=PAN&view=briefs&status=ready&decider=m1');
+    expect(briefFilterToSearch({ product: 'PAN', status: '', decider: '' })).toBe('product=PAN&view=briefs');
+    expect(briefFilterToApiQuery(f, 'p1')).toBe('product=p1&status=ready&decider=m1');
+    expect(briefFilterToApiQuery({ product: '', status: '', decider: '' }, 'p1')).toBe('product=p1');
+  });
+
+  it('闸口进度、转 PRD 的结果提示；简报状态有颜色', () => {
+    expect(gateLabel({ passed: 7, total: 11 })).toBe('7/11');
+    expect(convertMessage({ document: { displayKey: 'PAN-PRD-5' }, skipped: [] })).toBe('已生成 PAN-PRD-5');
+    expect(
+      convertMessage({
+        document: { displayKey: 'PAN-PRD-5' },
+        skipped: [
+          { displayKey: 'PAN-2', documentKey: 'PAN-PRD-1' },
+          { displayKey: 'PAN-7', documentKey: 'PAN-PRD-3' },
+        ],
+      }),
+    ).toBe('已生成 PAN-PRD-5；以下需求已挂在其他 PRD 上，没有覆盖：PAN-2（PAN-PRD-1）、PAN-7（PAN-PRD-3）');
+    for (const s of ['discussing', 'ready', 'converted'] as const) expect(DOCUMENT_STATUS_COLOR[s]).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  it('关联文档：输入解析与站内地址', () => {
+    expect(parseRelatedInput(' https://doc.example.com/x ', ' 群聊 ')).toEqual({ kind: 'url', url: 'https://doc.example.com/x', note: '群聊' });
+    expect(parseRelatedInput('[[pan-prd-3]]', '')).toEqual({ kind: 'wiki', target: 'pan-prd-3', note: '' });
+    expect(parseRelatedInput('PAN-12', '原需求')).toEqual({ kind: 'wiki', target: 'PAN-12', note: '原需求' });
+    expect(parseRelatedInput('  ', '')).toBeNull();
+    expect(parseRelatedInput('[[ ]]', '')).toBeNull();
+    expect(relatedLinkHref('acme', 'pan-prd-3')).toBe('/acme/documents/PAN-PRD-3');
+    expect(relatedLinkHref('acme', 'PAN-B-2#数据依据')).toBe('/acme/documents/PAN-B-2');
+    expect(relatedLinkHref('acme', 'PAN-12')).toBe('/acme/requirements/PAN-12');
+    expect(relatedLinkHref('acme', 'PAN-T-4')).toBe('/acme/tasks/PAN-T-4');
+    expect(relatedLinkHref('acme', '上传/分片')).toBeNull();
   });
 });

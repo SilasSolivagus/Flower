@@ -67,7 +67,8 @@ export async function eventFactsTx(tx: Tx, ev: MatchEvent): Promise<EventFacts> 
  * 这里先读到则删除会看到新记录并报「只能停用」。
  */
 export async function matchNotificationRules(tx: Tx, ev: MatchEvent): Promise<void> {
-  if (!isNotifiableEventType(ev.type)) return;
+  // 简报沿用 document.status_changed（payload.kind = 'brief'），不当作「PRD 状态变化」推送（设计 §5）
+  if (!isNotifiableEventType(ev.type) || ev.payload.kind === 'brief') return;
   const rules = await tx
     .select()
     .from(notificationRules)

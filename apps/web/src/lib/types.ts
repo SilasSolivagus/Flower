@@ -22,6 +22,11 @@ import type {
   InstanceStatus as CoreInstanceStatus,
   InvitationPreview as CoreInvitationPreview,
   InvitationView,
+  BriefConvertResult as CoreBriefConvertResult,
+  BriefGate as CoreBriefGate,
+  BriefListItem as CoreBriefListItem,
+  BriefRelatedLink as CoreBriefRelatedLink,
+  BriefStatus as CoreBriefStatus,
   IterationBrief as CoreIterationBrief,
   IterationDetail as CoreIterationDetail,
   IterationGantt as CoreIterationGantt,
@@ -69,6 +74,7 @@ import type {
   SubscriptionView,
   TaskDetail as CoreTaskDetail,
   TaskView,
+  TemplateKind as CoreTemplateKind,
   TemplateSection as CoreTemplateSection,
   TemplateView,
   TokenScope as CoreTokenScope,
@@ -144,6 +150,12 @@ export type DocumentRevision = Jsonify<RevisionListItem>;
 export type RevisionDiff = CoreRevisionDiff;
 export type DocumentComment = Jsonify<DocumentCommentView>;
 export type DocumentTemplate = Jsonify<TemplateView>;
+export type TemplateKind = CoreTemplateKind;
+export type BriefStatus = CoreBriefStatus;
+export type BriefListItem = Jsonify<CoreBriefListItem>;
+export type BriefGate = CoreBriefGate;
+export type BriefRelatedLink = CoreBriefRelatedLink;
+export type BriefConvertResult = Jsonify<CoreBriefConvertResult>;
 export type DocumentReviewQueue = Jsonify<CoreDocumentReviewQueue>;
 export type Attachment = AttachmentView & { url: string };
 export type LinkCard = CoreLinkCard;

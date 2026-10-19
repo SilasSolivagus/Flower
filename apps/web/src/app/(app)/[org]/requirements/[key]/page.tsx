@@ -22,6 +22,7 @@ import { Comments } from './comments';
 import { FieldsPanel } from './fields-panel';
 import { History } from './history';
 import { Assignments } from './assignments';
+import { BriefCard } from './brief-card';
 import { PrdCard } from './prd-card';
 import { Relations } from './relations';
 import { Releases } from './releases';
@@ -139,6 +140,7 @@ export default function RequirementPage() {
         <div className="flex flex-col gap-4">
           <StatusPanel org={org} requirement={r} />
           <TrackingPanel org={org} requirement={r} />
+          <BriefCard org={org} requirement={r} />
           <PrdCard org={org} requirement={r} />
           <FieldsPanel org={org} requirement={r} />
           <Assignments org={org} requirement={r} />

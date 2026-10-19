@@ -7,6 +7,8 @@ export default defineConfig({
   timeout: 60_000,
   fullyParallel: false,
   workers: 1,
+  // CI 默认的 github 报告要等结束才列出用例；line 逐条打出，超时时能看到停在哪一条。
+  reporter: process.env.CI ? [['github'], ['line']] : [['list']],
   globalSetup: './e2e/global-setup.ts',
   use: { baseURL: 'http://localhost:3100', locale: 'zh-CN', trace: 'retain-on-failure' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } }],

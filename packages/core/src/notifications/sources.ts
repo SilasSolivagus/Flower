@@ -14,7 +14,7 @@ import {
   requirements,
 } from '../db/schema';
 import type { Tx } from '../db/tx';
-import { DOCUMENT_STATUS_LABELS, documentDisplayKey } from '../documents/markdown';
+import { DOCUMENT_STATUS_LABELS, documentDisplayKey, documentKeyOf } from '../documents/markdown';
 import { AppError } from '../errors';
 import { ITERATION_STATUS_LABELS } from '../iterations/iterations';
 import { productWorkflowBody } from '../requirements/context';
@@ -112,9 +112,9 @@ async function subjectTx(tx: Tx, ev: EventRow, productKey: string, ctx: OrgConte
     }
   }
   if (ev.subjectType === 'document') {
-    const [d] = await tx.select({ number: documents.number, title: documents.title }).from(documents).where(eq(documents.id, ev.subjectId));
+    const [d] = await tx.select({ number: documents.number, title: documents.title, kind: documents.kind }).from(documents).where(eq(documents.id, ev.subjectId));
     if (d) {
-      const key = documentDisplayKey(productKey, d.number);
+      const key = documentKeyOf(d.kind, productKey, d.number);
       return { key, title: d.title, url: `${ctx.base}/documents/${key}` };
     }
   }

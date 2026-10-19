@@ -136,6 +136,14 @@ export async function createDocument(
   return (await json<{ document: { id: string; displayKey: string; version: number } }>(request.post(`/api/v1/orgs/acme/products/${productId}/documents`, { data }))).document;
 }
 
+export async function createBrief(
+  request: APIRequestContext,
+  productId: string,
+  data: { title: string; requirementIds?: string[] },
+): Promise<{ id: string; displayKey: string; version: number }> {
+  return (await json<{ document: { id: string; displayKey: string; version: number } }>(request.post(`/api/v1/orgs/acme/products/${productId}/briefs`, { data }))).document;
+}
+
 /** 1×1 像素的 PNG（base64），图片上传与导入用例共用。 */
 export const PNG_1PX_BASE64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 

@@ -56,8 +56,10 @@ describe('性能测量', () => {
       '跟进：含最近 30 天完成',
       '跟进：按产品',
       '跟进：按负责人（在手最多的人）',
+      '简报：列表（全部产品）',
+      '简报：上下文（最近更新的简报）',
     ]);
     const result = await measure(cases, 2);
-    expect(result).toHaveLength(24);
+    expect(result).toHaveLength(26);
   });
 });

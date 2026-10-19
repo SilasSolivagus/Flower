@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { requireProductRole, visibleProductIds } from '../access/permissions';
 import type { Db } from '../db/client';
 import { documentRevisions, documents, iterations, products, requirements, structureNodes, tasks } from '../db/schema';
@@ -31,7 +31,7 @@ async function sectionSuggestions(tx: Tx, productId: string | undefined, number:
   const [d] = await tx
     .select()
     .from(documents)
-    .where(and(eq(documents.productId, productId), eq(documents.number, number), isNull(documents.deletedAt)));
+    .where(and(eq(documents.productId, productId), eq(documents.number, number), ne(documents.kind, 'brief'), isNull(documents.deletedAt)));
   if (!d) return [];
   const key = documentDisplayKey(keyOf.get(productId)!, d.number);
   const out: LinkSuggestion[] = [{ kind: 'document', insert: key, displayKey: key, title: d.title, hint: '整篇', next: 'insert' }];

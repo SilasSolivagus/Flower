@@ -81,7 +81,7 @@ export async function loadTree(tx: Tx, productId: string): Promise<StructureTree
 }
 
 export function assertChangeDocument(doc: DocumentRow): void {
-  if (doc.kind !== 'change') throw new AppError('invalid', '模块文档没有影响声明');
+  if (doc.kind !== 'change') throw new AppError('invalid', doc.kind === 'brief' ? '简报没有影响声明' : '模块文档没有影响声明');
 }
 
 function assertNotDeprecated(tree: StructureTree, nodeId: string): void {

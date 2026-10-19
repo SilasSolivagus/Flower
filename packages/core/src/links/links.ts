@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, like, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, like, ne, or, sql } from 'drizzle-orm';
 import { documents, entityAliases, entityLinks, iterations, products, requirements, structureNodes, tasks } from '../db/schema';
 import type { Tx } from '../db/tx';
 import { splitSections } from '../documents/markdown';
@@ -65,7 +65,22 @@ class Resolver {
       }
       case 'document': {
         const pid = await this.productId(t.productKey);
-        const [d] = pid ? await this.tx.select({ id: documents.id }).from(documents).where(and(eq(documents.productId, pid), eq(documents.number, t.number))) : [];
+        const [d] = pid
+          ? await this.tx
+              .select({ id: documents.id })
+              .from(documents)
+              .where(and(eq(documents.productId, pid), eq(documents.number, t.number), ne(documents.kind, 'brief')))
+          : [];
+        return out('document', d?.id ?? null, t.section);
+      }
+      case 'brief': {
+        const pid = await this.productId(t.productKey);
+        const [d] = pid
+          ? await this.tx
+              .select({ id: documents.id })
+              .from(documents)
+              .where(and(eq(documents.productId, pid), eq(documents.number, t.number), eq(documents.kind, 'brief')))
+          : [];
         return out('document', d?.id ?? null, t.section);
       }
       case 'task': {

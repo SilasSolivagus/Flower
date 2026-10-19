@@ -51,7 +51,8 @@ jobs:
   e2e:
     name: 端到端测试
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 全量约 160 条、单 worker。上次跑到 30 分钟仍在执行就被取消（不是断言失败，也不是卡住）。
+    timeout-minutes: 60
     services:
       postgres: *postgres
     steps:

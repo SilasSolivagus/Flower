@@ -16,8 +16,8 @@ import {
   workItems,
 } from '../db/schema';
 import type { Tx } from '../db/tx';
-import type { DocumentStatus } from '../documents/constants';
-import { DOCUMENT_STATUS_LABELS, documentDisplayKey } from '../documents/markdown';
+import type { DocumentKind, DocumentStatus } from '../documents/constants';
+import { DOCUMENT_STATUS_LABELS, documentKeyOf } from '../documents/markdown';
 import { plainMentions, taskDisplayKey, workItemDisplayKey } from '../links/syntax';
 import { MEMBER_NOTIFICATION_RANK, type MemberNotificationKind, type NotificationSubjectType } from '../notifications/constants';
 import { productWorkflowBody } from '../requirements/context';
@@ -27,8 +27,8 @@ import { type CheckItem, reviewStarted } from '../requirements/workflow-runtime'
 import { checkSnapshots, documentSnapshots, waitingFor } from '../reviews/snapshot';
 
 export type EventRow = typeof domainEvents.$inferSelect;
-/** productId 为空：不关联产品的工作项（收件人排除访客）。 */
-export type NotificationSubject = { type: NotificationSubjectType; id: string; productId: string | null; title: string; url: string };
+/** productId 为空：不关联产品的工作项（收件人排除访客）。documentKind：文档对象的类型（简报的文案写「简报」）。 */
+export type NotificationSubject = { type: NotificationSubjectType; id: string; productId: string | null; title: string; url: string; documentKind?: DocumentKind };
 export type Candidate = { memberId: string; kind: MemberNotificationKind; body: string };
 export type EventPlan = { subject: NotificationSubject; candidates: Candidate[]; autoSubscribe: string[] };
 type Change = { field: string; old: unknown; new: unknown };
@@ -46,6 +46,7 @@ export const HANDLED_EVENT_TYPES: ReadonlySet<string> = new Set([
   'document.updated',
   'document.saved',
   'document.status_changed',
+  'brief.updated',
   'check_item.updated',
   'check_item.signed',
   'task.created',
@@ -98,13 +99,13 @@ export async function subjectTx(tx: Tx, slug: string, type: string, id: string):
   }
   if (type === 'document') {
     const [d] = await tx
-      .select({ productId: documents.productId, number: documents.number, title: documents.title, key: products.key })
+      .select({ productId: documents.productId, number: documents.number, title: documents.title, kind: documents.kind, key: products.key })
       .from(documents)
       .innerJoin(products, eq(products.id, documents.productId))
       .where(and(eq(documents.id, id), isNull(documents.deletedAt), isNull(products.deletedAt)));
     if (!d) return null;
-    const k = documentDisplayKey(d.key, d.number);
-    return { type: 'document', id, productId: d.productId, title: clip(`${k} ${d.title}`, TITLE_MAX), url: `/${slug}/documents/${k}` };
+    const k = documentKeyOf(d.kind, d.key, d.number);
+    return { type: 'document', id, productId: d.productId, title: clip(`${k} ${d.title}`, TITLE_MAX), url: `/${slug}/documents/${k}`, documentKind: d.kind };
   }
   if (type === 'task') {
     const [x] = await tx
@@ -189,6 +190,7 @@ export async function planEventTx(tx: Tx, ev: EventRow, slug: string): Promise<E
     autoSubscribe.push(...ids);
   };
   const notifyFollowers = async (body: string) => add(await followersTx(tx, subject), 'followed_change', body);
+  const isBrief = subject.documentKind === 'brief';
 
   switch (ev.type) {
     case 'comment.created': {
@@ -238,15 +240,18 @@ export async function planEventTx(tx: Tx, ev: EventRow, slug: string): Promise<E
       assign(asId(changeOf(p, 'ownerMemberId')?.new), '把你设为 PRD 负责人');
       break;
     case 'document.saved':
-      mention(idList(p.mentionedMemberIds), '在 PRD 正文中 @ 了你');
+      mention(idList(p.mentionedMemberIds), isBrief ? '在简报正文中 @ 了你' : '在 PRD 正文中 @ 了你');
       break;
     case 'document.status_changed': {
       const ch = changeOf(p, 'status');
       const name = (s: unknown) => DOCUMENT_STATUS_LABELS[s as DocumentStatus] ?? shown(s);
-      await notifyFollowers(`把 PRD 状态从「${name(ch?.old)}」改为「${name(ch?.new)}」`);
+      await notifyFollowers(`${isBrief ? '把简报状态' : '把 PRD 状态'}从「${name(ch?.old)}」改为「${name(ch?.new)}」`);
       if (ch?.new === 'review') candidates.push(...(await signersTx(tx, subject)));
       break;
     }
+    case 'brief.updated':
+      assign(asId(changeOf(p, 'deciderMemberId')?.new), '把你设为简报决策人');
+      break;
     case 'check_item.updated':
     case 'check_item.signed': {
       const ch = changeOf(p, 'state');

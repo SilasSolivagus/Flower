@@ -14,7 +14,7 @@ import { type SelectionAnchor, selectionAnchor } from '@/features/documents/edit
 import { uploadDataImages } from '@/features/documents/import';
 import { editorAnchors, findSectionIndex, type SaveState, saveStateLabel } from '@/features/documents/model';
 import { ApiError, api, apiUpload } from '@/lib/api';
-import { linkKeys, qk, useApiMutation, useDocumentComments, useDocumentLinks, useMentionMembers } from '@/lib/queries';
+import { briefKeys, linkKeys, qk, useApiMutation, useDocumentComments, useDocumentLinks, useMentionMembers } from '@/lib/queries';
 import type { Attachment, DocumentDetail, LinkSuggestion } from '@/lib/types';
 import { AnchorCommentDialog } from './comments';
 
@@ -45,6 +45,7 @@ export function EditorPane({
   doc,
   onReload,
   section,
+  sectionSeq,
   activeCommentId = null,
   onAnchorClick,
   ref,
@@ -54,6 +55,8 @@ export function EditorPane({
   onReload: () => void;
   /** 地址栏 ?section=：编辑器渲染后滚动到这个小节。 */
   section?: string | null;
+  /** 地址栏 ?at=：同一小节再次定位时递增，让滚动重新执行。 */
+  sectionSeq?: string | null;
   /** 评论区当前选中的评论：正文里对应的高亮加深。 */
   activeCommentId?: string | null;
   /** 点击正文里的评论高亮。 */
@@ -114,7 +117,7 @@ export function EditorPane({
       }))),
     {
       silentError: true,
-      invalidate: [qk.documentRevisions(org, doc.id), linkKeys(org)],
+      invalidate: [qk.documentRevisions(org, doc.id), linkKeys(org), briefKeys(org)],
       // 只把这次保存的结果写进缓存里的详情，不重新拉取整篇正文
       onSuccess: (r) =>
         qc.setQueryData<{ document: DocumentDetail }>(qk.document(org, doc.displayKey), (old) =>
@@ -251,7 +254,7 @@ export function EditorPane({
       }
     }, 100);
     return () => clearInterval(timer);
-  }, [section]);
+  }, [section, sectionSeq]);
 
   /** 点击正文里的链接卡：站内跳转（编辑区是可编辑区域，浏览器不会自己跟随链接）；点击评论高亮：交给评论区定位。 */
   const onBodyClick = (e: MouseEvent<HTMLDivElement>) => {
@@ -267,7 +270,7 @@ export function EditorPane({
   };
 
   return (
-    <section className="rounded-md border bg-card" aria-label="正文">
+    <section className="min-w-0 rounded-md border bg-card" aria-label="正文">
       <div className="flex h-10 items-center justify-between border-b px-4 text-[13px] text-muted-foreground">
         <span>第 {doc.revisionNumber} 版</span>
         <span role="status">{saveStateLabel(state, editable)}</span>
@@ -285,7 +288,7 @@ export function EditorPane({
           <FormError error={save.error} />
         </div>
       )}
-      <div ref={container} className="relative px-2 py-4" onMouseUp={onSelect} onKeyUp={onSelect} onClick={onBodyClick}>
+      <div ref={container} className="relative min-w-0 max-w-full px-2 py-4" onMouseUp={onSelect} onKeyUp={onSelect} onClick={onBodyClick}>
         <DocumentBodyEditor ref={handle} initialMarkdown={doc.markdown ?? ''} editable={editable && !conflict} onDirty={onDirty} uploadImage={uploadImage} decorations={decorations} searchLinks={editable ? searchLinks : undefined} mentionMembers={mentionMembers.data} />
         {pick && (
           <Button

@@ -6,6 +6,7 @@ import { withOrg } from '../src/db/tx';
 import { createWorkflowTemplate, setProductWorkflowVersion } from '../src/definitions/workflows';
 import type { Actor } from '../src/domain-types';
 import { addDocumentComment, markDocumentCommentsRead } from '../src/documents/comments';
+import { createBrief } from '../src/documents/briefs';
 import { createDocument } from '../src/documents/documents';
 import { createIteration, setIterationStatus } from '../src/iterations/iterations';
 import { addRequirementComment, markRequirementCommentsRead } from '../src/requirements/comments';
@@ -161,5 +162,17 @@ describe('工作台', () => {
     expect(await markDocumentCommentsRead(t.db, owner, owned.id)).toBe(1);
     expect(await markDocumentCommentsRead(t.db, owner, joined.id)).toBe(1);
     expect((await getWorkbench(t.db, account.id, { today: TODAY })).unread.items.filter((u) => u.documentId)).toEqual([]);
+  });
+
+  it('简报上的未读评论显示简报编号，不与同号的 PRD 混淆', async () => {
+    const peer = (await resolveActor(t.db, peerAccountId, 'acme'))!;
+    const brief = await createBrief(t.db, peer, mine.productId, { title: '我评论过的简报' });
+    expect(brief.displayKey).toBe('PAN-B-1');
+    await addDocumentComment(t.db, owner, brief.id, { body: '先确认数据来源' });
+    await addDocumentComment(t.db, peer, brief.id, { body: '已补充' });
+
+    const wb = await getWorkbench(t.db, account.id, { today: TODAY });
+    expect(wb.unread.items.filter((u) => u.documentId).map((u) => [u.displayKey, u.documentId, u.title])).toEqual([['PAN-B-1', brief.id, '我评论过的简报']]);
+    await markDocumentCommentsRead(t.db, owner, brief.id);
   });
 });

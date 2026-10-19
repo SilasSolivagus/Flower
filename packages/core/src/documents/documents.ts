@@ -1,7 +1,7 @@
-import { and, asc, desc, eq, ilike, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, type SQL, sql } from 'drizzle-orm';
 import { productRoleOf, requireProductRole } from '../access/permissions';
 import type { Db } from '../db/client';
-import { documentRevisions, documents, documentTemplates, products, requirements, structureNodes } from '../db/schema';
+import { documentBriefs, documentRevisions, documents, documentTemplates, products, requirements, structureNodes } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
 import type { Actor, ProductRole } from '../domain-types';
 import { AppError, isUniqueViolation } from '../errors';
@@ -12,19 +12,23 @@ import { assertAssignableMember, memberNames } from '../requirements/context';
 import type { CheckItemView } from '../requirements/check-views';
 import { assertTitle, productKeyOf, displayKey as requirementDisplayKey, type MemberRef } from '../requirements/requirements';
 import { orgToday } from '../tasks/tasks';
+import { type BriefHeader, briefHeaderTx } from './brief-header';
 import { reanchorDocumentComments } from './comments';
 import { documentCheckItemViews } from './checks';
 import { linkRequirementsTx, syncPrdCheck } from './coverage';
 import type { DocumentKind, DocumentStatus, ExternalProvider, RevisionSnapshot } from './constants';
 import {
+  briefDisplayKey,
   canTransition,
   diffRevisionSnapshots,
   DOCUMENT_STATUS_LABELS,
-  DOCUMENT_TRANSITIONS,
   documentDisplayKey,
+  documentKeyOf,
+  documentTransitions,
   fillTemplate,
   missingRequiredSections,
   normalizeExternalUrl,
+  parseBriefKey,
   parseDocumentKey,
   type RevisionDiff,
 } from './markdown';
@@ -64,6 +68,12 @@ export type DocumentDetail = DocumentListItem & {
   checkItems: CheckItemView[];
   /** 模块文档对应的模块；变更 PRD 为空。 */
   node: ModuleNodeRef | null;
+  /** 简报的头部信息；其他文档为空。 */
+  brief: BriefHeader | null;
+  /** 变更 PRD 由哪份简报转出（该简报当前的 converted_document_id 指向它）；没有时为空。 */
+  sourceBrief: { id: string; displayKey: string; title: string } | null;
+  /** 所用模板的说明，显示在编辑器上方；没有模板或说明为空时为空。 */
+  templateGuidance: string | null;
   createdAt: Date;
 };
 export type RevisionListItem = {
@@ -119,17 +129,31 @@ async function hydrate(tx: Tx, rows: DocRow[]): Promise<DocumentListItem[]> {
   const keys = await tx.select({ id: products.id, key: products.key }).from(products).where(inArray(products.id, [...new Set(rows.map((r) => r.productId))]));
   const keyOf = new Map(keys.map((k) => [k.id, k.key]));
   const names = await memberNames(tx, rows.map((r) => r.ownerMemberId));
-  const counts = await tx
-    .select({ id: requirements.changeDocumentId, n: sql<number>`count(*)::int` })
-    .from(requirements)
-    .where(and(inArray(requirements.changeDocumentId, rows.map((r) => r.id)), isNull(requirements.deletedAt)))
-    .groupBy(requirements.changeDocumentId);
+  // 覆盖需求数：变更 PRD 看 change_document_id，简报看 brief_document_id
+  const changeIds = rows.filter((r) => r.kind !== 'brief').map((r) => r.id);
+  const briefIds = rows.filter((r) => r.kind === 'brief').map((r) => r.id);
+  const counts = [
+    ...(changeIds.length > 0
+      ? await tx
+          .select({ id: requirements.changeDocumentId, n: sql<number>`count(*)::int` })
+          .from(requirements)
+          .where(and(inArray(requirements.changeDocumentId, changeIds), isNull(requirements.deletedAt)))
+          .groupBy(requirements.changeDocumentId)
+      : []),
+    ...(briefIds.length > 0
+      ? await tx
+          .select({ id: requirements.briefDocumentId, n: sql<number>`count(*)::int` })
+          .from(requirements)
+          .where(and(inArray(requirements.briefDocumentId, briefIds), isNull(requirements.deletedAt)))
+          .groupBy(requirements.briefDocumentId)
+      : []),
+  ];
   const countOf = new Map(counts.map((c) => [c.id!, c.n]));
   return rows.map((r) => ({
     id: r.id,
     productId: r.productId,
     number: r.number,
-    displayKey: documentDisplayKey(keyOf.get(r.productId)!, r.number),
+    displayKey: documentKeyOf(r.kind, keyOf.get(r.productId)!, r.number),
     kind: r.kind,
     title: r.title,
     source: r.source,
@@ -152,15 +176,27 @@ async function moduleNodeOf(tx: Tx, nodeId: string | null): Promise<ModuleNodeRe
 
 async function detailOf(tx: Tx, actor: Actor, doc: DocRow): Promise<DocumentDetail> {
   const role = await productRoleOf(tx, actor, doc.productId);
-  if (!role) throw new AppError('not_found', 'PRD 不存在');
+  if (!role) throw new AppError('not_found', doc.kind === 'brief' ? '简报不存在' : 'PRD 不存在');
   const [base] = await hydrate(tx, [doc]);
   const productKey = await productKeyOf(tx, doc.productId);
   const [rev] = doc.currentRevisionId ? await tx.select().from(documentRevisions).where(eq(documentRevisions.id, doc.currentRevisionId)) : [];
+  const covers = doc.kind === 'brief' ? eq(requirements.briefDocumentId, doc.id) : eq(requirements.changeDocumentId, doc.id);
   const reqs = await tx
     .select()
     .from(requirements)
-    .where(and(eq(requirements.changeDocumentId, doc.id), isNull(requirements.deletedAt)))
+    .where(and(covers, isNull(requirements.deletedAt)))
     .orderBy(asc(requirements.number));
+  const [header] = doc.kind === 'brief' ? await tx.select().from(documentBriefs).where(eq(documentBriefs.documentId, doc.id)) : [];
+  const [source] =
+    doc.kind === 'change'
+      ? await tx
+          .select({ id: documents.id, number: documents.number, title: documents.title })
+          .from(documentBriefs)
+          .innerJoin(documents, eq(documents.id, documentBriefs.documentId))
+          .where(and(eq(documentBriefs.convertedDocumentId, doc.id), isNull(documents.deletedAt)))
+          .limit(1)
+      : [];
+  const [tpl] = doc.templateId ? await tx.select({ guidance: documentTemplates.guidance }).from(documentTemplates).where(eq(documentTemplates.id, doc.templateId)) : [];
   return {
     ...base!,
     productKey,
@@ -169,10 +205,13 @@ async function detailOf(tx: Tx, actor: Actor, doc: DocRow): Promise<DocumentDeta
     markdown: rev ? rev.snapshot.markdown : null,
     revisionNumber: rev ? rev.version : null,
     myRole: role,
-    transitions: role === 'viewer' ? [] : DOCUMENT_TRANSITIONS[doc.status],
+    transitions: role === 'viewer' ? [] : documentTransitions(doc.kind, doc.status),
     requirements: reqs.map((r) => ({ id: r.id, displayKey: requirementDisplayKey(productKey, r.number), title: r.title, stateKey: r.stateKey })),
-    checkItems: doc.kind === 'module' ? [] : await documentCheckItemViews(tx, actor, role, doc),
+    checkItems: doc.kind === 'change' ? await documentCheckItemViews(tx, actor, role, doc) : [],
     node: await moduleNodeOf(tx, doc.nodeId),
+    brief: header ? await briefHeaderTx(tx, header) : null,
+    sourceBrief: source ? { id: source.id, displayKey: briefDisplayKey(productKey, source.number), title: source.title } : null,
+    templateGuidance: tpl?.guidance.trim() ? tpl.guidance : null,
     createdAt: doc.createdAt,
   };
 }
@@ -248,6 +287,60 @@ export async function commitSystemRevisionTx(
   return { id: rev.id, number: rev.number, version };
 }
 
+/**
+ * 新建一份 Flower 文档：按类型取编号（简报用 brief_seq，变更 PRD 与模块文档共用 document_seq），写第 1 版正文，
+ * 重建正文里的 [[ ]] 链接并接上写法相同的悬空链接。不检查权限，不记事件（调用方记）。
+ */
+export async function insertNativeDocumentTx(
+  tx: Tx,
+  actor: Actor,
+  input: {
+    productId: string;
+    kind: 'change' | 'brief';
+    title: string;
+    status: DocumentStatus;
+    ownerMemberId: string | null;
+    templateId: string | null;
+    markdown: string;
+    summary: string | null;
+  },
+): Promise<DocRow> {
+  const markdown = assertMarkdown(input.markdown);
+  const [seq] =
+    input.kind === 'brief'
+      ? await tx
+          .update(products)
+          .set({ briefSeq: sql`${products.briefSeq} + 1` })
+          .where(eq(products.id, input.productId))
+          .returning({ n: products.briefSeq, key: products.key })
+      : await tx
+          .update(products)
+          .set({ documentSeq: sql`${products.documentSeq} + 1` })
+          .where(eq(products.id, input.productId))
+          .returning({ n: products.documentSeq, key: products.key });
+  const [row] = await tx
+    .insert(documents)
+    .values({
+      orgId: actor.orgId,
+      productId: input.productId,
+      number: seq!.n,
+      kind: input.kind,
+      source: 'native',
+      title: input.title,
+      ownerMemberId: input.ownerMemberId,
+      templateId: input.templateId,
+      status: input.status,
+      createdBy: actor.memberId,
+      updatedAt: new Date(),
+    })
+    .returning();
+  const rev = await writeRevision(tx, actor, row!, { title: input.title, markdown }, { summary: input.summary, allowMerge: false });
+  await tx.update(documents).set({ currentRevisionId: rev.id }).where(eq(documents.id, row!.id));
+  await syncSourceLinks(tx, actor.orgId, { type: 'document', id: row!.id, productKey: seq!.key }, markdown, { markdown: true });
+  await relinkDangling(tx, { type: 'document', id: row!.id, texts: [documentKeyOf(input.kind, seq!.key, row!.number)], withSections: true });
+  return { ...row!, currentRevisionId: rev.id };
+}
+
 export async function createDocument(
   db: Db,
   actor: Actor,
@@ -270,39 +363,39 @@ export async function createDocument(
       const names = await memberNames(tx, [actor.memberId]);
       markdown = fillTemplate(tpl.body, { date: await orgToday(tx, actor.orgId), author: names.get(actor.memberId) ?? '' });
     }
-    const [seq] = await tx
-      .update(products)
-      .set({ documentSeq: sql`${products.documentSeq} + 1` })
-      .where(eq(products.id, productId))
-      .returning({ n: products.documentSeq });
     let doc: DocRow;
-    try {
-      [doc] = (await tx
-        .insert(documents)
-        .values({
-          orgId: actor.orgId,
-          productId,
-          number: seq!.n,
-          kind: 'change',
-          source: external ? 'external' : 'native',
-          title,
-          ownerMemberId: input.ownerMemberId ?? null,
-          templateId,
-          status: 'draft',
-          externalUrl: external?.url ?? null,
-          externalUrlKey: external?.key ?? null,
-          externalProvider: external?.provider ?? null,
-          createdBy: actor.memberId,
-        })
-        .returning()) as [DocRow];
-    } catch (e) {
-      if (isUniqueViolation(e)) throw new AppError('conflict', '该网址已对应其他 PRD');
-      throw e;
-    }
-    if (!external) {
-      const rev = await writeRevision(tx, actor, doc, { title, markdown }, { summary: null, allowMerge: false });
-      await tx.update(documents).set({ currentRevisionId: rev.id }).where(eq(documents.id, doc.id));
-      await syncSourceLinks(tx, actor.orgId, { type: 'document', id: doc.id, productKey: await productKeyOf(tx, productId) }, markdown, { markdown: true });
+    if (external) {
+      const [seq] = await tx
+        .update(products)
+        .set({ documentSeq: sql`${products.documentSeq} + 1` })
+        .where(eq(products.id, productId))
+        .returning({ n: products.documentSeq });
+      try {
+        [doc] = (await tx
+          .insert(documents)
+          .values({
+            orgId: actor.orgId,
+            productId,
+            number: seq!.n,
+            kind: 'change',
+            source: 'external',
+            title,
+            ownerMemberId: input.ownerMemberId ?? null,
+            templateId,
+            status: 'draft',
+            externalUrl: external.url,
+            externalUrlKey: external.key,
+            externalProvider: external.provider,
+            createdBy: actor.memberId,
+          })
+          .returning()) as [DocRow];
+      } catch (e) {
+        if (isUniqueViolation(e)) throw new AppError('conflict', '该网址已对应其他 PRD');
+        throw e;
+      }
+      await relinkDangling(tx, { type: 'document', id: doc.id, texts: [documentDisplayKey(await productKeyOf(tx, productId), doc.number)], withSections: true });
+    } else {
+      doc = await insertNativeDocumentTx(tx, actor, { productId, kind: 'change', title, status: 'draft', ownerMemberId: input.ownerMemberId ?? null, templateId, markdown, summary: null });
     }
     await recordEvent(tx, {
       orgId: actor.orgId,
@@ -313,7 +406,6 @@ export async function createDocument(
       actor,
       payload: { number: doc.number, title, source: doc.source, externalUrl: doc.externalUrl, templateId, ownerMemberId: doc.ownerMemberId },
     });
-    await relinkDangling(tx, { type: 'document', id: doc.id, texts: [documentDisplayKey(await productKeyOf(tx, productId), doc.number)], withSections: true });
     if (input.requirementIds?.length) await linkRequirementsTx(tx, actor, doc.id, input.requirementIds);
     return documentDetailInTx(tx, actor, doc.id);
   });
@@ -344,15 +436,26 @@ export async function getDocument(db: Db, actor: Actor, id: string): Promise<Doc
 }
 
 export async function getDocumentByKey(db: Db, actor: Actor, key: string): Promise<DocumentDetail> {
-  const parsed = parseDocumentKey(key);
-  if (!parsed) throw new AppError('not_found', 'PRD 不存在');
+  const prd = parseDocumentKey(key);
+  const brief = prd ? null : parseBriefKey(key);
+  const parsed = prd ?? brief;
+  const missing = brief ? '简报不存在' : 'PRD 不存在';
+  if (!parsed) throw new AppError('not_found', missing);
   return withOrg(db, actor.orgId, async (tx) => {
     const [row] = await tx
       .select({ d: documents })
       .from(documents)
       .innerJoin(products, eq(products.id, documents.productId))
-      .where(and(eq(products.key, parsed.productKey), eq(documents.number, parsed.number), isNull(documents.deletedAt), isNull(products.deletedAt)));
-    if (!row) throw new AppError('not_found', 'PRD 不存在');
+      .where(
+        and(
+          eq(products.key, parsed.productKey),
+          eq(documents.number, parsed.number),
+          brief ? eq(documents.kind, 'brief') : ne(documents.kind, 'brief'),
+          isNull(documents.deletedAt),
+          isNull(products.deletedAt),
+        ),
+      );
+    if (!row) throw new AppError('not_found', missing);
     return detailOf(tx, actor, row.d);
   });
 }
@@ -367,6 +470,9 @@ export async function updateDocument(
     const cur = await loadDocument(tx, id, { lock: true });
     await requireProductRole(tx, actor, cur.productId, 'editor');
     assertWritable(cur);
+    if (cur.kind === 'brief' && input.ownerMemberId !== undefined && input.ownerMemberId !== cur.ownerMemberId) {
+      throw new AppError('invalid', '简报没有负责人，请改头部的提出人、决策人或作者');
+    }
     const next = {
       title: input.title === undefined ? cur.title : assertTitle(input.title),
       ownerMemberId: input.ownerMemberId === undefined ? cur.ownerMemberId : input.ownerMemberId,
@@ -512,7 +618,7 @@ export async function transitionDocument(db: Db, actor: Actor, id: string, input
   return withOrg(db, actor.orgId, async (tx) => {
     const doc = await loadDocument(tx, id, { lock: true });
     await requireProductRole(tx, actor, doc.productId, 'editor');
-    if (!canTransition(doc.status, input.to)) {
+    if (!canTransition(doc.status, input.to, doc.kind)) {
       throw new AppError('invalid', `不能从「${DOCUMENT_STATUS_LABELS[doc.status]}」改为「${DOCUMENT_STATUS_LABELS[input.to]}」`);
     }
     if (input.to === 'review' && doc.source === 'native' && doc.templateId) {
@@ -527,8 +633,8 @@ export async function transitionDocument(db: Db, actor: Actor, id: string, input
 }
 
 /**
- * 改 PRD 状态：记录 document.status_changed，再按 id 升序锁住覆盖的需求，把它们的「PRD」检查项同步为新状态对应的结果。
- * 不检查权限与能否流转（调用方决定）。调用方已锁住文档行（锁顺序：PRD → 需求）。
+ * 改文档状态：记录 document.status_changed（简报的 payload 带 kind: 'brief'，事件规则据此跳过）；变更 PRD 再按 id 升序锁住覆盖的需求，
+ * 把它们的「PRD」检查项同步为新状态对应的结果。不检查权限与能否流转（调用方决定）。调用方已锁住文档行（锁顺序：文档 → 需求）。
  */
 export async function setDocumentStatusTx(tx: Tx, actor: Actor, doc: DocRow, to: DocumentStatus): Promise<void> {
   await tx.update(documents).set({ status: to, updatedAt: new Date() }).where(eq(documents.id, doc.id));
@@ -539,8 +645,9 @@ export async function setDocumentStatusTx(tx: Tx, actor: Actor, doc: DocRow, to:
     subjectType: 'document',
     subjectId: doc.id,
     actor,
-    payload: { changes: [{ field: 'status', old: doc.status, new: to }] },
+    payload: { changes: [{ field: 'status', old: doc.status, new: to }], ...(doc.kind === 'brief' ? { kind: 'brief' } : {}) },
   });
+  if (doc.kind !== 'change') return;
   const covered = await tx
     .select({ id: requirements.id })
     .from(requirements)

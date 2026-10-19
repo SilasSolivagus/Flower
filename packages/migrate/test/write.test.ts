@@ -13,6 +13,7 @@ import {
   createRequirement,
   createStructureNode,
   documentAffectedNodes,
+  documentBriefs,
   documentRevisions,
   documents,
   domainEvents,
@@ -137,6 +138,12 @@ describe('写入数据库', () => {
     await t.adminDb.insert(progressUpdates).values({ orgId: actor.orgId, workItemId: wi!.id, body: '工作项进展', authorMemberId: actor.memberId });
     await t.adminDb.insert(progressUpdates).values({ orgId: actor.orgId, requirementId: created.id, body: '需求进展', authorMemberId: actor.memberId });
     await t.adminDb.insert(blockers).values({ orgId: actor.orgId, workItemId: wi!.id, description: '工作项阻塞' });
+    const [briefDoc] = await t.adminDb
+      .insert(documents)
+      .values({ orgId: actor.orgId, productId: product!.id, number: 1, kind: 'brief', source: 'native', title: '导入后简报', status: 'discussing' })
+      .returning();
+    await t.adminDb.insert(documentBriefs).values({ documentId: briefDoc!.id, orgId: actor.orgId, convertedDocumentId: prd.id });
+    await t.adminDb.update(requirements).set({ briefDocumentId: briefDoc!.id }).where(eq(requirements.id, created.id));
 
     await writeImport(t.adminDb, plan, { replace: true });
 
@@ -155,6 +162,8 @@ describe('写入数据库', () => {
     }
     for (const table of [memberNotifications, subscriptions, wecomApps]) expect(await t.adminDb.select().from(table)).toEqual([]);
     for (const table of [workItems, progressUpdates]) expect(await t.adminDb.select().from(table)).toEqual([]);
+    expect(await t.adminDb.select().from(documentBriefs)).toEqual([]);
+    expect(await t.adminDb.select().from(documents).where(eq(documents.kind, 'brief'))).toEqual([]);
     expect(await t.adminDb.select().from(blockers).where(isNotNull(blockers.workItemId))).toEqual([]);
     const [cursor] = await t.adminDb.select().from(notificationCursors).where(eq(notificationCursors.orgId, after.orgId));
     const [latest] = await t.adminDb.select({ id: domainEvents.id }).from(domainEvents).where(eq(domainEvents.orgId, after.orgId)).orderBy(desc(domainEvents.occurredAt), desc(domainEvents.id)).limit(1);

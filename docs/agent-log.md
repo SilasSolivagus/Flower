@@ -20,6 +20,29 @@
 
 ## 记录
 
+### 2026-10-19 · 云端 · 合前修简报软闸口提示与 760 宽表
+- 分支 / PR：`feat/p3c2-requirement-brief` → `main`，PR #19（不另开 PR，不合并）
+- 做了什么：写 PRD 闸口「只作提示，不限制改状态与转 PRD。」改为琥珀色提示条（Info 图标、浅底描边），行为仍不拦改状态与转 PRD。正文宽表（简报第 10 节一类 5 列表）只在表格容器内横向滚动，编辑器链路允许收缩，760 下整页不再被撑出视口。端到端补上：等第 10 节宽表画出后再测 `expectNoPageOverflow`，并核对简报页签、需求详情、模板设置。
+- 怎么验证的：`pnpm typecheck` 通过；`pnpm --filter @flower/web lint` 0 警告；`e2e/briefs.spec.ts` 3 条通过（含 760 下第 10 节宽表画出后的 `expectNoPageOverflow`，以及简报页签、需求详情、模板设置）。上次 CI 的端到端在 30 分钟时限内仍在跑就被取消（日志末尾还在打开编辑器，Postgres 死锁已被既有重试处理），本次把该作业时限调到 60 分钟。
+- 留给对方：CI（含端到端）绿之前不要合并。不要开始 P3-C3。
+
+### 2026-10-19 · 云端 · 审查 P3-C2 并开 PR
+- 分支 / PR：`feat/p3c2-requirement-brief` → `main`，PR #19
+- 做了什么：对照设计与计划审查租户隔离、RLS、权限、与 `main` 的差异。`document_briefs` 带 `org_id` 且策略与既有租户表一致；简报读写都在 `withOrg` 里，列表按可见产品过滤，看不到的简报按不存在处理；只读成员与只读 Token 不能改头部、勾选闸口或转 PRD。与 `origin/main` 无落后提交。补了一处：文档详情「覆盖的需求」混入无法识别的编号时，与新建简报一样直接报错，不再静默丢掉。
+- 怎么验证的：`pnpm typecheck` 通过；`pnpm --filter @flower/web lint --max-warnings 0` 0 警告；`pnpm test`：core 735、web 261、migrate 124，全部通过。端到端与镜像冒烟沿用 `docs/p3c2-validation.md` 的记录（159 通过、1 跳过；`./scripts/smoke.sh` 通过），本次未重跑。
+- 留给对方：已知限制与人工验收仍见 `docs/p3c2-validation.md` 第 5、7 节。不要自行合并。不要开始 P3-C3。
+
+### 2026-10-16 · 本地 · P3-C2 需求简报
+- 分支 / PR：`feat/p3c2-requirement-brief`
+- 做了什么：
+  - 数据模型：`documents.kind` 加 `brief`，简报四个状态；`products.brief_seq` 与按类型拆开的编号唯一索引；新表 `document_briefs`（RLS）；`requirements.brief_document_id`；`document_templates.guidance`；迁移 0021（结构）与 0022（RLS、两个组织补齐预置简报模板）。
+  - core：预置简报模板与闸口、转 PRD 对应表（`brief-template.ts`）；闸口判定、转 PRD 拼接、上下文 Markdown（`brief-model.ts`）；新建、头部、覆盖需求、闸口、列表、转 PRD、上下文（`briefs.ts`、`coverage.ts`）；文档系统按类型区分编号、详情、流转、链接卡与被引用；PRD 专用入口（检查项、签字、影响声明、合入、负责人）拒绝简报；简报改状态不触发群推送；决策人「被指派」通知；需求详情带所挂简报；工作台与通知文案按类型生成编号。
+  - 接口 `/orgs/:org/briefs`（列表、头部、闸口、转 PRD、上下文）、`/products/:id/briefs`、模板接口的 `kind`。
+  - 页面：文档页「简报」页签与新建、简报详情（模板说明、头部信息、覆盖的需求、写 PRD 闸口、转 PRD、复制与下载 Markdown）、PRD 显示来源简报、需求详情「简报」区块、模板设置切换简报模板。
+  - perf 命令加两个简报用例。
+- 怎么验证的：`pnpm test`：core 735、web 261、migrate 124，全部通过；typecheck 通过；web lint 0 警告；全量 e2e 159 通过、1 跳过；`./scripts/smoke.sh` 通过。开发库迁移核对与预期一致（RLS、两个组织的预置简报模板、编号索引、需求 766 与文档 203 不变）；pan123 上写一份测试简报并转 PRD 的复验通过（含编辑器重排格式后的闸口判定）；简报列表 p95 4.2 毫秒、上下文 5.6 毫秒。详见 `docs/p3c2-validation.md`。
+- 留给对方：已知限制见 `docs/p3c2-validation.md` 第 5 节；下一步 P3-C3 周期汇总，之后规划原型评审增值模块。
+
 ### 2026-10-14 · 本地 · P3-C1 工作跟进
 - 分支 / PR：`feat/p3c1-tracking`
 - 做了什么：

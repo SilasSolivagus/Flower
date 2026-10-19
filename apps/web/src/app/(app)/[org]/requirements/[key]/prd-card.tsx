@@ -7,7 +7,7 @@ import { FormError } from '@/components/form-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { documentHref } from '@/features/documents/model';
-import { api } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 import { documentKeys, qk, requirementKeys, useApiMutation } from '@/lib/queries';
 import type { RequirementDetail } from '@/lib/types';
 import { CreateDocumentDialog } from '../../documents/create-dialog';
@@ -23,7 +23,9 @@ export function PrdCard({ org, requirement: r }: { org: string; requirement: Req
   const unlink = useApiMutation(() => api(`/orgs/${org}/documents/${doc!.id}/requirements/${r.id}`, { method: 'DELETE' }), { invalidate, success: '已移出 PRD' });
   const link = useApiMutation(
     async (k: string) => {
-      const found = await api<{ document: { id: string } }>(`/orgs/${org}/documents/${encodeURIComponent(k.trim().toUpperCase())}`);
+      const found = await api<{ document: { id: string; kind: string } }>(`/orgs/${org}/documents/${encodeURIComponent(k.trim().toUpperCase())}`);
+      // 简报与 PRD 编号同形（PAN-B-n / PAN-PRD-n），这里只接受变更 PRD，免得把需求挂到简报上
+      if (found.document.kind !== 'change') throw new ApiError(400, 'invalid', `请输入 PRD 编号，例如 ${r.productKey}-PRD-1`, null);
       return api(`/orgs/${org}/documents/${found.document.id}/requirements`, { method: 'POST', body: { requirementIds: [r.id] } });
     },
     {

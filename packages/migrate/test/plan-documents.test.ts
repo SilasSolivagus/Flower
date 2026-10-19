@@ -32,7 +32,10 @@ describe('导入计划：prd 页面', () => {
     ]);
     expect(doc1.ownerMemberId).toBe(member('李四'));
     expect(rows.products[0]!.documentSeq).toBe(2);
-    expect(rows.documentTemplates.map((t) => t.name)).toEqual(['变更 PRD（预置）']);
+    expect(rows.documentTemplates.map((t) => [t.kind, t.name])).toEqual([
+      ['change', '变更 PRD（预置）'],
+      ['brief', '需求简报（预置）'],
+    ]);
   });
 
   it('修订按旧版本号升序重新编号；当前正文与最后一版不同时追加一版；图片引用改为附件网址，内嵌图片抽成附件', () => {

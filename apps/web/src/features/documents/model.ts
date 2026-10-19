@@ -1,6 +1,7 @@
-import { bestQuoteMatch, CHANGE_DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, normalizeHeading, splitSections, squash, type TemplateSection } from '@flower/core/markdown';
+import { classifyTarget } from '@flower/core/links';
+import { bestQuoteMatch, BRIEF_STATUSES, CHANGE_DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, normalizeHeading, splitSections, squash, type TemplateSection } from '@flower/core/markdown';
 import { nodeOptions } from '@/features/structure/model';
-import type { AffectedChangeType, DocumentComment, MergeStatus, StructureNode } from '@/lib/types';
+import type { AffectedChangeType, BriefRelatedLink, BriefStatus, DocumentComment, MergeStatus, StructureNode } from '@/lib/types';
 
 export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
   draft: '#8a9199',
@@ -11,6 +12,9 @@ export const DOCUMENT_STATUS_COLOR: Record<DocumentStatus, string> = {
   discarded: '#5c6570',
   active: '#1e8a5a',
   archived: '#8a9199',
+  discussing: '#2f6fd6',
+  ready: '#1f6f54',
+  converted: '#0f766e',
 };
 
 export const PROVIDER_LABEL: Record<ExternalProvider, string> = {
@@ -29,16 +33,79 @@ export function sourceLabel(d: { source: 'native' | 'external'; externalProvider
 
 export const documentHref = (org: string, displayKey: string): string => `/${org}/documents/${displayKey}`;
 
-export type DocumentView = 'change' | 'modules';
+export type DocumentView = 'change' | 'modules' | 'briefs';
 
-/** 文档页的页签只由地址栏决定：?view=modules 为「模块文档」，否则为「变更 PRD」。 */
-export const documentView = (sp: URLSearchParams): DocumentView => (sp.get('view') === 'modules' ? 'modules' : 'change');
+/** 文档页的页签只由地址栏决定：?view=modules 为「模块文档」，?view=briefs 为「简报」，否则为「变更 PRD」。 */
+export function documentView(sp: URLSearchParams): DocumentView {
+  const v = sp.get('view');
+  return v === 'modules' ? 'modules' : v === 'briefs' ? 'briefs' : 'change';
+}
 
 /** 「模块文档」页签的地址；带 nodeId 时定位到这个模块。 */
 export function moduleDocsHref(org: string, productKey: string, nodeId?: string | null): string {
   const p = new URLSearchParams({ product: productKey, view: 'modules' });
   if (nodeId) p.set('node', nodeId);
   return `/${org}/documents?${p.toString()}`;
+}
+
+/** 「简报」页签的地址。 */
+export const briefsHref = (org: string, productKey: string): string => `/${org}/documents?${new URLSearchParams({ product: productKey, view: 'briefs' }).toString()}`;
+
+export type BriefListFilter = { product: string; status: BriefStatus | ''; decider: string };
+
+export function parseBriefFilter(sp: URLSearchParams): BriefListFilter {
+  const status = sp.get('status') ?? '';
+  return {
+    product: sp.get('product') ?? '',
+    status: (BRIEF_STATUSES as readonly string[]).includes(status) ? (status as BriefStatus) : '',
+    decider: sp.get('decider') ?? '',
+  };
+}
+
+/** 地址栏：带上产品与页签。 */
+export function briefFilterToSearch(f: BriefListFilter): string {
+  const p = new URLSearchParams();
+  if (f.product) p.set('product', f.product);
+  p.set('view', 'briefs');
+  if (f.status) p.set('status', f.status);
+  if (f.decider) p.set('decider', f.decider);
+  return p.toString();
+}
+
+/** 接口查询串：产品用 id。 */
+export function briefFilterToApiQuery(f: BriefListFilter, productId: string): string {
+  const p = new URLSearchParams({ product: productId });
+  if (f.status) p.set('status', f.status);
+  if (f.decider) p.set('decider', f.decider);
+  return p.toString();
+}
+
+export const gateLabel = (g: { passed: number; total: number }): string => `${g.passed}/${g.total}`;
+
+/** 转 PRD 成功后的提示：已挂在其他 PRD 上、没有覆盖的需求逐条列出。 */
+export function convertMessage(r: { document: { displayKey: string }; skipped: Array<{ displayKey: string; documentKey: string }> }): string {
+  const head = `已生成 ${r.document.displayKey}`;
+  if (r.skipped.length === 0) return head;
+  return `${head}；以下需求已挂在其他 PRD 上，没有覆盖：${r.skipped.map((s) => `${s.displayKey}（${s.documentKey}）`).join('、')}`;
+}
+
+/** 新增关联文档的输入：以 http(s):// 开头为网址，否则为 [[ ]] 引用（去掉外层方括号）。 */
+export function parseRelatedInput(text: string, note: string): BriefRelatedLink | null {
+  const t = text.trim();
+  if (!t) return null;
+  if (/^https?:\/\//i.test(t)) return { kind: 'url', url: t, note: note.trim() };
+  const target = t.replace(/^\[\[/, '').replace(/\]\]$/, '').trim();
+  return target ? { kind: 'wiki', target, note: note.trim() } : null;
+}
+
+/** 关联文档里 [[ ]] 引用的站内地址：需求、PRD、简报、任务按编号跳转，其他写法不链接。 */
+export function relatedLinkHref(org: string, target: string): string | null {
+  const t = classifyTarget(target);
+  if (t.kind === 'requirement') return `/${org}/requirements/${t.productKey}-${t.number}`;
+  if (t.kind === 'document') return `/${org}/documents/${t.productKey}-PRD-${t.number}`;
+  if (t.kind === 'brief') return `/${org}/documents/${t.productKey}-B-${t.number}`;
+  if (t.kind === 'task') return `/${org}/tasks/${t.productKey}-T-${t.number}`;
+  return null;
 }
 
 export type DocumentListFilter = { product: string; status: DocumentStatus | ''; owner: string; source: 'native' | 'external' | ''; q: string };
@@ -73,6 +140,14 @@ export function parseRequirementKeys(input: string): string[] {
     .map((s) => s.trim().toUpperCase())
     .filter((s) => /^[A-Z][A-Z0-9]{1,9}-\d{1,9}$/.test(s));
   return [...new Set(keys)];
+}
+
+/** 需求编号输入里无法识别的片段（与 parseRequirementKeys 使用同一套分隔和格式）。 */
+export function invalidRequirementKeys(input: string): string[] {
+  return input
+    .split(/[\s,，、;；]+/)
+    .map((s) => s.trim())
+    .filter((s) => s && !/^[A-Z][A-Z0-9]{1,9}-\d{1,9}$/.test(s.toUpperCase()));
 }
 
 export type SaveState = 'saved' | 'dirty' | 'saving';

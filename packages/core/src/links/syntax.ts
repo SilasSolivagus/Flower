@@ -16,6 +16,8 @@ export const CONTEXT_MAX = 120;
 export type WikiTarget =
   | { kind: 'requirement'; productKey: string; number: number }
   | { kind: 'document'; productKey: string; number: number; section: string | null }
+  /** 需求简报（P3-C2），解析为 target_type = 'document' 的简报文档。 */
+  | { kind: 'brief'; productKey: string; number: number; section: string | null }
   | { kind: 'task'; productKey: string; number: number }
   | { kind: 'iteration'; productKey: string | null; name: string }
   /** 结构树节点路径，或只有一段的旧编号；首段是否为产品前缀见 canonicalText。 */
@@ -28,6 +30,7 @@ export type TextPart = { text: string; pos: number; code: boolean };
 
 const KEY = '([A-Za-z][A-Za-z0-9]{1,9})';
 const DOC_RE = new RegExp(`^${KEY}-PRD-(\\d{1,9})(?:#(.*))?$`, 'i');
+const BRIEF_RE = new RegExp(`^${KEY}-B-(\\d{1,9})(?:#(.*))?$`, 'i');
 const TASK_RE = new RegExp(`^${KEY}-T-(\\d{1,9})$`, 'i');
 const REQ_RE = new RegExp(`^${KEY}-(\\d{1,9})$`);
 const ITER_RE = new RegExp(`^(?:${KEY}\\/)?迭代[:：](.+)$`);
@@ -85,6 +88,8 @@ export function classifyTarget(target: string): WikiTarget {
   const t = target.trim();
   let m = DOC_RE.exec(t);
   if (m) return { kind: 'document', productKey: m[1]!.toUpperCase(), number: Number(m[2]), section: m[3]?.trim() || null };
+  m = BRIEF_RE.exec(t);
+  if (m) return { kind: 'brief', productKey: m[1]!.toUpperCase(), number: Number(m[2]), section: m[3]?.trim() || null };
   m = TASK_RE.exec(t);
   if (m) return { kind: 'task', productKey: m[1]!.toUpperCase(), number: Number(m[2]) };
   m = REQ_RE.exec(t);
@@ -124,6 +129,8 @@ export function canonicalText(t: WikiTarget, sourceProductKey: string): string {
       return `${t.productKey}-${t.number}`;
     case 'document':
       return `${t.productKey}-PRD-${t.number}${t.section ? `#${t.section}` : ''}`;
+    case 'brief':
+      return `${t.productKey}-B-${t.number}${t.section ? `#${t.section}` : ''}`;
     case 'task':
       return taskDisplayKey(t.productKey, t.number);
     case 'iteration':
