@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { FormError } from '@/components/form-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { parseRequirementKeys } from '@/features/documents/model';
+import { invalidRequirementKeys, parseRequirementKeys } from '@/features/documents/model';
 import { ApiError, api } from '@/lib/api';
 import { useApiMutation } from '@/lib/queries';
 import type { DocumentDetail } from '@/lib/types';
@@ -17,6 +17,8 @@ export function CoveredRequirements({ org, doc, invalidate }: { org: string; doc
   const [keys, setKeys] = useState('');
   const link = useApiMutation(
     async (input: string) => {
+      const bad = invalidRequirementKeys(input);
+      if (bad.length > 0) throw new ApiError(400, 'invalid', `无法识别的需求编号：${bad.join('、')}（应为 ${doc.productKey}-12 这样的写法）`, null);
       const wanted = parseRequirementKeys(input);
       if (wanted.length === 0) throw new ApiError(400, 'invalid', '请输入需求编号，例如 PAN-12', null);
       const ids = await Promise.all(wanted.map(async (k) => (await api<{ requirement: { id: string } }>(`/orgs/${org}/requirements/${encodeURIComponent(k)}`)).requirement.id));
