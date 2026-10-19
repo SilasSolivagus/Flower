@@ -21,7 +21,7 @@
 ## 记录
 
 ### 2026-10-19 · 云端 · 审查 P3-C2 并开 PR
-- 分支 / PR：`feat/p3c2-requirement-brief` → `main`（PR 号见本条更新；handoff 同步）
+- 分支 / PR：`feat/p3c2-requirement-brief` → `main`，PR #19
 - 做了什么：对照设计与计划审查租户隔离、RLS、权限、与 `main` 的差异。`document_briefs` 带 `org_id` 且策略与既有租户表一致；简报读写都在 `withOrg` 里，列表按可见产品过滤，看不到的简报按不存在处理；只读成员与只读 Token 不能改头部、勾选闸口或转 PRD。与 `origin/main` 无落后提交。补了一处：文档详情「覆盖的需求」混入无法识别的编号时，与新建简报一样直接报错，不再静默丢掉。
 - 怎么验证的：`pnpm typecheck` 通过；`pnpm --filter @flower/web lint --max-warnings 0` 0 警告；`pnpm test`：core 735、web 261、migrate 124，全部通过。端到端与镜像冒烟沿用 `docs/p3c2-validation.md` 的记录（159 通过、1 跳过；`./scripts/smoke.sh` 通过），本次未重跑。
 - 留给对方：已知限制与人工验收仍见 `docs/p3c2-validation.md` 第 5、7 节。不要自行合并。不要开始 P3-C3。
