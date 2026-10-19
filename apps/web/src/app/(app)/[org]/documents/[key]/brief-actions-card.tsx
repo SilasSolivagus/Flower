@@ -21,7 +21,7 @@ const downloadName = (displayKey: string, title: string): string => {
 
 type Props = { org: string; doc: DocumentDetail; saveEditor: () => Promise<number | null> };
 
-/** 转 PRD 的确认：先列出没通过的闸口项（不阻止）；已转过时可以打开已有 PRD 或再生成一份新草稿。 */
+/** 生成 PRD 的确认：先列出没勾完的检查项（不阻止）；已生成过时主操作是打开当前 PRD，再生成是次操作。 */
 function ConvertDialog({ org, doc, saveEditor, open, onOpenChange }: Props & { open: boolean; onOpenChange: (open: boolean) => void }) {
   const router = useRouter();
   const qc = useQueryClient();
@@ -53,14 +53,14 @@ function ConvertDialog({ org, doc, saveEditor, open, onOpenChange }: Props & { o
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>转 PRD</DialogTitle>
+          <DialogTitle>生成 PRD</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-3 text-[13px]">
-          <p>按简报第 18 节的对应关系生成一份变更 PRD 草稿，覆盖与简报相同的需求；已挂在其他 PRD 上的需求会跳过并列出。</p>
+          <p>用简报内容生成一份 PRD 草稿，并挂上这份简报关联的需求。已挂在别的 PRD 上的会跳过。</p>
           {gate.data &&
             (failing.length > 0 ? (
               <div>
-                <p>以下闸口项还没有通过（不影响生成）：</p>
+                <p>还有这些没勾完（仍可生成）：</p>
                 <ul className="mt-1 list-disc pl-5 text-muted-foreground">
                   {failing.map((i) => (
                     <li key={i.no}>
@@ -70,15 +70,15 @@ function ConvertDialog({ org, doc, saveEditor, open, onOpenChange }: Props & { o
                 </ul>
               </div>
             ) : (
-              <p>闸口全部通过。</p>
+              <p>检查项都勾完了。</p>
             ))}
           {converted && (
             <p>
-              这份简报已转为{' '}
+              已生成{' '}
               <Link href={documentHref(org, converted.displayKey)} className="font-mono hover:underline">
                 {converted.displayKey}
               </Link>
-              。再生成会新建一份草稿，原来的 PRD 保留。
+              。再生成会新建一份草稿；已关联的需求不会挂到新草稿，原来的 PRD 不动。
             </p>
           )}
           <FormError error={convert.error} />
@@ -89,16 +89,16 @@ function ConvertDialog({ org, doc, saveEditor, open, onOpenChange }: Props & { o
           </Button>
           {converted ? (
             <>
-              <Button variant="outline" asChild>
-                <Link href={documentHref(org, converted.displayKey)}>打开 {converted.displayKey}</Link>
+              <Button variant="outline" disabled={convert.isPending} onClick={() => convert.mutate(true)}>
+                再生成一份草稿
               </Button>
-              <Button disabled={convert.isPending} onClick={() => convert.mutate(true)}>
-                再生成一份新草稿
+              <Button asChild>
+                <Link href={documentHref(org, converted.displayKey)}>打开当前 PRD</Link>
               </Button>
             </>
           ) : (
             <Button disabled={convert.isPending} onClick={() => convert.mutate(false)}>
-              生成 PRD 草稿
+              生成 PRD
             </Button>
           )}
         </DialogFooter>
@@ -107,10 +107,34 @@ function ConvertDialog({ org, doc, saveEditor, open, onOpenChange }: Props & { o
   );
 }
 
-/** 操作：转 PRD、复制为 Markdown、下载 .md（先保存编辑器里没到时间的修改，内容与上下文接口一致）。 */
-export function BriefActionsCard({ org, doc, saveEditor }: Props) {
+/** 生成或打开 PRD。已生成过时主按钮是打开当前 PRD，再生成降为次按钮。 */
+export function BriefPrimaryActions({ org, doc, saveEditor }: Props) {
   const [converting, setConverting] = useState(false);
   const canEdit = doc.myRole !== 'viewer';
+  const converted = doc.brief!.convertedDocument;
+  return (
+    <>
+      <div className="flex flex-wrap gap-2">
+        {converted && (
+          <Button size="sm" asChild>
+            <Link href={documentHref(org, converted.displayKey)}>打开当前 PRD</Link>
+          </Button>
+        )}
+        {canEdit && (
+          <Button size="sm" variant={converted ? 'outline' : 'default'} disabled={doc.status === 'discarded'} onClick={() => setConverting(true)}>
+            {converted ? '再生成一份草稿' : '生成 PRD'}
+          </Button>
+        )}
+      </div>
+      {converted && <p className="text-[12px] text-muted-foreground">再生成一份草稿时，已关联的需求不会挂到新草稿，原来的 PRD 不动。</p>}
+      {canEdit && doc.status === 'discarded' && <p className="text-[12px] text-muted-foreground">已废弃的简报不能生成 PRD。</p>}
+      {canEdit && <ConvertDialog org={org} doc={doc} saveEditor={saveEditor} open={converting} onOpenChange={setConverting} />}
+    </>
+  );
+}
+
+/** 操作：生成或打开 PRD、复制为文本、下载 .md（先保存编辑器里没到时间的修改，内容与上下文接口一致）。 */
+export function BriefActionsCard({ org, doc, saveEditor }: Props) {
   const converted = doc.brief!.convertedDocument;
   const markdown = async () => {
     await saveEditor();
@@ -131,7 +155,7 @@ export function BriefActionsCard({ org, doc, saveEditor }: Props) {
         throw new Error('复制失败，请改用「下载 .md」');
       }
     },
-    { success: '已复制 Markdown' },
+    { success: '已复制文本' },
   );
   const download = useApiMutation(async () => {
     const url = URL.createObjectURL(new Blob([await markdown()], { type: 'text/markdown;charset=utf-8' }));
@@ -148,28 +172,22 @@ export function BriefActionsCard({ org, doc, saveEditor }: Props) {
       </h2>
       {converted && (
         <p className="mb-2 text-[13px]">
-          已转为{' '}
+          已生成{' '}
           <Link href={documentHref(org, converted.displayKey)} className="font-mono hover:underline">
             {converted.displayKey}
           </Link>{' '}
           {converted.title}
         </p>
       )}
-      <div className="flex flex-wrap gap-2">
-        {canEdit && (
-          <Button size="sm" disabled={doc.status === 'discarded'} onClick={() => setConverting(true)}>
-            转 PRD
-          </Button>
-        )}
+      <BriefPrimaryActions org={org} doc={doc} saveEditor={saveEditor} />
+      <div className="mt-2 flex flex-wrap gap-2">
         <Button size="sm" variant="outline" disabled={copy.isPending} onClick={() => copy.mutate(undefined)}>
-          复制为 Markdown
+          复制为文本
         </Button>
         <Button size="sm" variant="outline" disabled={download.isPending} onClick={() => download.mutate(undefined)}>
           下载 .md
         </Button>
       </div>
-      {canEdit && doc.status === 'discarded' && <p className="mt-2 text-[12px] text-muted-foreground">已废弃的简报不能转 PRD。</p>}
-      {canEdit && <ConvertDialog org={org} doc={doc} saveEditor={saveEditor} open={converting} onOpenChange={setConverting} />}
     </section>
   );
 }

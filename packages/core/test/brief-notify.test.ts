@@ -45,8 +45,10 @@ describe('简报的站内通知', () => {
     await updateBrief(t.db, editor, brief.id, { deciderMemberId: decider.memberId });
     await updateBrief(t.db, editor, brief.id, { deciderMemberId: outsider.memberId });
     await generate();
-    expect((await inbox(decider.memberId)).map((n) => [n.kind, n.title, n.body, n.url])).toEqual([['assigned', 'PAN-B-1 上传提速', '把你设为简报决策人', '/acme/documents/PAN-B-1']]);
-    expect((await inbox(editor.memberId)).filter((n) => n.body === '把你设为简报决策人')).toEqual([]);
+    expect((await inbox(decider.memberId)).map((n) => [n.kind, n.title, n.body, n.url])).toEqual([
+      ['assigned', 'PAN-B-1 上传提速', '把你设为这份简报的确认人，请确认问题、规则、指标与上线策略', '/acme/documents/PAN-B-1'],
+    ]);
+    expect((await inbox(editor.memberId)).filter((n) => n.body.startsWith('把你设为这份简报的确认人'))).toEqual([]);
     expect(await inbox(outsider.memberId)).toEqual([]);
   });
 
@@ -57,7 +59,7 @@ describe('简报的站内通知', () => {
     await generate();
     const mentioned = (await inbox(member.memberId)).find((n) => n.body === '在简报正文中 @ 了你');
     expect([mentioned?.title, mentioned?.url]).toEqual(['PAN-B-1 上传提速', '/acme/documents/PAN-B-1']);
-    const changed = (await inbox(decider.memberId)).find((n) => n.body === '把简报状态从「讨论中」改为「可写 PRD」');
+    const changed = (await inbox(decider.memberId)).find((n) => n.body === '把简报状态从「讨论中」改为「可以写 PRD」');
     expect([changed?.title, changed?.url]).toEqual(['PAN-B-1 上传提速', '/acme/documents/PAN-B-1']);
   });
 });

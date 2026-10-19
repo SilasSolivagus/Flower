@@ -154,7 +154,7 @@ export async function getBriefGate(db: Db, actor: Actor, id: string): Promise<Br
 /** 勾选或取消闸口人工项（产品编辑及以上）；状态不变时不写、不记事件。 */
 export async function setBriefGateCheck(db: Db, actor: Actor, id: string, item: number, input: { checked: boolean }): Promise<BriefGate> {
   const def = BRIEF_GATE_ITEMS.find((g) => g.no === item);
-  if (!def) throw new AppError('invalid', '闸口项不存在');
+  if (!def) throw new AppError('invalid', '检查项不存在');
   if (def.auto) throw new AppError('invalid', '这一项由系统检查，不能手动勾选');
   return withOrg(db, actor.orgId, async (tx) => {
     const { doc, header } = await loadBriefTx(tx, id, { lock: true });
@@ -200,9 +200,9 @@ export async function updateBrief(db: Db, actor: Actor, id: string, input: Brief
       if (v && v !== cur[f]) await assertAssignableMember(tx, v);
     }
     if (input.participantTagIds !== undefined) {
-      if (next.participantTagIds.length > TAGS_MAX) throw new AppError('invalid', `参与方不超过 ${TAGS_MAX} 个`);
+      if (next.participantTagIds.length > TAGS_MAX) throw new AppError('invalid', `参与角色不超过 ${TAGS_MAX} 个`);
       const found = next.participantTagIds.length > 0 ? await tx.select({ id: functionTags.id }).from(functionTags).where(inArray(functionTags.id, next.participantTagIds)) : [];
-      if (found.length !== next.participantTagIds.length) throw new AppError('invalid', '参与方标签不存在');
+      if (found.length !== next.participantTagIds.length) throw new AppError('invalid', '参与角色不存在');
     }
     const changes = (Object.keys(next) as Array<keyof typeof next>)
       .map((field) => ({ field, old: cur[field], new: next[field] }))
@@ -274,7 +274,7 @@ export async function convertBriefToPrd(db: Db, actor: Actor, id: string, input:
   return withOrg(db, actor.orgId, async (tx) => {
     const { doc, header } = await loadBriefTx(tx, id, { lock: true });
     await briefRoleTx(tx, actor, doc, 'editor');
-    if (doc.status === 'discarded') throw new AppError('invalid', '已废弃的简报不能转 PRD');
+    if (doc.status === 'discarded') throw new AppError('invalid', '已废弃的简报不能生成 PRD');
     const productKey = await productKeyOf(tx, doc.productId);
     const briefKey = briefDisplayKey(productKey, doc.number);
     if (header.convertedDocumentId && !input.again) {
@@ -284,7 +284,7 @@ export async function convertBriefToPrd(db: Db, actor: Actor, id: string, input:
         .where(and(eq(documents.id, header.convertedDocumentId), isNull(documents.deletedAt)));
       if (prev) {
         const documentKey = documentDisplayKey(productKey, prev.number);
-        throw new AppError('conflict', `这份简报已转为 ${documentKey}`, { documentKey });
+        throw new AppError('conflict', `这份简报已生成 ${documentKey}`, { documentKey });
       }
     }
     const markdown = briefToPrdMarkdown({ briefKey, markdown: await documentMarkdownTx(tx, doc) });

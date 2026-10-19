@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useRef, useState } from 'react';
+import { Suspense, useCallback, useRef, useState } from 'react';
 import { Backlinks } from '@/components/backlinks';
 import { EditableTitle } from '@/components/editable-title';
 import { FollowButton } from '@/components/follow-button';
@@ -15,7 +15,9 @@ import { api } from '@/lib/api';
 import { documentKeys, useApiMutation, useDocument } from '@/lib/queries';
 import type { DocumentDetail } from '@/lib/types';
 import { ImportDialog } from '../import-dialog';
+import { BriefNarrowBar } from './brief-narrow-bar';
 import { BriefSidePanel } from './brief-side-panel';
+import { BriefTaskBanner } from './brief-task-banner';
 import { DocumentComments } from './comments';
 import { EditorPane, type EditorPaneHandle } from './editor-pane';
 import { ExternalCard } from './external-card';
@@ -44,6 +46,15 @@ function DocumentPage() {
   };
   // 恢复版本、改状态之前先保存编辑器里没到时间的修改；返回编辑器的版本号，外部 PRD 没有编辑器时为 null
   const saveEditor = async () => (editor.current ? editor.current.saveNow() : null);
+  // 「去改」滚到目标节后清掉 section/at，刷新不再跳回该节
+  const clearBriefLocate = useCallback(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    if (!next.has('section') && !next.has('at')) return;
+    next.delete('section');
+    next.delete('at');
+    const q = next.toString();
+    router.replace(q ? `${pathname}?${q}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
   const patch = useApiMutation(
     async (body: { title: string }) => {
       const r = await api<{ document: DocumentDetail }>(`/orgs/${org}/documents/${d!.id}`, { method: 'PATCH', body });
@@ -74,8 +85,11 @@ function DocumentPage() {
         title={<EditableTitle displayKey={d.displayKey} title={d.title} canEdit={canEdit} onSubmit={(title, close) => patch.mutate({ title }, { onSuccess: close })} />}
         actions={<FollowButton org={org} type="document" id={d.id} />}
       />
+      {d.kind === 'brief' && <BriefTaskBanner org={org} doc={d} />}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-w-0 flex-col gap-4">
+          {d.kind === 'brief' && <BriefNarrowBar org={org} doc={d} saveEditor={saveEditor} />}
+          {d.kind === 'brief' && <p className="text-[13px] text-muted-foreground">不涉及的小节写成一行：不涉及：……理由（写「不适用：理由」也同样认）。</p>}
           {d.templateGuidance && (
             <section aria-label="模板说明" className="whitespace-pre-wrap rounded-md border bg-muted/40 px-4 py-3 text-[13px] leading-6 text-muted-foreground">
               {d.templateGuidance}
@@ -90,7 +104,7 @@ function DocumentPage() {
               生成
             </p>
           )}
-          {d.source === 'native' ? <EditorPane key={`${d.id}:${epoch}`} ref={editor} org={org} doc={d} onReload={() => void reload()} section={searchParams.get('section')} sectionSeq={searchParams.get('at')} activeCommentId={focus?.id ?? null} onAnchorClick={(id) => setFocus((f) => ({ id, seq: (f?.seq ?? 0) + 1 }))} /> : <ExternalCard org={org} doc={d} onConvert={() => setConverting(true)} />}
+          {d.source === 'native' ? <EditorPane key={`${d.id}:${epoch}`} ref={editor} org={org} doc={d} onReload={() => void reload()} section={searchParams.get('section')} sectionSeq={searchParams.get('at')} onSectionShown={d.kind === 'brief' ? clearBriefLocate : undefined} activeCommentId={focus?.id ?? null} onAnchorClick={(id) => setFocus((f) => ({ id, seq: (f?.seq ?? 0) + 1 }))} /> : <ExternalCard org={org} doc={d} onConvert={() => setConverting(true)} />}
           <DocumentComments org={org} doc={d} focus={focus} />
           <Backlinks org={org} type="document" id={d.id} />
           {d.kind === 'module' && <MergeRecords org={org} doc={d} />}

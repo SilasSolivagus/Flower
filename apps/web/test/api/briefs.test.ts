@@ -140,11 +140,11 @@ describe('上下文', () => {
     expect(res.headers.get('content-type')).toContain('text/markdown');
     const text = await res.text();
     expect(text.startsWith('# PAN-B-1 上传提速\n')).toBe(true);
-    expect(text).toContain('| 决策人 | 只读成员 |');
-    expect(text).toContain('## 写 PRD 闸口（3/11）');
+    expect(text).toContain('| 确认人 | 只读成员 |');
+    expect(text).toContain('## 写 PRD 前检查（3/11，还差 8 项）');
     expect(text).toContain('| PAN-1 | 网盘需求 |');
     const json = await call(app, 'GET', `${path}?format=json`, who.viewer!);
-    expect(json.body.context.brief).toMatchObject({ displayKey: 'PAN-B-1', statusLabel: '可写 PRD', version: 'v0.2' });
+    expect(json.body.context.brief).toMatchObject({ displayKey: 'PAN-B-1', statusLabel: '可以写 PRD', version: 'v0.2' });
     expect(json.body.context.requirements).toHaveLength(1);
     for (const k of ['panToken', 'guest']) expect((await call(app, 'GET', `/orgs/acme/briefs/${ids.docBrief}/context?format=json`, who[k]!)).status, k).toBe(404);
     for (const k of ['panToken', 'guest']) expect((await call(app, 'GET', '/orgs/acme/documents/DOC-B-1', who[k]!)).status, k).toBe(404);
@@ -163,7 +163,7 @@ describe('转 PRD', () => {
     expect(first.body.document).toMatchObject({ displayKey: 'PAN-PRD-1', kind: 'change', sourceBrief: { displayKey: 'PAN-B-1' }, requirements: [{ displayKey: 'PAN-1' }] });
     expect(first.body.skipped).toEqual([]);
     const again = await call(app, 'POST', path, { ...who.editor, body: {} });
-    expect([again.status, again.body.error.message, again.body.error.details]).toEqual([409, '这份简报已转为 PAN-PRD-1', { documentKey: 'PAN-PRD-1' }]);
+    expect([again.status, again.body.error.message, again.body.error.details]).toEqual([409, '这份简报已生成 PAN-PRD-1', { documentKey: 'PAN-PRD-1' }]);
     const second = await call(app, 'POST', path, { ...who.editor, body: { again: true } });
     expect([second.status, second.body.document.displayKey]).toEqual([201, 'PAN-PRD-2']);
     expect(second.body.skipped).toEqual([expect.objectContaining({ displayKey: 'PAN-1', documentKey: 'PAN-PRD-1' })]);

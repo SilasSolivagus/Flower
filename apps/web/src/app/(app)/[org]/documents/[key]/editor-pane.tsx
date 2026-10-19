@@ -46,6 +46,7 @@ export function EditorPane({
   onReload,
   section,
   sectionSeq,
+  onSectionShown,
   activeCommentId = null,
   onAnchorClick,
   ref,
@@ -57,6 +58,8 @@ export function EditorPane({
   section?: string | null;
   /** 地址栏 ?at=：同一小节再次定位时递增，让滚动重新执行。 */
   sectionSeq?: string | null;
+  /** 简报「去改」滚到目标节之后调用，用来清掉地址栏参数。 */
+  onSectionShown?: () => void;
   /** 评论区当前选中的评论：正文里对应的高亮加深。 */
   activeCommentId?: string | null;
   /** 点击正文里的评论高亮。 */
@@ -237,24 +240,85 @@ export function EditorPane({
     return () => window.removeEventListener('beforeunload', warn);
   }, [state]);
 
-  // 地址栏指定了小节：等编辑器渲染出标题后滚动过去（最多等 3 秒）
+  // 高亮画在编辑器外面。直接改标题节点的 class 会被编辑器立刻改回去。
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [flash, setFlash] = useState<{ top: number; height: number } | null>(null);
+  const showBriefSection = useCallback((name: string) => {
+    const root = container.current;
+    if (!root) return false;
+    const heads = [...root.querySelectorAll<HTMLElement>('[data-content-type="heading"]')];
+    const i = findSectionIndex(
+      heads.map((h) => h.textContent ?? ''),
+      name,
+    );
+    const head = i >= 0 ? heads[i] : undefined;
+    if (!head) return false;
+    const y = head.getBoundingClientRect().top + window.scrollY - 72;
+    window.scrollTo({ top: Math.max(0, y) });
+    const hb = head.getBoundingClientRect();
+    const rb = root.getBoundingClientRect();
+    setFlash({ top: hb.top - rb.top + root.scrollTop, height: Math.max(hb.height, 32) });
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(null), 4000);
+    return true;
+  }, []);
+
+  // 「去改」点名小节：高亮、顶栏留空，并清掉可能留下的 section/at。
+  useEffect(() => {
+    if (doc.kind !== 'brief') return;
+    const onGoto = (e: Event) => {
+      const name = (e as CustomEvent<{ section?: string }>).detail?.section;
+      if (!name || !showBriefSection(name)) return;
+      onSectionShown?.();
+    };
+    window.addEventListener('flower-brief-section', onGoto);
+    return () => window.removeEventListener('flower-brief-section', onGoto);
+  }, [doc.kind, onSectionShown, showBriefSection]);
+
+  // 地址栏指定了小节：等编辑器渲染出标题后滚动过去（最多等 3 秒）。简报留出顶栏空隙、闪一下，并清掉参数。
   useEffect(() => {
     if (!section) return;
     let tries = 0;
+    let done = false;
     const timer = setInterval(() => {
-      const heads = container.current ? [...container.current.querySelectorAll<HTMLElement>('[data-content-type="heading"]')] : [];
+      const root = container.current;
+      const heads = root ? [...root.querySelectorAll<HTMLElement>('[data-content-type="heading"]')] : [];
       const i = findSectionIndex(
         heads.map((h) => h.textContent ?? ''),
         section,
       );
       tries += 1;
-      if (i >= 0 || tries >= 30) {
-        clearInterval(timer);
-        heads[i]?.scrollIntoView({ block: 'start' });
+      if (i < 0 && tries < 30) return;
+      clearInterval(timer);
+      if (done) return;
+      done = true;
+      const head = i >= 0 ? heads[i] : undefined;
+      if (doc.kind === 'brief') {
+        if (head) showBriefSection(section);
+        onSectionShown?.();
+      } else if (head) {
+        head.scrollIntoView({ block: 'start' });
       }
     }, 100);
     return () => clearInterval(timer);
-  }, [section, sectionSeq]);
+  }, [section, sectionSeq, doc.kind, onSectionShown, showBriefSection]);
+
+  // 第 16 节的表单独收窄，让「待谁定 / 是否阻塞」留在视口里
+  useEffect(() => {
+    if (doc.kind !== 'brief') return;
+    const root = container.current;
+    if (!root) return;
+    const mark = () => {
+      for (const table of root.querySelectorAll<HTMLElement>('[data-content-type="table"]')) {
+        const text = table.textContent ?? '';
+        if (text.includes('待谁定') && text.includes('是否阻塞')) table.classList.add('brief-pending-table');
+      }
+    };
+    mark();
+    const obs = new MutationObserver(mark);
+    obs.observe(root, { childList: true, subtree: true });
+    return () => obs.disconnect();
+  }, [doc.kind, doc.id, doc.markdown]);
 
   /** 点击正文里的链接卡：站内跳转（编辑区是可编辑区域，浏览器不会自己跟随链接）；点击评论高亮：交给评论区定位。 */
   const onBodyClick = (e: MouseEvent<HTMLDivElement>) => {
@@ -289,6 +353,7 @@ export function EditorPane({
         </div>
       )}
       <div ref={container} className="relative min-w-0 max-w-full px-2 py-4" onMouseUp={onSelect} onKeyUp={onSelect} onClick={onBodyClick}>
+        {flash && <div aria-hidden className="brief-section-target pointer-events-none absolute inset-x-2 z-10" style={{ top: flash.top, height: flash.height }} />}
         <DocumentBodyEditor ref={handle} initialMarkdown={doc.markdown ?? ''} editable={editable && !conflict} onDirty={onDirty} uploadImage={uploadImage} decorations={decorations} searchLinks={editable ? searchLinks : undefined} mentionMembers={mentionMembers.data} />
         {pick && (
           <Button

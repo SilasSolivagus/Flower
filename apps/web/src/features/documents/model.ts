@@ -1,5 +1,5 @@
 import { classifyTarget } from '@flower/core/links';
-import { bestQuoteMatch, BRIEF_STATUSES, CHANGE_DOCUMENT_STATUSES, type DocumentStatus, type ExternalProvider, normalizeHeading, splitSections, squash, type TemplateSection } from '@flower/core/markdown';
+import { bestQuoteMatch, BRIEF_STATUSES, CHANGE_DOCUMENT_STATUSES, DOCUMENT_STATUS_LABELS, type DocumentStatus, type ExternalProvider, normalizeHeading, splitSections, squash, type TemplateSection } from '@flower/core/markdown';
 import { nodeOptions } from '@/features/structure/model';
 import type { AffectedChangeType, BriefRelatedLink, BriefStatus, DocumentComment, MergeStatus, StructureNode } from '@/lib/types';
 
@@ -80,13 +80,32 @@ export function briefFilterToApiQuery(f: BriefListFilter, productId: string): st
   return p.toString();
 }
 
-export const gateLabel = (g: { passed: number; total: number }): string => `${g.passed}/${g.total}`;
+/** 检查进度：分数，未完成时写明还差几项。 */
+export const gateLabel = (g: { passed: number; total: number }): string => {
+  const left = g.total - g.passed;
+  return left > 0 ? `${g.passed}/${g.total}，还差 ${left} 项` : `${g.passed}/${g.total}`;
+};
 
-/** 转 PRD 成功后的提示：已挂在其他 PRD 上、没有覆盖的需求逐条列出。 */
+/** 检查项里系统已查与人工勾选各通过了几项。 */
+export function gateBreakdown(items: Array<{ auto: boolean; passed: boolean }>): string {
+  const auto = items.filter((i) => i.auto);
+  const manual = items.filter((i) => !i.auto);
+  return `系统 ${auto.filter((i) => i.passed).length} · 人工 ${manual.filter((i) => i.passed).length}`;
+}
+
+/** 简报列表当前筛了什么，供空筛态说明。 */
+export function briefFilterSummary(f: BriefListFilter, deciderName: string | null): string {
+  const parts: string[] = [];
+  if (f.status) parts.push(DOCUMENT_STATUS_LABELS[f.status]);
+  if (f.decider) parts.push(deciderName ? `确认人 ${deciderName}` : '确认人');
+  return parts.join('、');
+}
+
+/** 生成 PRD 成功后的提示：已挂在其他 PRD 上、没有关联到新 PRD 的需求逐条列出。 */
 export function convertMessage(r: { document: { displayKey: string }; skipped: Array<{ displayKey: string; documentKey: string }> }): string {
   const head = `已生成 ${r.document.displayKey}`;
   if (r.skipped.length === 0) return head;
-  return `${head}；以下需求已挂在其他 PRD 上，没有覆盖：${r.skipped.map((s) => `${s.displayKey}（${s.documentKey}）`).join('、')}`;
+  return `${head}；以下需求已挂在其他 PRD 上，未关联到新 PRD：${r.skipped.map((s) => `${s.displayKey}（${s.documentKey}）`).join('、')}`;
 }
 
 /** 新增关联文档的输入：以 http(s):// 开头为网址，否则为 [[ ]] 引用（去掉外层方括号）。 */
@@ -226,6 +245,47 @@ export function sectionsFromBody(body: string): TemplateSection[] {
 export function findSectionIndex(headings: string[], section: string): number {
   const want = normalizeHeading(section);
   return headings.findIndex((h) => normalizeHeading(h) === want);
+}
+
+const PENDING_HEADING = normalizeHeading('16. 待定问题');
+const CONFIRM_FALLBACK = '请确认问题、规则、指标与上线策略。';
+
+function tableCells(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((c) => c.trim());
+}
+
+/**
+ * 确认人进页任务条的一句话：第 16 节第一条写了问题的待定项；没有时说明要确认的方向。
+ */
+export function pendingQuestionLine(markdown: string): string {
+  const section = splitSections(markdown).find((s) => s.heading !== null && normalizeHeading(s.heading) === PENDING_HEADING);
+  const lines = (section?.markdown ?? '').split('\n').filter((l) => l.trim().startsWith('|'));
+  if (lines.length < 3) return CONFIRM_FALLBACK;
+  const header = tableCells(lines[0]!);
+  const at = (name: string) => header.findIndex((h) => h.startsWith(name));
+  const q = at('问题');
+  if (q < 0) return CONFIRM_FALLBACK;
+  const opt = at('选项');
+  const sug = at('建议');
+  const who = at('待谁定');
+  const block = at('是否阻塞');
+  const rows = lines.slice(2).map(tableCells).filter((r) => (r[q] ?? '').trim());
+  const first = rows[0];
+  if (!first) return CONFIRM_FALLBACK;
+  const bits = [
+    opt >= 0 && first[opt]?.trim() ? `选项 ${first[opt]!.trim()}` : '',
+    sug >= 0 && first[sug]?.trim() ? `建议 ${first[sug]!.trim()}` : '',
+    who >= 0 && first[who]?.trim() ? `待 ${first[who]!.trim()} 定` : '',
+  ].filter(Boolean);
+  const blocking = block >= 0 && first[block]?.trim() === '是' ? '仍阻塞写 PRD。' : '';
+  const more = rows.length > 1 ? `还有 ${rows.length - 1} 个。` : '';
+  const detail = bits.length > 0 ? `（${bits.join('，')}）` : '';
+  return `请确认第 16 节：${first[q]!.trim()}${detail}。${blocking}${more}`;
 }
 
 export type TextSegment = { text: string; pos: number };

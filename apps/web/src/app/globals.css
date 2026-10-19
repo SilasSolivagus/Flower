@@ -142,6 +142,50 @@ a.wikilink-card:hover {
   overflow-x: auto;
 }
 
+/*
+ * 简报第 16 节：六列收进内容区，「待谁定」「是否阻塞」不用横滑。
+ * 选择器要比 BlockNote 的 `width: auto !important` 和单元格默认 min-width 更具体。
+ */
+.bn-editor .brief-pending-table[data-content-type='table'] .tableWrapper {
+  overflow-x: hidden;
+}
+.bn-editor .brief-pending-table[data-content-type='table'] table {
+  width: 100% !important;
+  min-width: 0 !important;
+  table-layout: fixed !important;
+}
+.bn-editor .brief-pending-table col {
+  width: 16.6% !important;
+  min-width: 0 !important;
+}
+.bn-editor.ProseMirror .brief-pending-table[data-content-type='table'] th,
+.bn-editor.ProseMirror .brief-pending-table[data-content-type='table'] td,
+.bn-editor .ProseMirror .brief-pending-table[data-content-type='table'] th,
+.bn-editor .ProseMirror .brief-pending-table[data-content-type='table'] td {
+  min-width: 0 !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+.bn-editor .brief-pending-table .bn-inline-content {
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+
+/* 「去改」滚到的小节：顶栏留空，并短暂高亮 */
+.bn-editor .brief-section-target {
+  scroll-margin-top: 4.5rem;
+  border-radius: 4px;
+  animation: brief-section-flash 1.6s ease-out;
+}
+@keyframes brief-section-flash {
+  0% {
+    background: rgba(251, 191, 36, 0.55);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
 /* PRD 编辑器：未解决的划词评论 */
 .comment-anchor {
   background: rgba(251, 191, 36, 0.28);

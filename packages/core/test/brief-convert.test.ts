@@ -71,7 +71,7 @@ describe('转 PRD', () => {
 
   it('再转：原 PRD 还在时返回 409 并给出编号；确认后生成新草稿，原 PRD 与它覆盖的需求保留', async () => {
     const b = await getDocumentByKey(t.db, editor, 'PAN-B-1');
-    await expect(convertBriefToPrd(t.db, editor, b.id)).rejects.toMatchObject({ code: 'conflict', message: '这份简报已转为 PAN-PRD-2', details: { documentKey: 'PAN-PRD-2' } });
+    await expect(convertBriefToPrd(t.db, editor, b.id)).rejects.toMatchObject({ code: 'conflict', message: '这份简报已生成 PAN-PRD-2', details: { documentKey: 'PAN-PRD-2' } });
     const res = await convertBriefToPrd(t.db, editor, b.id, { again: true });
     expect(res.document.displayKey).toBe('PAN-PRD-3');
     expect(res.document.requirements).toEqual([]);
@@ -92,7 +92,7 @@ describe('转 PRD', () => {
     await expect(convertBriefToPrd(t.db, readOnlyToken(owner), b2.id)).rejects.toMatchObject({ code: 'forbidden' });
     await expect(convertBriefToPrd(t.db, guest, b2.id)).rejects.toMatchObject({ code: 'not_found', message: '简报不存在' });
     await transitionDocument(t.db, editor, b2.id, { to: 'discarded' });
-    await expect(convertBriefToPrd(t.db, editor, b2.id)).rejects.toThrow('已废弃的简报不能转 PRD');
+    await expect(convertBriefToPrd(t.db, editor, b2.id)).rejects.toThrow('已废弃的简报不能生成 PRD');
     const leaver = await asMember(t.db, owner, '离开的作者');
     const b3 = await createBrief(t.db, leaver, pan, { title: '作者会离开' });
     await updateMember(t.db, owner, leaver.memberId, { status: 'left' });
@@ -117,7 +117,7 @@ describe('上下文', () => {
       displayKey: 'PAN-B-1',
       title: '上传提速',
       status: 'converted',
-      statusLabel: '已转 PRD',
+      statusLabel: '已生成 PRD',
       product: { key: 'PAN', name: '网盘' },
       version: 'v0.1',
       decider: '只读乙',
@@ -135,7 +135,7 @@ describe('上下文', () => {
     expect(ctx.markdown).toContain('上传失败率 3%。');
     const md = briefContextMarkdown(ctx);
     expect(md.startsWith('# PAN-B-1 上传提速\n')).toBe(true);
-    expect(md).toContain('| 转出的 PRD | PAN-PRD-3 上传提速（草稿） |');
+    expect(md).toContain('| 已生成的 PRD | PAN-PRD-3 上传提速（草稿） |');
     expect(md).toContain('## 正文\n\n### 1. 问题与目标');
     await expect(getBriefContext(t.db, guest, b.id)).rejects.toMatchObject({ code: 'not_found', message: '简报不存在' });
   });

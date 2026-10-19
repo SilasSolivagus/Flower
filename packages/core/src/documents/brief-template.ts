@@ -2,7 +2,7 @@ import type { TemplateSection } from './constants';
 
 /**
  * 预置「需求简报」模板（P3-C2，用户提供，设计附录 A）。头部信息表不进正文（结构化字段，见 document_briefs）；
- * 「用法」三条是模板说明，显示在编辑器上方。不预填任何人名。迁移 0022 的 SQL 与这里逐字一致。
+ * 「用法」三条是模板说明，显示在编辑器上方。不预填任何人名。迁移 0022 写入初版；0023 把预置模板文案更新成与这里一致。
  */
 
 export const BRIEF_SECTIONS: ReadonlyArray<{ no: number; heading: string; guidance: string }> = [
@@ -10,7 +10,7 @@ export const BRIEF_SECTIONS: ReadonlyArray<{ no: number; heading: string; guidan
   { no: 2, heading: '2. 数据依据', guidance: '取数口径必须和第 7 节一致' },
   { no: 3, heading: '3. 受影响用户', guidance: '估出影响人数与付费用户占比' },
   { no: 4, heading: '4. 场景清单', guidance: '边界情况逐条写：刚好等于阈值、进行中状态变化、多端同时操作、撤销与恢复' },
-  { no: 5, heading: '5. 对象与状态', guidance: '有多状态、多层级、多个相似对象时必填；不涉及写「不适用：理由」' },
+  { no: 5, heading: '5. 对象与状态', guidance: '有多状态、多层级、多个相似对象时必填；不涉及时写「不涉及：理由」（也可写「不适用：理由」）' },
   { no: 6, heading: '6. 规则与方案', guidance: '核心规则一句话；未定的数值列进第 16 节' },
   { no: 7, heading: '7. 计算口径与算法', guidance: '涉及阈值、计数、排名、计费、配额时必填；每个指标写公式、口径与至少 3 个算例' },
   { no: 8, heading: '8. 现状核对', guidance: '实读代码；每条现状写证据（仓库 文件:行号 / 提交号）与核对日期' },
@@ -22,8 +22,8 @@ export const BRIEF_SECTIONS: ReadonlyArray<{ no: number; heading: string; guidan
   { no: 14, heading: '14. 分工', guidance: '每个角色写负责人与时间点' },
   { no: 15, heading: '15. 决策日志', guidance: '结论被推翻时在这里记录推翻的过程' },
   { no: 16, heading: '16. 待定问题', guidance: '「是否阻塞 PRD」填「是」或「否」' },
-  { no: 17, heading: '17. 写 PRD 闸口', guidance: '闸口结果以侧栏「写 PRD 闸口」为准' },
-  { no: 18, heading: '18. 与 PRD 章节的对应', guidance: '转 PRD 时按此表拼接' },
+  { no: 17, heading: '17. 写 PRD 前检查', guidance: '检查结果以侧栏「写 PRD 前检查」为准' },
+  { no: 18, heading: '18. 与 PRD 章节的对应', guidance: '生成 PRD 时按此表拼接' },
 ];
 
 const BODY = `## 1. 问题与目标
@@ -219,21 +219,21 @@ const BODY = `## 1. 问题与目标
 | --- | --- | --- | --- | --- | --- |
 | 1 | | | | | 是 / 否 |
 
-## 17. 写 PRD 闸口
+## 17. 写 PRD 前检查
 
 | # | 检查项 | 结果 |
 | --- | --- | --- |
 | 1 | 第 1~14 节没有空白，不涉及的都写了理由 | |
 | 2 | 第 1 节的问题有数字支撑（第 2 节） | |
 | 3 | 第 3 节已估出影响人数和付费用户占比 | |
-| 4 | 第 5 节对象与状态已确认（或注明不适用） | |
+| 4 | 第 5 节对象与状态已确认（或注明不涉及） | |
 | 5 | 第 6 节核心规则已定；未定的数值都在第 16 节 | |
 | 6 | 第 7 节每个指标都有公式、口径和算例，且与取数需求口径一致 | |
 | 7 | 第 8 节的每条现状都有代码证据和核对日期 | |
 | 8 | 第 9 节研发给出了可行性结论 | |
 | 9 | 第 10 节各端都过了一遍，老版本表现已确认 | |
 | 10 | 第 16 节没有「阻塞 PRD」的问题 | |
-| 11 | 决策人确认过第 1、6、7、13 节 | |
+| 11 | 确认人确认过第 1、6、7、13 节 | |
 
 ## 18. 与 PRD 章节的对应
 
@@ -257,8 +257,8 @@ const BODY = `## 1. 问题与目标
 `;
 
 const GUIDANCE = `- 简报记录的是讨论到当前为止的结论，不是会议流水账。结论被推翻时直接改正文，推翻的过程记进第 15 节「决策日志」。
-- 每一节都必须填写；不涉及的写「不适用：理由」，不能空着。
-- 第 17 节的闸口全部通过后才能开始写 PRD。PRD 的各章节从对应小节取内容（见第 18 节）。`;
+- 每节都要有内容。不涉及就写：不涉及：……理由（写「不适用：理由」也同样认）。
+- 写 PRD 前尽量勾完检查项；未勾完也能生成，系统会列出还差的项。`;
 
 export const BRIEF_TEMPLATE: { name: string; guidance: string; body: string; sections: TemplateSection[] } = {
   name: '需求简报（预置）',
@@ -272,14 +272,14 @@ export const BRIEF_GATE_ITEMS: ReadonlyArray<{ no: number; label: string; auto: 
   { no: 1, label: '第 1~14 节没有空白，不涉及的都写了理由', auto: true },
   { no: 2, label: '第 1 节的问题有数字支撑（第 2 节）', auto: false },
   { no: 3, label: '第 3 节已估出影响人数和付费用户占比', auto: false },
-  { no: 4, label: '第 5 节对象与状态已确认（或注明不适用）', auto: false },
+  { no: 4, label: '第 5 节对象与状态已确认（或注明不涉及）', auto: false },
   { no: 5, label: '第 6 节核心规则已定；未定的数值都在第 16 节', auto: false },
   { no: 6, label: '第 7 节每个指标都有公式、口径和算例，且与取数需求口径一致', auto: false },
   { no: 7, label: '第 8 节的每条现状都有代码证据和核对日期', auto: true },
   { no: 8, label: '第 9 节研发给出了可行性结论', auto: false },
   { no: 9, label: '第 10 节各端都过了一遍，老版本表现已确认', auto: false },
   { no: 10, label: '第 16 节没有「阻塞 PRD」的问题', auto: true },
-  { no: 11, label: '决策人确认过第 1、6、7、13 节', auto: false },
+  { no: 11, label: '确认人确认过第 1、6、7、13 节', auto: false },
 ];
 
 /**

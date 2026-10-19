@@ -26,7 +26,7 @@ export function BriefCard({ org, requirement: r }: { org: string; requirement: R
           </Link>
           <div className="flex items-center gap-3">
             <DocumentStatusBadge status={brief.status} />
-            <span className="font-mono text-[12px] text-muted-foreground">闸口 {gateLabel(brief.gate)}</span>
+            <span className="font-mono text-[12px] text-muted-foreground">检查 {gateLabel(brief.gate)}</span>
           </div>
         </div>
       ) : (

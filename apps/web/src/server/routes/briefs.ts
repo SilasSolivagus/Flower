@@ -56,7 +56,7 @@ export function registerBriefRoutes(app: App, deps: ApiDeps): void {
   app.put('/orgs/:org/briefs/:id/gate/:item', async (c) => {
     const id = briefId(c);
     const item = Number(c.req.param('item'));
-    if (!Number.isInteger(item)) throw new AppError('invalid', '闸口项不存在');
+    if (!Number.isInteger(item)) throw new AppError('invalid', '检查项不存在');
     const body = await readJson(c, z.object({ checked: z.boolean() }));
     return c.json({ gate: await setBriefGateCheck(deps.db, c.get('actor'), id, item, body) });
   });

@@ -16,8 +16,8 @@ export const DOCUMENT_STATUS_LABELS: Record<DocumentStatus, string> = {
   active: '使用中',
   archived: '已归档',
   discussing: '讨论中',
-  ready: '可写 PRD',
-  converted: '已转 PRD',
+  ready: '可以写 PRD',
+  converted: '已生成 PRD',
 };
 
 export const documentDisplayKey = (productKey: string, number: number): string => `${productKey}-PRD-${number}`;

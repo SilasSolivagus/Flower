@@ -162,6 +162,13 @@
       "when": 1792114094635,
       "tag": "0022_p3c2_briefs",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792401600000,
+      "tag": "0023_p3c2_ux_copy",
+      "breakpoints": true
     }
   ]
 }

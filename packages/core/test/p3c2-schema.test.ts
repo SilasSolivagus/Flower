@@ -22,8 +22,15 @@ const BACKFILL = readFileSync(new URL('../migrations/0022_p3c2_briefs.sql', impo
   .map((s) => s.trim())
   .filter(Boolean)
   .slice(2);
+const COPY = readFileSync(new URL('../migrations/0023_p3c2_ux_copy.sql', import.meta.url), 'utf8')
+  .split('--> statement-breakpoint')
+  .map((s) => s.trim())
+  .filter(Boolean);
 const runBackfill = async () => {
   for (const s of BACKFILL) await t.adminDb.execute(sql.raw(s));
+};
+const runCopy = async () => {
+  for (const s of COPY) await t.adminDb.execute(sql.raw(s));
 };
 const doc = (number: number, kind: 'change' | 'brief', title: string) => ({
   orgId: owner.orgId,
@@ -88,11 +95,13 @@ describe('P3-C2 数据模型', () => {
   });
 });
 
-describe('迁移 0022 的补齐', () => {
-  it('为没有组织级简报模板的组织写入预置简报模板，内容与代码里的常量逐字一致；可重复执行', async () => {
+describe('迁移 0022 的补齐与 0023 的文案', () => {
+  it('为没有组织级简报模板的组织写入预置简报模板，0023 把文案更新成与代码常量逐字一致；可重复执行', async () => {
     await t.adminDb.delete(documentTemplates).where(eq(documentTemplates.kind, 'brief'));
     await runBackfill();
     await runBackfill();
+    await runCopy();
+    await runCopy();
     for (const org of [owner.orgId, orgB]) {
       const rows = await t.adminDb
         .select()

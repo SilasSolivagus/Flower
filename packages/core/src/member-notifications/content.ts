@@ -250,7 +250,7 @@ export async function planEventTx(tx: Tx, ev: EventRow, slug: string): Promise<E
       break;
     }
     case 'brief.updated':
-      assign(asId(changeOf(p, 'deciderMemberId')?.new), '把你设为简报决策人');
+      assign(asId(changeOf(p, 'deciderMemberId')?.new), '把你设为这份简报的确认人，请确认问题、规则、指标与上线策略');
       break;
     case 'check_item.updated':
     case 'check_item.signed': {
