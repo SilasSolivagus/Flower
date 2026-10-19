@@ -30,13 +30,15 @@ export function CoveredRequirements({ org, doc, invalidate }: { org: string; doc
     invalidate,
     success: '已移出',
   });
+  const linkedTitle = doc.kind === 'brief' ? '关联的需求' : '覆盖的需求';
+  const linkedEmpty = doc.kind === 'brief' ? '还没有关联需求' : '还没有覆盖需求';
   return (
     <section className="rounded-md border bg-card p-4" aria-labelledby="doc-req-title">
       <h2 id="doc-req-title" className="mb-2 text-sm font-semibold">
-        覆盖的需求
+        {linkedTitle}
       </h2>
       {doc.requirements.length === 0 ? (
-        <p className="text-[13px] text-muted-foreground">还没有覆盖需求</p>
+        <p className="text-[13px] text-muted-foreground">{linkedEmpty}</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {doc.requirements.map((r) => (

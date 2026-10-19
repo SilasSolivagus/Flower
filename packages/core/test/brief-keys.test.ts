@@ -28,8 +28,8 @@ describe('简报状态与流转', () => {
   it('中文名称', () => {
     expect([DOCUMENT_STATUS_LABELS.discussing, DOCUMENT_STATUS_LABELS.ready, DOCUMENT_STATUS_LABELS.converted, DOCUMENT_STATUS_LABELS.discarded]).toEqual([
       '讨论中',
-      '可写 PRD',
-      '已转 PRD',
+      '可以写 PRD',
+      '已生成 PRD',
       '已废弃',
     ]);
   });

@@ -81,7 +81,7 @@ function TemplateDialog({
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            {kind === 'brief' ? '简报的必填小节用于「写 PRD 闸口」第 1 项（第 1–14 节）；闸口只作提示，不限制改状态。' : '提交评审时检查必填小节：标题存在，且内容不只是模板原文。'}
+            {kind === 'brief' ? '简报的必填小节用于「写 PRD 前检查」第 1 项（第 1–14 节）；未勾完也可以生成 PRD。' : '提交评审时检查必填小节：标题存在，且内容不只是模板原文。'}
           </p>
           <ul className="flex flex-col gap-2">
             {sections.map((s, i) => (

@@ -145,7 +145,7 @@ export function DocumentComments({ org, doc, focus = null }: { org: string; doc:
           add.mutate({ body }, { onSuccess: () => setBody('') });
         }}
       >
-        <WikilinkTextarea org={org} productId={doc.productId} aria-label="发表评论" placeholder="对整篇 PRD 的意见" className="min-h-20 text-[13px]" value={body} onValueChange={setBody} />
+        <WikilinkTextarea org={org} productId={doc.productId} aria-label="发表评论" placeholder={doc.kind === 'brief' ? '对这份简报的意见' : '对整篇 PRD 的意见'} className="min-h-20 text-[13px]" value={body} onValueChange={setBody} />
         <FormError error={add.error} />
         <div className="flex justify-end">
           <Button type="submit" size="sm" disabled={add.isPending || !body.trim()}>

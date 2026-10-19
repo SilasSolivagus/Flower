@@ -121,7 +121,7 @@ describe('头部信息', () => {
     const left = await asMember(t.db, owner, '已离开丁');
     await updateMember(t.db, owner, left.memberId, { status: 'left' });
     await expect(updateBrief(t.db, editor, b.id, { authorMemberId: left.memberId })).rejects.toThrow('该成员已离开组织，不能选择');
-    await expect(updateBrief(t.db, editor, b.id, { participantTagIds: [RANDOM] })).rejects.toThrow('参与方标签不存在');
+    await expect(updateBrief(t.db, editor, b.id, { participantTagIds: [RANDOM] })).rejects.toThrow('参与角色不存在');
     await expect(updateBrief(t.db, editor, b.id, { relatedLinks: [{ kind: 'url', url: 'ftp://x', note: '' }] })).rejects.toThrow('关联文档的网址无效');
     await expect(updateBrief(t.db, editor, b.id, { relatedLinks: [{ kind: 'wiki', target: '[[ ]]', note: '' }] })).rejects.toThrow('引用写法无效');
     const many = Array.from({ length: 21 }, (_, i) => ({ kind: 'url' as const, url: `https://doc.example.com/${i}`, note: '' }));
@@ -153,7 +153,7 @@ describe('闸口', () => {
     expect((await setBriefGateCheck(t.db, editor, b.id, 2, { checked: true })).passed).toBe(3);
     expect((await setBriefGateCheck(t.db, editor, b.id, 2, { checked: false })).passed).toBe(2);
     await expect(setBriefGateCheck(t.db, editor, b.id, 1, { checked: true })).rejects.toThrow('这一项由系统检查，不能手动勾选');
-    await expect(setBriefGateCheck(t.db, editor, b.id, 12, { checked: true })).rejects.toThrow('闸口项不存在');
+    await expect(setBriefGateCheck(t.db, editor, b.id, 12, { checked: true })).rejects.toThrow('检查项不存在');
     await expect(setBriefGateCheck(t.db, viewer, b.id, 3, { checked: true })).rejects.toMatchObject({ code: 'forbidden' });
     await expect(setBriefGateCheck(t.db, readOnlyToken(owner), b.id, 3, { checked: true })).rejects.toMatchObject({ code: 'forbidden' });
     await expect(getBriefGate(t.db, editor, prdId)).rejects.toMatchObject({ code: 'not_found', message: '简报不存在' });
@@ -223,7 +223,10 @@ describe('简报走文档入口时的分流与拒绝', () => {
     await expect(getMergePlan(t.db, editor, b.id)).rejects.toMatchObject({ code: 'invalid', message: '简报没有影响声明' });
     await expect(setDocumentCheckItemState(t.db, editor, b.id, 'prd_review', { state: 'passed' })).rejects.toMatchObject({ code: 'invalid', message: '简报没有检查项' });
     await expect(signDocumentCheckItem(t.db, editor, b.id, 'prd_review', { decision: 'passed' })).rejects.toMatchObject({ code: 'invalid', message: '简报没有检查项' });
-    await expect(updateDocument(t.db, editor, b.id, { ownerMemberId: editor.memberId })).rejects.toMatchObject({ code: 'invalid', message: '简报没有负责人，请改头部的提出人、决策人或作者' });
+    await expect(updateDocument(t.db, editor, b.id, { ownerMemberId: editor.memberId })).rejects.toMatchObject({
+      code: 'invalid',
+      message: '简报没有负责人，请改基本信息里的提出人、确认人或作者',
+    });
     expect((await updateDocument(t.db, editor, b.id, { title: '简报一（改名）', ownerMemberId: null })).title).toBe('简报一（改名）');
 
     const saved = await saveDocumentContent(t.db, editor, b.id, { baseVersion: (await brief1()).version, markdown: `# 背景\n\n${mentionMarkup(viewer.memberId, '只读乙')} 请看` });

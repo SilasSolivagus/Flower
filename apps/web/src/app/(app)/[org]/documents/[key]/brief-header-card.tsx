@@ -25,7 +25,7 @@ type Patch = {
 };
 const PEOPLE = [
   { field: 'requesterMemberId', key: 'requester', label: '提出人' },
-  { field: 'deciderMemberId', key: 'decider', label: '决策人' },
+  { field: 'deciderMemberId', key: 'decider', label: '确认人' },
   { field: 'authorMemberId', key: 'author', label: '作者' },
 ] as const;
 
@@ -74,7 +74,7 @@ export function BriefHeaderCard({ org, doc }: { org: string; doc: DocumentDetail
   return (
     <section className="rounded-md border bg-card p-4" aria-labelledby="brief-header-title">
       <h2 id="brief-header-title" className="mb-3 text-sm font-semibold">
-        头部信息
+        基本信息
       </h2>
       <div className="flex flex-col gap-3 text-[13px]">
         <div className="flex flex-col gap-1.5">
@@ -104,11 +104,11 @@ export function BriefHeaderCard({ org, doc }: { org: string; doc: DocumentDetail
           </div>
         ))}
         <div className="flex flex-col gap-1.5">
-          <span className="text-sm font-medium">参与方</span>
+          <span className="text-sm font-medium">参与角色</span>
           {canEdit && tags.data && (
             <div>
               <OptionMultiSelect
-                label="参与方"
+                label="参与角色"
                 options={tags.data.map((x) => ({ id: x.id, label: x.name, color: x.color }))}
                 value={h.participantTags.map((x) => x.id)}
                 onChange={(ids) => save.mutate({ participantTagIds: ids })}

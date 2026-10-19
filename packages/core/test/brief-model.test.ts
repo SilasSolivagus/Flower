@@ -73,9 +73,10 @@ describe('闸口第 1 项：第 1–14 节没有空白', () => {
     expect(item(gate(md), 1)).toMatchObject({ passed: true, reasons: [], section: null });
     expect(item(gate(reformat(md)), 1).passed).toBe(true);
     expect(item(gate(fill(md, 5, '不适用：只有一种对象')), 1).passed).toBe(true);
-    for (const text of ['不适用：', '不适用', '不适用： ']) {
+    expect(item(gate(fill(md, 5, '不涉及：只有一种对象')), 1).passed).toBe(true);
+    for (const text of ['不适用：', '不适用', '不适用： ', '不涉及：', '不涉及']) {
       const g = gate(fill(md, 5, text));
-      expect(item(g, 1).reasons, text).toEqual(['「5. 对象与状态」写了「不适用」但没有写理由']);
+      expect(item(g, 1).reasons, text).toEqual(['「5. 对象与状态」写了不涉及，但还没写理由']);
       expect(item(g, 1).section).toBe('5. 对象与状态');
     }
   });
@@ -169,19 +170,19 @@ describe('上下文 Markdown', () => {
     const out = briefContextMarkdown(ctx);
     expect(out.startsWith('# PAN-B-2 上传提速\n')).toBe(true);
     expect(out).toContain('| 产品 | 网盘（PAN） |');
-    expect(out).toContain('| 决策人 | 决策人甲 |');
+    expect(out).toContain('| 确认人 | 决策人甲 |');
     expect(out).toContain('| 提出人 | — |');
-    expect(out).toContain('| 参与方 | 产品、后端 |');
+    expect(out).toContain('| 参与角色 | 产品、后端 |');
     expect(out).toContain('| 关联文档 | [[PAN-PRD-1]] 旧方案；https://doc.example.com/a\\|b |');
-    expect(out).toContain('| 转出的 PRD | — |');
+    expect(out).toContain('| 已生成的 PRD | — |');
     expect(out).toContain('| PAN-12 | 上传 \\| 提速 | 设计中 |');
-    expect(out).toContain('## 写 PRD 闸口（2/11）');
+    expect(out).toContain('## 写 PRD 前检查（2/11，还差 9 项）');
     expect(out).toContain('- [ ] 1. 第 1~14 节没有空白，不涉及的都写了理由：「1. 问题与目标」还没有填写；');
-    expect(out).toContain('- [x] 7. 第 8 节的每条现状都有代码证据和核对日期\n');
-    expect(out).toContain('- [ ] 2. 第 1 节的问题有数字支撑（第 2 节）（人工确认）');
+    expect(out).toContain('- [x] 7. 第 8 节的每条现状都有代码证据和核对日期（系统已查）\n');
+    expect(out).toContain('- [ ] 2. 第 1 节的问题有数字支撑（第 2 节）\n');
     expect(out.endsWith('## 正文\n\n### 1. 问题与目标\n\n正文\n')).toBe(true);
     const deep = briefContextMarkdown({ ...ctx, markdown: '# 总标题\n\n```\n## 代码里的\n```\n\n## 二级\n\n###### 六级\n' });
     expect(deep).toContain('## 正文\n\n### 总标题\n\n```\n## 代码里的\n```\n\n#### 二级\n\n###### 六级\n');
-    expect(briefContextMarkdown({ ...ctx, requirements: [] })).toContain('## 覆盖的需求\n\n没有覆盖需求\n');
+    expect(briefContextMarkdown({ ...ctx, requirements: [] })).toContain('## 关联的需求\n\n还没有关联需求\n');
   });
 });

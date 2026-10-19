@@ -114,7 +114,7 @@ export async function insertPresetTemplate(tx: Tx, orgId: string): Promise<void>
   await tx.insert(documentTemplates).values({ orgId, productId: null, kind: 'change', name: PRESET_TEMPLATE.name, body: PRESET_TEMPLATE.body, sections: PRESET_TEMPLATE.sections });
 }
 
-/** 预置简报模板（P3-C2）：新组织初始化时写入；已有组织由迁移 0022 补齐。 */
+/** 预置简报模板（P3-C2）：新组织初始化时写入；已有组织由迁移 0022 补齐，0023 更新文案。 */
 export async function insertPresetBriefTemplate(tx: Tx, orgId: string): Promise<void> {
   await tx.insert(documentTemplates).values({
     orgId,

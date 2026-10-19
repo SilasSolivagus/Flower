@@ -471,7 +471,7 @@ export async function updateDocument(
     await requireProductRole(tx, actor, cur.productId, 'editor');
     assertWritable(cur);
     if (cur.kind === 'brief' && input.ownerMemberId !== undefined && input.ownerMemberId !== cur.ownerMemberId) {
-      throw new AppError('invalid', '简报没有负责人，请改头部的提出人、决策人或作者');
+      throw new AppError('invalid', '简报没有负责人，请改基本信息里的提出人、确认人或作者');
     }
     const next = {
       title: input.title === undefined ? cur.title : assertTitle(input.title),

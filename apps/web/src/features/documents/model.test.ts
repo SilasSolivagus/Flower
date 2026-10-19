@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DocumentComment, StructureNode } from '@/lib/types';
-import { base64ToBytes, briefFilterToApiQuery, briefFilterToSearch, briefsHref, CHANGE_TYPE_LABEL, clipContext, convertMessage, countRemoteImages, DOCUMENT_STATUS_COLOR, documentFilterToApiQuery, documentFilterToSearch, documentHref, documentView, domainOptions, editorAnchors, featureOptions, findDataImages, findSectionIndex, gateLabel, groupThreads, importSummary, invalidRequirementKeys, locateAnchorRange, MERGE_STATUS_LABEL, moduleDocsHref, moduleOptions, parseBriefFilter, parseDocumentFilter, parseRelatedInput, parseRequirementKeys, relatedLinkHref, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
+import { base64ToBytes, briefFilterSummary, briefFilterToApiQuery, briefFilterToSearch, briefsHref, CHANGE_TYPE_LABEL, clipContext, convertMessage, countRemoteImages, DOCUMENT_STATUS_COLOR, documentFilterToApiQuery, documentFilterToSearch, documentHref, documentView, domainOptions, editorAnchors, featureOptions, findDataImages, findSectionIndex, gateBreakdown, gateLabel, groupThreads, importSummary, invalidRequirementKeys, locateAnchorRange, MERGE_STATUS_LABEL, moduleDocsHref, moduleOptions, parseBriefFilter, parseDocumentFilter, parseRelatedInput, parseRequirementKeys, pendingQuestionLine, relatedLinkHref, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
 
 describe('PRD 列表筛选', () => {
   it('地址栏 ↔ 筛选；无效的状态与来源被忽略', () => {
@@ -189,8 +189,12 @@ describe('简报列表与链接', () => {
     expect(briefFilterToApiQuery({ product: '', status: '', decider: '' }, 'p1')).toBe('product=p1');
   });
 
-  it('闸口进度、转 PRD 的结果提示；简报状态有颜色', () => {
-    expect(gateLabel({ passed: 7, total: 11 })).toBe('7/11');
+  it('检查进度、生成 PRD 的结果提示；简报状态有颜色', () => {
+    expect(gateLabel({ passed: 7, total: 11 })).toBe('7/11，还差 4 项');
+    expect(gateLabel({ passed: 11, total: 11 })).toBe('11/11');
+    expect(gateBreakdown([{ auto: true, passed: true }, { auto: true, passed: false }, { auto: false, passed: true }])).toBe('系统 1 · 人工 1');
+    expect(briefFilterSummary({ product: 'PAN', status: 'ready', decider: 'm1' }, '林澄')).toBe('可以写 PRD、确认人 林澄');
+    expect(briefFilterSummary({ product: 'PAN', status: '', decider: '' }, null)).toBe('');
     expect(convertMessage({ document: { displayKey: 'PAN-PRD-5' }, skipped: [] })).toBe('已生成 PAN-PRD-5');
     expect(
       convertMessage({
@@ -200,8 +204,14 @@ describe('简报列表与链接', () => {
           { displayKey: 'PAN-7', documentKey: 'PAN-PRD-3' },
         ],
       }),
-    ).toBe('已生成 PAN-PRD-5；以下需求已挂在其他 PRD 上，没有覆盖：PAN-2（PAN-PRD-1）、PAN-7（PAN-PRD-3）');
+    ).toBe('已生成 PAN-PRD-5；以下需求已挂在其他 PRD 上，未关联到新 PRD：PAN-2（PAN-PRD-1）、PAN-7（PAN-PRD-3）');
     for (const s of ['discussing', 'ready', 'converted'] as const) expect(DOCUMENT_STATUS_COLOR[s]).toMatch(/^#[0-9a-f]{6}$/);
+  });
+
+  it('确认人任务条取出第 16 节第一条待定问题', () => {
+    const md = ['## 16. 待定问题', '', '| # | 问题 | 选项 | 建议 | 待谁定 | 是否阻塞 PRD |', '| --- | --- | --- | --- | --- | --- |', '| 1 | 重试间隔 | 1 秒 / 3 秒 | 3 秒 | 后端 | 否 |', '| 2 | 开关名 | | | | 是 |'].join('\n');
+    expect(pendingQuestionLine(md)).toBe('请确认第 16 节：重试间隔（选项 1 秒 / 3 秒，建议 3 秒，待 后端 定）。还有 1 个。');
+    expect(pendingQuestionLine('## 1. 问题与目标\n\n没有待定问题')).toBe('请确认问题、规则、指标与上线策略。');
   });
 
   it('关联文档：输入解析与站内地址', () => {

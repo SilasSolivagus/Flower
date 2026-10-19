@@ -116,8 +116,8 @@ describe('简报的状态流转与推送', () => {
     const b = await getDocumentByKey(t.db, editor, 'PAN-B-2');
     const r = await transitionDocument(t.db, editor, b.id, { to: 'ready' });
     expect([r.status, r.transitions]).toEqual(['ready', ['discussing', 'discarded']]);
-    await expect(transitionDocument(t.db, editor, b.id, { to: 'draft' })).rejects.toThrow('不能从「可写 PRD」改为「草稿」');
-    await expect(transitionDocument(t.db, editor, b.id, { to: 'converted' })).rejects.toThrow('不能从「可写 PRD」改为「已转 PRD」');
+    await expect(transitionDocument(t.db, editor, b.id, { to: 'draft' })).rejects.toThrow('不能从「可以写 PRD」改为「草稿」');
+    await expect(transitionDocument(t.db, editor, b.id, { to: 'converted' })).rejects.toThrow('不能从「可以写 PRD」改为「已生成 PRD」');
     await expect(transitionDocument(t.db, viewer, b.id, { to: 'discussing' })).rejects.toMatchObject({ code: 'forbidden' });
     const [ev] = (await eventsOf(b.id)).filter((e) => e.type === 'document.status_changed');
     expect(ev!.payload).toMatchObject({ kind: 'brief', changes: [{ field: 'status', old: 'discussing', new: 'ready' }] });

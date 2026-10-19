@@ -86,10 +86,10 @@ function CreateBriefForm({
         )}
       </div>
       {requirementIds ? (
-        <p className="text-[13px] text-muted-foreground">新简报会覆盖当前需求。</p>
+        <p className="text-[13px] text-muted-foreground">新简报会关联到当前这条需求。</p>
       ) : (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="brief-requirements">覆盖需求（选填）</Label>
+          <Label htmlFor="brief-requirements">关联需求（选填）</Label>
           <Input id="brief-requirements" placeholder="PAN-12, PAN-15" value={keys} onChange={(e) => setKeys(e.target.value)} />
         </div>
       )}
