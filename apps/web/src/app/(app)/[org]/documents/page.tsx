@@ -182,11 +182,11 @@ function DocumentsPage() {
             )
           ) : (
             <div className="overflow-x-auto rounded-md border bg-card">
-              <Table className="table-fixed">
+              <Table className="min-w-[960px] table-fixed">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-32">编号</TableHead>
-                    <TableHead className="w-[40%]">标题</TableHead>
+                    <TableHead className="min-w-[12rem]">标题</TableHead>
                     <TableHead className="w-24">状态</TableHead>
                     <TableHead className="w-32">来源</TableHead>
                     <TableHead className="w-24">负责人</TableHead>
@@ -202,7 +202,7 @@ function DocumentsPage() {
                           {d.displayKey}
                         </Link>
                       </TableCell>
-                      <TableCell className="truncate">
+                      <TableCell className="min-w-[12rem] truncate">
                         <Link href={documentHref(org, d.displayKey)} className="hover:underline">
                           {d.title}
                         </Link>

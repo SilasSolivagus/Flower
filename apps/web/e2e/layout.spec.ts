@@ -74,7 +74,7 @@ test('工作台：800px 下四个区块单列排列、标题不被挤没；1440p
   const owned = page.getByRole('region', { name: /我负责的需求/ });
   const following = page.getByRole('region', { name: /等我跟进/ });
   const tasks = page.getByRole('region', { name: /我的任务/ });
-  const sign = page.getByRole('region', { name: /等我签字/ });
+  const sign = page.getByRole('region', { name: /等我确认 检查项/ });
 
   await page.setViewportSize({ width: 800, height: 900 });
   await page.goto('/acme');

@@ -31,7 +31,7 @@ test('需求挂 PRD：从需求新建 PRD；PRD 状态带动「PRD」检查项�
   await expect(side.getByRole('region', { name: '状态' })).toContainText('评审中');
 
   await page.goto('/acme');
-  const sign = page.getByRole('region', { name: /等我签字/ });
+  const sign = page.getByRole('region', { name: /等我确认 检查项/ });
   const signatureLink = sign.getByRole('link', { name: /PAN-PRD-1/ });
   await expect(signatureLink).toBeVisible({ timeout: 15_000 });
   await signatureLink.click();

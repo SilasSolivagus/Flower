@@ -1,22 +1,26 @@
 'use client';
 
+import { DOCUMENT_STATUS_LABELS } from '@flower/core/markdown';
 import Link from 'next/link';
 import { type ReactNode, useId } from 'react';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
-import { showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref } from '@/features/workbench/model';
+import { confirmationHref, showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref } from '@/features/workbench/model';
 import { useWorkbench } from '@/lib/queries';
 import type { Workbench } from '@/lib/types';
 
 const ROW = 'flex h-10 items-center gap-3 px-4 text-[13px] hover:bg-muted';
 
-function Section({ title, total, shown, empty, children }: { title: string; total: number; shown: number; empty: string; children: ReactNode }) {
+function Section({ title, hint, total, shown, empty, children }: { title: string; hint?: string; total: number; shown: number; empty: string; children: ReactNode }) {
   const id = useId();
   return (
     <section aria-labelledby={id} className="flex min-w-0 flex-col rounded-lg border bg-card">
       <h2 id={id} className="flex items-center justify-between border-b px-4 py-2.5 font-semibold">
-        {title}
+        <span className="flex min-w-0 items-baseline gap-2">
+          {title}
+          {hint ? <span className="text-xs font-normal text-muted-foreground">{hint}</span> : null}
+        </span>
         <span className="font-mono text-xs font-normal text-muted-foreground">{total}</span>
       </h2>
       {total === 0 ? <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">{empty}</p> : <ul className="divide-y">{children}</ul>}
@@ -74,7 +78,7 @@ function Sections({ data }: { data: Workbench }) {
           </li>
         ))}
       </Section>
-      <Section title="等我签字" total={data.signatures.total} shown={data.signatures.items.length} empty="没有等你签字的检查项">
+      <Section title="等我确认" hint="检查项" total={data.signatures.total} shown={data.signatures.items.length} empty="没有等你确认的检查项">
         {data.signatures.items.map((s) => (
           <li key={`${s.requirementId ?? s.documentId}-${s.itemKey}-${s.ruleIndex}`}>
             <Link href={signatureHref(s)} className={ROW}>
@@ -83,6 +87,18 @@ function Sections({ data }: { data: Workbench }) {
               <span className="flex-1 truncate">{s.title}</span>
               <span className="text-xs">{s.itemLabel}</span>
               {s.onBehalfOf && <span className="rounded-sm bg-muted px-1.5 py-0.5 text-xs">代 {s.onBehalfOf}</span>}
+            </Link>
+          </li>
+        ))}
+      </Section>
+      <Section title="等我确认" hint="简报" total={data.confirmations.total} shown={data.confirmations.items.length} empty="暂无需要你确认的简报">
+        {data.confirmations.items.map((c) => (
+          <li key={c.documentId}>
+            <Link href={confirmationHref(c)} className={ROW}>
+              <OrgBadge show={badge} name={c.org.name} />
+              <span className="font-mono text-muted-foreground">{c.displayKey}</span>
+              <span className="flex-1 truncate">{c.title}</span>
+              <span className="text-xs text-muted-foreground">{DOCUMENT_STATUS_LABELS[c.status]}</span>
             </Link>
           </li>
         ))}
@@ -111,7 +127,7 @@ export default function WorkbenchPage() {
   else body = <Skeleton className="h-64" />;
   return (
     <>
-      <PageHeader title="工作台" description="汇总你在所有组织里负责的需求与工作项、等你跟进的条目、指派给你的任务、等你签字的检查项和未读评论。" />
+      <PageHeader title="工作台" description="汇总你在所有组织里负责的需求与工作项、等你跟进的条目、指派给你的任务、等你确认的简报、等你确认的检查项和未读评论。" />
       {body}
     </>
   );

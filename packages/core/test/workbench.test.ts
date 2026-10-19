@@ -6,8 +6,8 @@ import { withOrg } from '../src/db/tx';
 import { createWorkflowTemplate, setProductWorkflowVersion } from '../src/definitions/workflows';
 import type { Actor } from '../src/domain-types';
 import { addDocumentComment, markDocumentCommentsRead } from '../src/documents/comments';
-import { createBrief } from '../src/documents/briefs';
-import { createDocument } from '../src/documents/documents';
+import { convertBriefToPrd, createBrief, updateBrief } from '../src/documents/briefs';
+import { createDocument, transitionDocument } from '../src/documents/documents';
 import { createIteration, setIterationStatus } from '../src/iterations/iterations';
 import { addRequirementComment, markRequirementCommentsRead } from '../src/requirements/comments';
 import { createRequirement, type RequirementListItem } from '../src/requirements/requirements';
@@ -123,7 +123,7 @@ describe('工作台', () => {
     expect(wb.signatures.total).toBe(0);
     // 同事在 PAN-1 上评论过，之后负责人回复的一条对同事是未读
     expect(wb.unread.items.map((u) => [u.displayKey, u.unread])).toEqual([['PAN-1', 1]]);
-    const all = [...wb.owned.items, ...wb.tasks.items, ...wb.signatures.items, ...wb.unread.items];
+    const all = [...wb.owned.items, ...wb.tasks.items, ...wb.signatures.items, ...wb.unread.items, ...wb.confirmations.items];
     expect(all.every((x) => x.org.slug === 'acme')).toBe(true);
   });
 
@@ -174,5 +174,39 @@ describe('工作台', () => {
     const wb = await getWorkbench(t.db, account.id, { today: TODAY });
     expect(wb.unread.items.filter((u) => u.documentId).map((u) => [u.displayKey, u.documentId, u.title])).toEqual([['PAN-B-1', brief.id, '我评论过的简报']]);
     await markDocumentCommentsRead(t.db, owner, brief.id);
+  });
+
+  it('等我确认：确认人是我且简报在讨论中或可以写 PRD；已转 PRD、已废弃和别人的确认人不计入', async () => {
+    const peer = (await resolveActor(t.db, peerAccountId, 'acme'))!;
+    const discussing = await createBrief(t.db, owner, mine.productId, { title: '等我确认的简报' });
+    await updateBrief(t.db, owner, discussing.id, { deciderMemberId: owner.memberId });
+    const ready = await createBrief(t.db, owner, mine.productId, { title: '可以写 PRD 的简报' });
+    await updateBrief(t.db, owner, ready.id, { deciderMemberId: owner.memberId });
+    await transitionDocument(t.db, owner, ready.id, { to: 'ready' });
+    const converted = await createBrief(t.db, owner, mine.productId, { title: '已经生成 PRD 的简报' });
+    await updateBrief(t.db, owner, converted.id, { deciderMemberId: owner.memberId });
+    await convertBriefToPrd(t.db, owner, converted.id);
+    const discarded = await createBrief(t.db, owner, mine.productId, { title: '已废弃的简报' });
+    await updateBrief(t.db, owner, discarded.id, { deciderMemberId: owner.memberId });
+    await transitionDocument(t.db, owner, discarded.id, { to: 'discarded' });
+    const theirs = await createBrief(t.db, peer, mine.productId, { title: '同事确认的简报' });
+    await updateBrief(t.db, peer, theirs.id, { deciderMemberId: peer.memberId });
+
+    const otherActor = (await resolveActor(t.db, account.id, 'other'))!;
+    const otherProduct = (await createProduct(t.db, otherActor, { name: '另一产品', key: 'OTH' })).id;
+    const otherBrief = await createBrief(t.db, otherActor, otherProduct, { title: '另一个组织等我确认' });
+    await updateBrief(t.db, otherActor, otherBrief.id, { deciderMemberId: otherActor.memberId });
+
+    const wb = await getWorkbench(t.db, account.id, { today: TODAY });
+    expect(wb.confirmations.total).toBe(3);
+    const byTitle = new Map(wb.confirmations.items.map((c) => [c.title, c]));
+    expect(byTitle.get('等我确认的简报')).toMatchObject({ status: 'discussing', displayKey: discussing.displayKey, documentId: discussing.id, org: { slug: 'acme' } });
+    expect(byTitle.get('可以写 PRD 的简报')).toMatchObject({ status: 'ready', displayKey: ready.displayKey, documentId: ready.id });
+    expect(byTitle.get('另一个组织等我确认')).toMatchObject({ status: 'discussing', displayKey: otherBrief.displayKey, org: { slug: 'other', name: '第二组织' } });
+    expect(wb.confirmations.items.map((c) => c.title).sort()).toEqual(['另一个组织等我确认', '可以写 PRD 的简报', '等我确认的简报']);
+    expect(wb.confirmations.items.every((c) => c.updatedAt instanceof Date)).toBe(true);
+
+    const peerWb = await getWorkbench(t.db, peerAccountId, { today: TODAY });
+    expect(peerWb.confirmations.items.map((c) => [c.title, c.status, c.org.slug])).toEqual([['同事确认的简报', 'discussing', 'acme']]);
   });
 });
