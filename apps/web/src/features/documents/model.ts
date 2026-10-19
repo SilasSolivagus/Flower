@@ -81,7 +81,6 @@ export function briefFilterToApiQuery(f: BriefListFilter, productId: string): st
 }
 
 export const gateLabel = (g: { passed: number; total: number }): string => `${g.passed}/${g.total}`;
-export const briefFileName = (displayKey: string): string => `${displayKey}.md`;
 
 /** 转 PRD 成功后的提示：已挂在其他 PRD 上、没有覆盖的需求逐条列出。 */
 export function convertMessage(r: { document: { displayKey: string }; skipped: Array<{ displayKey: string; documentKey: string }> }): string {
@@ -141,6 +140,14 @@ export function parseRequirementKeys(input: string): string[] {
     .map((s) => s.trim().toUpperCase())
     .filter((s) => /^[A-Z][A-Z0-9]{1,9}-\d{1,9}$/.test(s));
   return [...new Set(keys)];
+}
+
+/** 需求编号输入里无法识别的片段（与 parseRequirementKeys 使用同一套分隔和格式）。 */
+export function invalidRequirementKeys(input: string): string[] {
+  return input
+    .split(/[\s,，、;；]+/)
+    .map((s) => s.trim())
+    .filter((s) => s && !/^[A-Z][A-Z0-9]{1,9}-\d{1,9}$/.test(s.toUpperCase()));
 }
 
 export type SaveState = 'saved' | 'dirty' | 'saving';

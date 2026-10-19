@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DocumentComment, StructureNode } from '@/lib/types';
-import { base64ToBytes, briefFileName, briefFilterToApiQuery, briefFilterToSearch, briefsHref, CHANGE_TYPE_LABEL, clipContext, convertMessage, countRemoteImages, DOCUMENT_STATUS_COLOR, documentFilterToApiQuery, documentFilterToSearch, documentHref, documentView, domainOptions, editorAnchors, featureOptions, findDataImages, findSectionIndex, gateLabel, groupThreads, importSummary, locateAnchorRange, MERGE_STATUS_LABEL, moduleDocsHref, moduleOptions, parseBriefFilter, parseDocumentFilter, parseRelatedInput, parseRequirementKeys, relatedLinkHref, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
+import { base64ToBytes, briefFilterToApiQuery, briefFilterToSearch, briefsHref, CHANGE_TYPE_LABEL, clipContext, convertMessage, countRemoteImages, DOCUMENT_STATUS_COLOR, documentFilterToApiQuery, documentFilterToSearch, documentHref, documentView, domainOptions, editorAnchors, featureOptions, findDataImages, findSectionIndex, gateLabel, groupThreads, importSummary, invalidRequirementKeys, locateAnchorRange, MERGE_STATUS_LABEL, moduleDocsHref, moduleOptions, parseBriefFilter, parseDocumentFilter, parseRelatedInput, parseRequirementKeys, relatedLinkHref, replaceImageSources, saveStateLabel, sectionsFromBody, sourceLabel } from './model';
 
 describe('PRD 列表筛选', () => {
   it('地址栏 ↔ 筛选；无效的状态与来源被忽略', () => {
@@ -26,6 +26,9 @@ describe('详情页辅助', () => {
   it('需求编号：逗号、顿号、空白分隔，转大写、去重，丢弃不合法的写法', () => {
     expect(parseRequirementKeys(' pan-1，PAN-2、PAN-1  x-y PAN-03 ')).toEqual(['PAN-1', 'PAN-2', 'PAN-03']);
     expect(parseRequirementKeys('')).toEqual([]);
+    expect(invalidRequirementKeys(' pan-1，PAN12、x-y ')).toEqual(['PAN12', 'x-y']);
+    expect(invalidRequirementKeys('PAN-1, PAN-2')).toEqual([]);
+    expect(invalidRequirementKeys('  ')).toEqual([]);
   });
 
   it('保存状态文字', () => {
@@ -186,9 +189,8 @@ describe('简报列表与链接', () => {
     expect(briefFilterToApiQuery({ product: '', status: '', decider: '' }, 'p1')).toBe('product=p1');
   });
 
-  it('闸口进度、下载文件名、转 PRD 的结果提示；简报状态有颜色', () => {
+  it('闸口进度、转 PRD 的结果提示；简报状态有颜色', () => {
     expect(gateLabel({ passed: 7, total: 11 })).toBe('7/11');
-    expect(briefFileName('PAN-B-3')).toBe('PAN-B-3.md');
     expect(convertMessage({ document: { displayKey: 'PAN-PRD-5' }, skipped: [] })).toBe('已生成 PAN-PRD-5');
     expect(
       convertMessage({

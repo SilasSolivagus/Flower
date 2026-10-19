@@ -45,6 +45,7 @@ export function EditorPane({
   doc,
   onReload,
   section,
+  sectionSeq,
   activeCommentId = null,
   onAnchorClick,
   ref,
@@ -54,6 +55,8 @@ export function EditorPane({
   onReload: () => void;
   /** 地址栏 ?section=：编辑器渲染后滚动到这个小节。 */
   section?: string | null;
+  /** 地址栏 ?at=：同一小节再次定位时递增，让滚动重新执行。 */
+  sectionSeq?: string | null;
   /** 评论区当前选中的评论：正文里对应的高亮加深。 */
   activeCommentId?: string | null;
   /** 点击正文里的评论高亮。 */
@@ -251,7 +254,7 @@ export function EditorPane({
       }
     }, 100);
     return () => clearInterval(timer);
-  }, [section]);
+  }, [section, sectionSeq]);
 
   /** 点击正文里的链接卡：站内跳转（编辑区是可编辑区域，浏览器不会自己跟随链接）；点击评论高亮：交给评论区定位。 */
   const onBodyClick = (e: MouseEvent<HTMLDivElement>) => {

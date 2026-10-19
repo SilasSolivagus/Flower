@@ -8,8 +8,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { documentHref, parseRequirementKeys } from '@/features/documents/model';
-import { api } from '@/lib/api';
+import { documentHref, invalidRequirementKeys, parseRequirementKeys } from '@/features/documents/model';
+import { ApiError, api } from '@/lib/api';
 import { briefKeys, documentKeys, requirementKeys, useApiMutation, useTemplates } from '@/lib/queries';
 import type { DocumentDetail } from '@/lib/types';
 
@@ -36,6 +36,8 @@ function CreateBriefForm({
   const chosen = templateId ?? templates.data?.[0]?.id ?? null;
   const create = useApiMutation(
     async () => {
+      const bad = requirementIds ? [] : invalidRequirementKeys(keys);
+      if (bad.length > 0) throw new ApiError(400, 'invalid', `无法识别的需求编号：${bad.join('、')}（应为 PAN-12 这样的写法）`, null);
       const ids =
         requirementIds ??
         (await Promise.all(parseRequirementKeys(keys).map(async (k) => (await api<{ requirement: { id: string } }>(`/orgs/${org}/requirements/${encodeURIComponent(k)}`)).requirement.id)));

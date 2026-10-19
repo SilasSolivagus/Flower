@@ -116,7 +116,23 @@ export function BriefActionsCard({ org, doc, saveEditor }: Props) {
     await saveEditor();
     return apiText(`/orgs/${org}/briefs/${doc.id}/context?format=markdown`);
   };
-  const copy = useApiMutation(async () => navigator.clipboard.writeText(await markdown()), { success: '已复制 Markdown' });
+  // 剪贴板写入要在点击的同一时刻发起（Safari 在 await 之后会丢掉用户激活状态），内容以 Promise 传入
+  const copy = useApiMutation(
+    async () => {
+      const text = markdown();
+      try {
+        if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+          await navigator.clipboard.write([new ClipboardItem({ 'text/plain': text.then((t) => new Blob([t], { type: 'text/plain' })) })]);
+        } else {
+          await navigator.clipboard.writeText(await text);
+        }
+      } catch {
+        await text; // 取内容本身失败时抛出接口的中文错误
+        throw new Error('复制失败，请改用「下载 .md」');
+      }
+    },
+    { success: '已复制 Markdown' },
+  );
   const download = useApiMutation(async () => {
     const url = URL.createObjectURL(new Blob([await markdown()], { type: 'text/markdown;charset=utf-8' }));
     const a = document.createElement('a');

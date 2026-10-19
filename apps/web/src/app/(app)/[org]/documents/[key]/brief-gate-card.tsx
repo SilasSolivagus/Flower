@@ -1,7 +1,7 @@
 'use client';
 
 import { Check, X } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { QueryError } from '@/components/load-error';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -16,6 +16,7 @@ export function BriefGateCard({ org, doc }: { org: string; doc: DocumentDetail }
   const gate = useBriefGate(org, doc.id);
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const canEdit = doc.myRole !== 'viewer';
   const check = useApiMutation(
     (v: { item: number; checked: boolean }) => api(`/orgs/${org}/briefs/${doc.id}/gate/${v.item}`, { method: 'PUT', body: { checked: v.checked } }),
@@ -68,7 +69,13 @@ export function BriefGateCard({ org, doc }: { org: string; doc: DocumentDetail }
                   <button
                     type="button"
                     className="mt-1 text-[12px] text-primary hover:underline"
-                    onClick={() => router.replace(`${pathname}?section=${encodeURIComponent(i.section!)}`, { scroll: false })}
+                    onClick={() => {
+                      // 保留现有查询参数；at 每次递增，重复点击同一小节也会再次滚动
+                      const next = new URLSearchParams(searchParams.toString());
+                      next.set('section', i.section!);
+                      next.set('at', String(Number(next.get('at') ?? 0) + 1));
+                      router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+                    }}
                   >
                     定位到「{i.section}」
                   </button>

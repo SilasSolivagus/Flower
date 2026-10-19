@@ -66,7 +66,9 @@ export function BriefHeaderCard({ org, doc }: { org: string; doc: DocumentDetail
   const saveVersion = (e?: FormEvent) => {
     e?.preventDefault();
     const v = version.trim();
-    if (v && v !== h.version) save.mutate({ version: v });
+    if (save.isPending) return;
+    if (!v) setVersion(h.version);
+    else if (v !== h.version) save.mutate({ version: v });
   };
 
   return (
@@ -147,7 +149,7 @@ export function BriefHeaderCard({ org, doc }: { org: string; doc: DocumentDetail
                         size="icon-sm"
                         variant="ghost"
                         aria-label={`移除关联 ${i + 1}`}
-                        disabled={save.isPending}
+                        disabled={save.isPending || addLink.isPending}
                         onClick={() => save.mutate({ relatedLinks: h.relatedLinks.filter((_, j) => j !== i) })}
                       >
                         <X className="size-4" aria-hidden="true" />
@@ -169,7 +171,7 @@ export function BriefHeaderCard({ org, doc }: { org: string; doc: DocumentDetail
               <Input aria-label="引用或网址" placeholder={`${doc.productKey}-PRD-3 或 https://…`} className="h-8" value={target} onChange={(e) => setTarget(e.target.value)} />
               <div className="flex gap-2">
                 <Input aria-label="说明" placeholder="说明（选填）" className="h-8" maxLength={100} value={note} onChange={(e) => setNote(e.target.value)} />
-                <Button type="submit" size="sm" disabled={addLink.isPending || !target.trim()}>
+                <Button type="submit" size="sm" disabled={addLink.isPending || save.isPending || !target.trim()}>
                   添加
                 </Button>
               </div>

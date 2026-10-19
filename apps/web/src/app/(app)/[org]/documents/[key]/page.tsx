@@ -90,7 +90,7 @@ function DocumentPage() {
               生成
             </p>
           )}
-          {d.source === 'native' ? <EditorPane key={`${d.id}:${epoch}`} ref={editor} org={org} doc={d} onReload={() => void reload()} section={searchParams.get('section')} activeCommentId={focus?.id ?? null} onAnchorClick={(id) => setFocus((f) => ({ id, seq: (f?.seq ?? 0) + 1 }))} /> : <ExternalCard org={org} doc={d} onConvert={() => setConverting(true)} />}
+          {d.source === 'native' ? <EditorPane key={`${d.id}:${epoch}`} ref={editor} org={org} doc={d} onReload={() => void reload()} section={searchParams.get('section')} sectionSeq={searchParams.get('at')} activeCommentId={focus?.id ?? null} onAnchorClick={(id) => setFocus((f) => ({ id, seq: (f?.seq ?? 0) + 1 }))} /> : <ExternalCard org={org} doc={d} onConvert={() => setConverting(true)} />}
           <DocumentComments org={org} doc={d} focus={focus} />
           <Backlinks org={org} type="document" id={d.id} />
           {d.kind === 'module' && <MergeRecords org={org} doc={d} />}
