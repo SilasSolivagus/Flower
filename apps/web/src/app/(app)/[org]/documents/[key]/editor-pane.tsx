@@ -270,7 +270,7 @@ export function EditorPane({
   };
 
   return (
-    <section className="rounded-md border bg-card" aria-label="正文">
+    <section className="min-w-0 rounded-md border bg-card" aria-label="正文">
       <div className="flex h-10 items-center justify-between border-b px-4 text-[13px] text-muted-foreground">
         <span>第 {doc.revisionNumber} 版</span>
         <span role="status">{saveStateLabel(state, editable)}</span>
@@ -288,7 +288,7 @@ export function EditorPane({
           <FormError error={save.error} />
         </div>
       )}
-      <div ref={container} className="relative px-2 py-4" onMouseUp={onSelect} onKeyUp={onSelect} onClick={onBodyClick}>
+      <div ref={container} className="relative min-w-0 max-w-full px-2 py-4" onMouseUp={onSelect} onKeyUp={onSelect} onClick={onBodyClick}>
         <DocumentBodyEditor ref={handle} initialMarkdown={doc.markdown ?? ''} editable={editable && !conflict} onDirty={onDirty} uploadImage={uploadImage} decorations={decorations} searchLinks={editable ? searchLinks : undefined} mentionMembers={mentionMembers.data} />
         {pick && (
           <Button

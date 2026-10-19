@@ -125,6 +125,23 @@ a.wikilink-card:hover {
   color: var(--muted-foreground);
 }
 
+/*
+ * 正文宽表（如简报第 10 节 5 列）默认每列至少 120px。表格块是 flex 子项，
+ * min-width 为 auto 时会把整页撑出视口。只让表格容器横向滚动。
+ */
+.bn-container,
+.bn-editor,
+.bn-editor .bn-block-outer:has([data-content-type='table']),
+.bn-editor .bn-block:has(> .bn-block-content[data-content-type='table']),
+.bn-editor [data-content-type='table'].bn-block-content,
+.bn-editor [data-content-type='table'] .tableWrapper {
+  min-width: 0;
+  max-width: 100%;
+}
+.bn-editor [data-content-type='table'] .tableWrapper {
+  overflow-x: auto;
+}
+
 /* PRD 编辑器：未解决的划词评论 */
 .comment-anchor {
   background: rgba(251, 191, 36, 0.28);

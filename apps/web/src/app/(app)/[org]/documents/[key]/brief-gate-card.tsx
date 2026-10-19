@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, X } from 'lucide-react';
+import { Check, Info, X } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { QueryError } from '@/components/load-error';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -30,7 +30,10 @@ export function BriefGateCard({ org, doc }: { org: string; doc: DocumentDetail }
         </h2>
         {gate.data && <span className="font-mono text-[13px] text-muted-foreground">{gateLabel(gate.data)}</span>}
       </div>
-      <p className="mb-3 text-[12px] text-muted-foreground">只作提示，不限制改状态与转 PRD。</p>
+      <p role="note" className="mb-3 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] leading-5 text-amber-950 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-50">
+        <Info className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+        <span>只作提示，不限制改状态与转 PRD。</span>
+      </p>
       {gate.isError ? (
         <QueryError error={gate.error} noAccessMessage="没有查看这份简报的权限。" retryMessage="加载闸口失败，请重试。" onRetry={() => gate.refetch()} />
       ) : !gate.data ? (

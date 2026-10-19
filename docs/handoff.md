@@ -144,7 +144,7 @@ Flower：多组织、多产品的产品研发管理平台，最终以 docker 形
 
 ## 下一步
 
-1. 合并 P3-C2（分支 `feat/p3c2-requirement-brief`，PR #19）。
+1. CI（含端到端）全绿后再合并 P3-C2（分支 `feat/p3c2-requirement-brief`，PR #19）。合前已补：闸口「只作提示」改为琥珀色提示条；760 下简报宽表只在表内横滚。
 2. 用户按 `docs/p3c2-validation.md` 第 7 节验收；P3-C1 见 `docs/p3c1-validation.md` 第 7 节；P3-B2 见 `docs/p3b2-validation.md` 第 6 节，P3-B1、P3-A 见 `docs/p3b1-validation.md` 第 5、6 节与 `docs/p3a-validation.md` 第 5、6 节。
 3. P3-C3 周期汇总：完成清单、在推进与风险、进展摘录、数字与对比（周、月、季、半年、年；按产品经理、类型、产品）；导出 Markdown 与 Excel；定时推送到群，推送规则是否接入 P3-C1、P3-C2 的新事件届时再定。
 4. 待规划：原型评审增值模块（可拆卸）。从 123云盘 开始，用产品仓库的真实前端组件加模拟后端复现各版本界面，AI 生成改动后的版本，内部评审时可标注、评论、对比现版本与改动版本；原型在隔离环境运行，不接触真实接口与生产数据。

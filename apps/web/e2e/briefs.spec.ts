@@ -89,6 +89,7 @@ test('从需求新建简报：头部信息、正文与闸口、转 PRD 与互链
   await page.reload();
   await expect(header.getByLabel('版本')).toHaveValue('v0.2');
   const gate = side.getByRole('region', { name: '写 PRD 闸口' });
+  await expect(gate.getByRole('note')).toContainText('只作提示，不限制改状态与转 PRD。');
   await expect(gate).toContainText('2/11');
   await expect(gate.getByRole('listitem', { name: '闸口 1', exact: true })).toContainText('「14. 分工」写了「不适用」但没有写理由');
   await expect(gate.getByRole('listitem', { name: '闸口 7', exact: true }).getByLabel('通过', { exact: true })).toBeVisible();
@@ -155,8 +156,9 @@ test('从需求新建简报：头部信息、正文与闸口、转 PRD 与互链
   await expect(prdCard.getByRole('alert')).toContainText('请输入 PRD 编号，例如 PAN-PRD-1');
 });
 
-test('文档页「简报」页签：列表、状态与决策人筛选（写入地址栏）、新建；1440 与 760 下列表与详情不横向滚动', async ({ page, request }) => {
+test('文档页「简报」页签：列表、状态与决策人筛选（写入地址栏）、新建；1440 与 760 下列表、含宽表的详情与需求详情不横向滚动', async ({ page, request }) => {
   const productId = await createProduct(request);
+  await createRequirement(request, productId, '上传失败自动重试');
   const deciderId = await createMember(request, '决策人甲');
   const a = await createBrief(request, productId, { title: '上传提速' });
   const b = await createBrief(request, productId, { title: '下载限速' });
@@ -202,7 +204,27 @@ test('文档页「简报」页签：列表、状态与决策人筛选（写入�
     await expect(page.getByRole('row', { name: /PAN-B-3/ })).toBeVisible();
     await expectNoPageOverflow(page);
     await page.goto('/acme/documents/PAN-B-1');
+    const body = page.getByRole('region', { name: '正文' });
+    // 预置模板第 10 节是 5 列宽表；等编辑器画出来再量，避免骨架屏时误判为不溢出
+    await expect(body.getByText('10. 影响面与兼容')).toBeVisible();
+    const wideTable = body.locator('table').filter({ hasText: '端 / 对象' });
+    await expect(wideTable).toBeVisible();
+    // 表比容器宽时，滚动发生在表格容器里，而不是把页面撑宽后裁切
+    await expect
+      .poll(() =>
+        wideTable.evaluate((table) => {
+          const wrap = table.closest('.tableWrapper');
+          if (!wrap) return false;
+          const overflowX = getComputedStyle(wrap).overflowX;
+          const scrolls = overflowX === 'auto' || overflowX === 'scroll';
+          return table.scrollWidth <= wrap.clientWidth + 1 || scrolls;
+        }),
+      )
+      .toBe(true);
     await expect(page.getByRole('complementary').getByRole('region', { name: '写 PRD 闸口' })).toContainText('2/11');
+    await expectNoPageOverflow(page);
+    await page.goto('/acme/requirements/PAN-1');
+    await expect(page.getByRole('region', { name: '简报', exact: true })).toBeVisible();
     await expectNoPageOverflow(page);
   }
 });
@@ -219,4 +241,10 @@ test('模板设置：切换到简报模板，看到预置简报模板的必填�
   const dialog = page.getByRole('dialog', { name: '编辑模板' });
   await expect(dialog.getByLabel('模板说明')).toHaveValue(/不是会议流水账/);
   await expect(dialog.getByLabel('小节 18 标题')).toHaveValue('18. 与 PRD 章节的对应');
+  await page.setViewportSize({ width: 760, height: 900 });
+  await expectNoPageOverflow(page);
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(row).toBeVisible();
+  await expectNoPageOverflow(page);
 });
