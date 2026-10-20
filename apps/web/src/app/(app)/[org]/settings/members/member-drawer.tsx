@@ -3,6 +3,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Link2 } from 'lucide-react';
 import { useState } from 'react';
+import { ConfirmDialog } from '@/components/confirm-dialog';
 import { FormError } from '@/components/form-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -40,6 +41,7 @@ export function MemberDrawer({
   const [roles, setRoles] = useState<Record<string, string>>({});
   const [error, setError] = useState<ApiError | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
 
   const [synced, setSynced] = useState<Member | null>(null);
   if (member && member !== synced) {
@@ -55,7 +57,12 @@ export function MemberDrawer({
   const isAdminRole = form.orgRole === 'owner' || form.orgRole === 'admin';
   const roleOptions: OrgRole[] = kind === 'agent' ? ['member', 'guest'] : me.orgRole === 'owner' ? ['owner', 'admin', 'member', 'guest'] : ['admin', 'member', 'guest'];
 
-  async function save() {
+  function cancelLeave() {
+    setConfirmLeave(false);
+    if (member) setForm((current) => ({ ...current, status: member.status }));
+  }
+
+  async function persist() {
     if (!member) return;
     setSaving(true);
     setError(null);
@@ -85,6 +92,15 @@ export function MemberDrawer({
     } finally {
       setSaving(false);
     }
+  }
+
+  function save() {
+    if (!member) return;
+    if (form.status === 'left' && member.status !== 'left') {
+      setConfirmLeave(true);
+      return;
+    }
+    void persist();
   }
 
   return (
@@ -192,6 +208,17 @@ export function MemberDrawer({
           </fieldset>
           <FormError error={error} />
         </div>
+        <ConfirmDialog
+          open={confirmLeave}
+          title="设为已离开"
+          description="设为已离开后，会清除该成员的产品角色，并吊销其全部 API Token。确认后才会保存。"
+          confirmLabel="确认离开"
+          onCancel={cancelLeave}
+          onConfirm={() => {
+            setConfirmLeave(false);
+            void persist();
+          }}
+        />
         <SheetFooter className="mt-auto flex-row justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             取消

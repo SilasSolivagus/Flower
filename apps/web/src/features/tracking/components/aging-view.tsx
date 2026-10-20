@@ -6,6 +6,7 @@ import { formatDate } from '@/features/requirements/format';
 import { agingRows, itemHref, staleRows } from '@/features/tracking/model';
 import type { TrackingItem } from '@/lib/types';
 import { AgingDays, StageLabel, WriteButton } from './item-bits';
+import { NarrowTrackingList } from './narrow-list';
 
 function ShortTable({ org, label, items, last, onWrite }: { org: string; label: string; items: TrackingItem[]; last: 'blockers' | 'latest'; onWrite: (item: TrackingItem) => void }) {
   return (
@@ -18,7 +19,7 @@ function ShortTable({ org, label, items, last, onWrite }: { org: string; label: 
           <TableHead>当前阶段</TableHead>
           <TableHead>本阶段停留</TableHead>
           <TableHead>{last === 'blockers' ? '阻塞/风险' : '最近进展'}</TableHead>
-          <TableHead>
+          <TableHead className="sticky right-0 z-10 bg-card">
             <span className="sr-only">操作</span>
           </TableHead>
         </TableRow>
@@ -48,7 +49,7 @@ function ShortTable({ org, label, items, last, onWrite }: { org: string; label: 
                   ? formatDate(i.latest.createdAt)
                   : '没有进展记录'}
             </TableCell>
-            <TableCell>
+            <TableCell className="sticky right-0 z-10 bg-card group-even:bg-zebra">
               <WriteButton item={i} onWrite={onWrite} />
             </TableCell>
           </TableRow>
@@ -70,7 +71,12 @@ export function AgingView({ org, items, staleDays, onWrite }: { org: string; ite
         {rows.length === 0 ? (
           <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">没有未完成的条目</p>
         ) : (
-          <ShortTable org={org} label="按本阶段停留排序" items={rows} last="blockers" onWrite={onWrite} />
+          <>
+            <NarrowTrackingList org={org} label="按本阶段停留排序" items={rows} onWrite={onWrite} />
+            <div className="hidden md:block">
+              <ShortTable org={org} label="按本阶段停留排序" items={rows} last="blockers" onWrite={onWrite} />
+            </div>
+          </>
         )}
       </section>
       <section aria-label={staleTitle} className="min-w-0 rounded-md border bg-card">
@@ -81,7 +87,12 @@ export function AgingView({ org, items, staleDays, onWrite }: { org: string; ite
         {stale.length === 0 ? (
           <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">没有超过 {staleDays} 天没有进展的条目</p>
         ) : (
-          <ShortTable org={org} label={staleTitle} items={stale} last="latest" onWrite={onWrite} />
+          <>
+            <NarrowTrackingList org={org} label={staleTitle} items={stale} onWrite={onWrite} />
+            <div className="hidden md:block">
+              <ShortTable org={org} label={staleTitle} items={stale} last="latest" onWrite={onWrite} />
+            </div>
+          </>
         )}
       </section>
     </div>

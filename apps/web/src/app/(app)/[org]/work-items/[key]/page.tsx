@@ -26,6 +26,7 @@ import { qk, trackingKeys, useApiMutation, useFields, useMembers, useOrg, usePro
 import type { WorkItemDetail } from '@/lib/types';
 
 const NONE = '__none';
+const WORK_ITEM_REQUIREMENT_NOTE = '工作项不关联需求；请从需求详情看关联';
 type Patch = { title?: string; description?: string; productId?: string | null; ownerMemberId?: string | null; workTypeOptionId?: string | null; startedOn?: string | null; expectedDate?: string | null };
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -155,6 +156,7 @@ function InfoPanel({ org, item: w }: { org: string; item: WorkItemDetail }) {
           <span>{w.product?.name ?? '不关联产品'}</span>
         )}
       </Field>
+      <p className="text-xs leading-5 text-muted-foreground">{WORK_ITEM_REQUIREMENT_NOTE}</p>
       <Field label="启动日期">{dateInput('启动日期', 'startedOn')}</Field>
       <Field label="预计完成日期">{dateInput('预计完成日期', 'expectedDate')}</Field>
       <p className="text-xs text-muted-foreground">
