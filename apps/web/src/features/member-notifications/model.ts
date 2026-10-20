@@ -41,6 +41,44 @@ export function relativeTime(iso: string, now: Date, timeZone?: string): string 
 /** 「谁」：操作人的当前姓名；系统告警为「系统」。 */
 export const actorLabel = (n: Pick<MemberNotification, 'actor' | 'kind'>): string => n.actor?.displayName ?? (n.kind === 'system_alert' ? '系统' : '有人');
 
+/** 要你做的事：被 @、被指派、等你签字。关注动态和系统告警是流水。 */
+const ACTION_KINDS = new Set<MemberNotificationKind>(['mentioned', 'assigned', 'signoff_due']);
+
+export function isActionNotification(kind: MemberNotificationKind): boolean {
+  return ACTION_KINDS.has(kind);
+}
+
+/** 通知中心分区：行动项在前，其余动态在后。组内保持原顺序（接口已按时间倒序）。没有条目的分区不出现。 */
+export function groupInbox<T extends { kind: MemberNotificationKind }>(items: T[]): Array<{ label: '要你做的事' | '全部动态'; items: T[] }> {
+  const actions = items.filter((n) => isActionNotification(n.kind));
+  const activity = items.filter((n) => !isActionNotification(n.kind));
+  return [
+    ...(actions.length > 0 ? [{ label: '要你做的事' as const, items: actions }] : []),
+    ...(activity.length > 0 ? [{ label: '全部动态' as const, items: activity }] : []),
+  ];
+}
+
+export type CopySegment = { text: string; keep: boolean };
+
+/**
+ * 中文后紧跟一个空格和英文词时整段不换行，避免铃铛里「已生成 PRD」断成「已生成 / PRD」。
+ * 其余文字仍可在标点和空格处换行。
+ */
+export function notificationCopySegments(text: string): CopySegment[] {
+  const glued = /([\u3400-\u9fff]{1,12}) ([A-Za-z][A-Za-z0-9-]{0,20})/g;
+  const out: CopySegment[] = [];
+  let last = 0;
+  for (const m of text.matchAll(glued)) {
+    const start = m.index ?? 0;
+    if (start > last) out.push({ text: text.slice(last, start), keep: false });
+    out.push({ text: `${m[1]} ${m[2]}`, keep: true });
+    last = start + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last), keep: false });
+  if (out.length === 0) out.push({ text, keep: false });
+  return out;
+}
+
 export type NotificationPageFilter = { read: 'all' | 'unread'; kind: MemberNotificationKind | '' };
 
 export function parseNotificationFilter(p: URLSearchParams): NotificationPageFilter {
