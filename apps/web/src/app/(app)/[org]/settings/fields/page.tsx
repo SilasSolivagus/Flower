@@ -43,7 +43,7 @@ function FieldsPage() {
           </Select>
         }
       />
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {fields.data?.map((f) => (
           <FieldCard key={f.id} org={org} field={f} productId={productId} editable={scope === 'org' ? f.productId === null : f.productId !== null} />
         ))}

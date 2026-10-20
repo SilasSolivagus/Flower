@@ -6,6 +6,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, Suspense } from 'react';
 import { EmptyState } from '@/components/empty-state';
 import { QueryError } from '@/components/load-error';
+import { NO_PERMISSION_MESSAGE } from '@/components/no-access';
 import { PageHeader } from '@/components/page-header';
 import { RequireOrgAdmin } from '@/components/require-org-admin';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -108,7 +109,7 @@ function OrgDashboardPage() {
   let body: ReactNode;
   if (!q.data) {
     if (q.error instanceof ApiError && q.error.status === 400) body = <InvalidFilter message={q.error.message} onReset={() => go(DEFAULT_FILTER)} />;
-    else if (q.isError) body = <QueryError error={q.error} noAccessMessage="你没有查看组织汇总的权限。" retryMessage="加载组织汇总失败，请重试。" onRetry={() => q.refetch()} />;
+    else if (q.isError) body = <QueryError error={q.error} noAccessMessage={NO_PERMISSION_MESSAGE} retryMessage="加载组织汇总失败，请重试。" onRetry={() => q.refetch()} />;
     else body = <Skeleton className="h-40" />;
   } else {
     body = (

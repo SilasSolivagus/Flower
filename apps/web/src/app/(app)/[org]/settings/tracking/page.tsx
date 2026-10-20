@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { FormError } from '@/components/form-error';
 import { QueryError } from '@/components/load-error';
+import { NO_PERMISSION_MESSAGE } from '@/components/no-access';
 import { PageHeader } from '@/components/page-header';
 import { RequireOrgAdmin } from '@/components/require-org-admin';
 import { Button } from '@/components/ui/button';
@@ -42,7 +43,7 @@ function TrackingSettingsPage() {
       }),
     { invalidate: [trackingKeys(org)], silentError: true, success: '已保存' },
   );
-  if (q.isError) return <QueryError error={q.error} noAccessMessage="你没有修改跟进设置的权限。" retryMessage="加载跟进设置失败，请重试。" onRetry={() => q.refetch()} />;
+  if (q.isError) return <QueryError error={q.error} noAccessMessage={NO_PERMISSION_MESSAGE} retryMessage="加载跟进设置失败，请重试。" onRetry={() => q.refetch()} />;
   if (!q.data) return null;
   return (
     <>

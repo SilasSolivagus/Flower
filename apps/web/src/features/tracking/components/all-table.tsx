@@ -5,13 +5,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { itemHref } from '@/features/tracking/model';
 import type { TrackingItem } from '@/lib/types';
 import { AgingDays, LatestProgress, StageLabel, WriteButton } from './item-bits';
+import { NarrowTrackingList } from './narrow-list';
 
 const dash = (v: string | null | undefined): string => v || '—';
 
 /** 全部在手：每条一行。表格在自己的容器里横向滚动，标题列固定在左侧。 */
 export function AllTable({ org, items, onWrite }: { org: string; items: TrackingItem[]; onWrite: (item: TrackingItem) => void }) {
   return (
-    <div className="min-w-0 rounded-md border bg-card">
+    <>
+      <NarrowTrackingList org={org} label="全部在手" items={items} onWrite={onWrite} className="rounded-md border bg-card" />
+      <div className="hidden min-w-0 rounded-md border bg-card md:block">
       <Table aria-label="全部在手" className="text-[13px]">
         <TableHeader>
           <TableRow>
@@ -29,7 +32,7 @@ export function AllTable({ org, items, onWrite }: { org: string; items: Tracking
             <TableHead>预计上线</TableHead>
             <TableHead>实际上线</TableHead>
             <TableHead>在制时长</TableHead>
-            <TableHead>
+            <TableHead className="sticky right-0 z-10 bg-card">
               <span className="sr-only">操作</span>
             </TableHead>
           </TableRow>
@@ -69,13 +72,14 @@ export function AllTable({ org, items, onWrite }: { org: string; items: Tracking
               <TableCell className="font-mono text-xs">{dash(i.expectedDate)}</TableCell>
               <TableCell className="font-mono text-xs">{dash(i.doneOn)}</TableCell>
               <TableCell className="whitespace-nowrap font-mono text-xs">{i.wipDays} 天</TableCell>
-              <TableCell>
+              <TableCell className="sticky right-0 z-10 bg-card group-even:bg-zebra">
                 <WriteButton item={i} onWrite={onWrite} />
               </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
-    </div>
+      </div>
+    </>
   );
 }

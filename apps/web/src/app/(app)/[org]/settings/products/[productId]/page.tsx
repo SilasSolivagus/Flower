@@ -2,7 +2,8 @@
 
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
-import { NoAccess } from '@/components/no-access';
+import { ConfirmDialog } from '@/components/confirm-dialog';
+import { NO_PERMISSION_MESSAGE, NoAccess } from '@/components/no-access';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ export default function ProductDetailPage() {
   const orgQ = useOrg(org);
   const product = useProduct(org, productId);
   const [name, setName] = useState('');
+  const [confirmArchive, setConfirmArchive] = useState(false);
   const serverName = product.data?.name ?? '';
   const [syncedName, setSyncedName] = useState('');
   if (serverName !== syncedName) {
@@ -35,10 +37,10 @@ export default function ProductDetailPage() {
     { invalidate: [qk.product(org, productId), qk.products(org), qk.me], success: '已保存' },
   );
   if (!product.data && product.isError) {
-    return <QueryError error={product.error} noAccessMessage="产品不存在，或者你没有访问权限。" retryMessage="加载产品失败，请重试。" onRetry={() => product.refetch()} />;
+    return <QueryError error={product.error} noAccessMessage={NO_PERMISSION_MESSAGE} retryMessage="加载产品失败，请重试。" onRetry={() => product.refetch()} />;
   }
   if (!product.data || !orgQ.data) return null;
-  if (product.data.myRole !== 'admin') return <NoAccess message="只有产品管理员可以修改产品设置。" />;
+  if (product.data.myRole !== 'admin') return <NoAccess message={NO_PERMISSION_MESSAGE} />;
   const p = product.data;
   const orgAdmin = isOrgAdminRole(orgQ.data.me.orgRole);
   return (
@@ -78,12 +80,23 @@ export default function ProductDetailPage() {
                 </Button>
               </div>
             </div>
-            <div className="flex items-center justify-between border-t pt-4">
-              <span className="text-[13px] text-muted-foreground">归档后产品不再出现在日常视图中，数据保留。</span>
-              <Button variant="outline" onClick={() => update.mutate({ status: p.status === 'active' ? 'archived' : 'active' })}>
+            <div className="flex flex-col items-start gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="max-w-prose text-[13px] leading-6 text-muted-foreground">归档后产品不再出现在日常视图中，数据保留。</p>
+              <Button variant="outline" className="shrink-0" onClick={() => setConfirmArchive(true)}>
                 {p.status === 'active' ? '归档产品' : '取消归档'}
               </Button>
             </div>
+            <ConfirmDialog
+              open={confirmArchive}
+              title={p.status === 'active' ? '归档产品' : '取消归档'}
+              description={p.status === 'active' ? '归档后产品不再出现在日常视图中，数据保留。确认后才会归档。' : '取消归档后，产品会重新出现在日常视图中。确认后才会生效。'}
+              confirmLabel={p.status === 'active' ? '确认归档' : '确认取消归档'}
+              onCancel={() => setConfirmArchive(false)}
+              onConfirm={() => {
+                setConfirmArchive(false);
+                update.mutate({ status: p.status === 'active' ? 'archived' : 'active' });
+              }}
+            />
           </section>
         </TabsContent>
         <TabsContent value="roles">

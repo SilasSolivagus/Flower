@@ -112,28 +112,28 @@ function MembersPage() {
           {rows.length === 0 ? (
             <EmptyState icon={Users} title="没有符合条件的成员" />
           ) : (
-            <div className="overflow-hidden rounded-lg border bg-card">
+            <div className="min-w-0 overflow-x-auto rounded-lg border bg-card">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>成员</TableHead>
                     <TableHead>类型</TableHead>
                     <TableHead>组织角色</TableHead>
-                    <TableHead>职能</TableHead>
-                    <TableHead>企业微信账号</TableHead>
+                    <TableHead className="hidden md:table-cell">职能</TableHead>
+                    <TableHead className="hidden md:table-cell">企业微信账号</TableHead>
                     <TableHead>状态</TableHead>
-                    <TableHead className="w-20" />
+                    <TableHead className="sticky right-0 z-10 w-20 bg-card" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.map((m) => {
                     const kind = memberKind(m);
                     return (
-                      <TableRow key={m.id} className="h-10 even:bg-zebra">
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{m.displayName}</span>
-                            <span className="font-mono text-xs text-muted-foreground">
+                      <TableRow key={m.id} className="group h-10 even:bg-zebra">
+                        <TableCell className="max-w-48">
+                          <div className="flex min-w-0 flex-col">
+                            <span className="truncate font-medium">{m.displayName}</span>
+                            <span className="truncate font-mono text-xs text-muted-foreground">
                               {m.email ?? (m.department ? `${m.department} · 未关联账号` : kind === 'agent' ? 'API 调用身份' : '—')}
                             </span>
                           </div>
@@ -144,7 +144,7 @@ function MembersPage() {
                           </Badge>
                         </TableCell>
                         <TableCell>{ORG_ROLE_LABEL[m.orgRole]}</TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           <div className="flex flex-wrap gap-1">
                             {m.functionTagIds.map((id) => {
                               const t = tagById.get(id);
@@ -157,7 +157,7 @@ function MembersPage() {
                             })}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden md:table-cell">
                           <div className="flex items-center gap-1">
                             <span className={m.wecomUserid ? 'font-mono text-[13px]' : 'text-muted-foreground'}>{m.wecomUserid ?? '—'}</span>
                             {m.kind === 'human' && (
@@ -170,7 +170,7 @@ function MembersPage() {
                         <TableCell className={m.status === 'left' ? 'text-muted-foreground' : 'text-emerald-700 dark:text-emerald-400'}>
                           {m.status === 'left' ? '已离开' : '在职'}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="sticky right-0 z-10 bg-card text-right group-even:bg-zebra">
                           <Button variant="ghost" size="sm" aria-label={`查看${m.displayName}`} onClick={() => setSelected(m)}>
                             详情
                           </Button>

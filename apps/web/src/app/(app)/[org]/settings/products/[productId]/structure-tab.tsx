@@ -80,9 +80,9 @@ export function StructureTab({ org, productId }: { org: string; productId: strin
 
   return (
     <section className="rounded-lg border bg-card" aria-label="结构树">
-      <div className="flex items-center justify-between border-b px-4 py-3">
+      <div className="flex flex-col items-start gap-1 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="font-semibold">结构树</h2>
-        <span className="text-xs text-muted-foreground">层级：{names.join(' / ')}（在「字段与层级」中修改叫法）</span>
+        <span className="max-w-prose text-xs leading-5 text-muted-foreground">层级：{names.join(' / ')}（在「字段与层级」中修改叫法）</span>
       </div>
       <ul>
         {list.map((n) => {

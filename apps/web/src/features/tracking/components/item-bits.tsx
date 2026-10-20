@@ -16,7 +16,7 @@ export function AgingDays({ item }: { item: TrackingItem }) {
 /** 当前阶段：颜色点与名称；暂停时加「已暂停」标签，悬停显示原因。 */
 export function StageLabel({ item }: { item: TrackingItem }) {
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+    <span className="inline-flex max-w-full flex-wrap items-center gap-1.5">
       <span className="size-2 shrink-0 rounded-full" style={{ background: item.stage.color }} aria-hidden="true" />
       {item.stage.label}
       {item.paused && (
@@ -46,7 +46,7 @@ export function LatestProgress({ item }: { item: TrackingItem }) {
 export function WriteButton({ item, onWrite }: { item: TrackingItem; onWrite: (item: TrackingItem) => void }) {
   if (!item.canWrite) return null;
   return (
-    <Button size="sm" variant="ghost" className="h-7 px-2" aria-label={`写进展：${item.displayKey}`} onClick={() => onWrite(item)}>
+    <Button size="sm" variant="ghost" className="h-7 shrink-0 px-2" aria-label={`写进展：${item.displayKey}`} onClick={() => onWrite(item)}>
       写进展
     </Button>
   );

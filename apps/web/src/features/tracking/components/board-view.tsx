@@ -9,9 +9,9 @@ import { AgingDays, WriteButton } from './item-bits';
 /** 按阶段看板：只读，不能拖动。列在自己的容器里横向滚动。 */
 export function BoardView({ org, list, productId, onWrite }: { org: string; list: TrackingList; productId: string | null; onWrite: (item: TrackingItem) => void }) {
   return (
-    <div className="flex min-w-0 gap-3 overflow-x-auto pb-2">
+    <div className="flex min-w-0 flex-col gap-3 md:flex-row md:overflow-x-auto md:pb-2">
       {boardColumns(list, productId).map((c) => (
-        <section key={c.key} aria-label={c.label} className="flex w-64 shrink-0 flex-col gap-2 rounded-md border bg-muted/40 p-2">
+        <section key={c.key} aria-label={c.label} className="flex w-full min-w-0 flex-col gap-2 rounded-md border bg-muted/40 p-2 md:w-64 md:shrink-0">
           <h2 className="flex items-center gap-1.5 px-1 text-[13px] font-semibold">
             {c.color && <span className="size-2 rounded-full" style={{ background: c.color }} aria-hidden="true" />}
             {c.label}

@@ -39,7 +39,7 @@ function ProductsPage() {
       {products.data?.length === 0 ? (
         <EmptyState icon={Box} title="还没有产品" description="例如「网盘」，编号前缀 PAN，需求编号会显示为 PAN-123。" />
       ) : (
-        <div className="overflow-hidden rounded-lg border bg-card">
+        <div className="min-w-0 overflow-x-auto rounded-lg border bg-card">
           <Table>
             <TableHeader>
               <TableRow>

@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { QueryError } from '@/components/load-error';
+import { NO_PERMISSION_MESSAGE } from '@/components/no-access';
 import { PageHeader } from '@/components/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ActionGate } from '@/features/workflow/components/action-gate';
@@ -55,7 +56,7 @@ export default function WorkflowEditorPage() {
   );
 
   if (!wf.data && wf.isError) {
-    return <QueryError error={wf.error} noAccessMessage="流程不存在，或者你没有编辑权限。" retryMessage="加载流程失败，请重试。" onRetry={() => wf.refetch()} />;
+    return <QueryError error={wf.error} noAccessMessage={NO_PERMISSION_MESSAGE} retryMessage="加载流程失败，请重试。" onRetry={() => wf.refetch()} />;
   }
   if (!wf.data || !draft || !current) return null;
   const def = wf.data.definition;
@@ -98,7 +99,7 @@ export default function WorkflowEditorPage() {
         }
       />
       <ValidationPanel issues={issues} />
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Tabs defaultValue="transitions" className="min-w-0">
           <TabsList>
             <TabsTrigger value="states">状态 {draft.states.length}</TabsTrigger>
