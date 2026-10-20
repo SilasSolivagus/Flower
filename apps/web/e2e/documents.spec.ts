@@ -68,10 +68,15 @@ test('只读成员看不到新建按钮，可以搜索；1440 与 760 宽度下�
   await expect(page).toHaveURL(/q=/);
   await expect(page.getByRole('table').getByRole('row')).toHaveCount(2);
 
-  for (const width of [1440, 760]) {
+  for (const width of [1440, 1280, 760]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/acme/documents');
+    const longRow = page.getByRole('row', { name: /一个很长的 PRD 标题/ });
+    await expect(longRow).toBeVisible();
     await expect(page.getByRole('row', { name: /支付改版/ })).toBeVisible();
+    if (width === 760) {
+      await expect.poll(async () => longRow.getByRole('cell').nth(1).evaluate((el) => el.getBoundingClientRect().width)).toBeGreaterThan(80);
+    }
     await expectNoPageOverflow(page);
   }
   await ctx.close();

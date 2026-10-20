@@ -1,9 +1,9 @@
 import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import { productRoleOf, visibleProductIds } from '../access/permissions';
 import type { Db } from '../db/client';
-import { checkItemResults, commentReads, comments, documents, iterations, products, progressUpdates, requirements, tasks, workItems } from '../db/schema';
+import { checkItemResults, commentReads, comments, documentBriefs, documents, iterations, products, progressUpdates, requirements, tasks, workItems } from '../db/schema';
 import { type Tx, withOrg } from '../db/tx';
-import { documentDisplayKey, documentKeyOf } from '../documents/markdown';
+import { briefDisplayKey, documentDisplayKey, documentKeyOf } from '../documents/markdown';
 import type { Actor } from '../domain-types';
 import { type StateInfo, stateInfoByProduct, stateOf } from '../iterations/iterations';
 import { workItemDisplayKey } from '../links/syntax';
@@ -61,6 +61,15 @@ export type WorkbenchUnread = {
   unread: number;
   lastAt: Date;
 };
+/** 「等我确认」一行：我是确认人、且简报仍在讨论中或可以写 PRD。 */
+export type WorkbenchConfirmation = {
+  org: WorkbenchOrg;
+  documentId: string;
+  displayKey: string;
+  title: string;
+  status: 'discussing' | 'ready';
+  updatedAt: Date;
+};
 export type WorkbenchSection<T> = { total: number; items: T[] };
 export type Workbench = {
   orgs: WorkbenchOrg[];
@@ -69,8 +78,16 @@ export type Workbench = {
   signatures: WorkbenchSection<WorkbenchSignature>;
   unread: WorkbenchSection<WorkbenchUnread>;
   following: WorkbenchSection<WorkbenchFollowUp>;
+  confirmations: WorkbenchSection<WorkbenchConfirmation>;
 };
-type OrgPart = { owned: WorkbenchRequirement[]; tasks: WorkbenchTask[]; signatures: WorkbenchSignature[]; unread: WorkbenchUnread[]; following: WorkbenchFollowUp[] };
+type OrgPart = {
+  owned: WorkbenchRequirement[];
+  tasks: WorkbenchTask[];
+  signatures: WorkbenchSignature[];
+  unread: WorkbenchUnread[];
+  following: WorkbenchFollowUp[];
+  confirmations: WorkbenchConfirmation[];
+};
 
 function section<T>(list: T[], compare: (a: T, b: T) => number): WorkbenchSection<T> {
   return { total: list.length, items: [...list].sort(compare).slice(0, WORKBENCH_LIMIT) };
@@ -119,7 +136,7 @@ async function orgPart(db: Db, actor: Actor, org: WorkbenchOrg, today: string | 
   return withOrg(db, actor.orgId, async (tx) => {
     const visible = [...(await visibleProductIds(tx, actor))];
     const unlinked = canViewUnlinked(actor);
-    if (visible.length === 0 && !unlinked) return { owned: [], tasks: [], signatures: [], unread: [], following: [] };
+    if (visible.length === 0 && !unlinked) return { owned: [], tasks: [], signatures: [], unread: [], following: [], confirmations: [] };
     const day = today ?? (await orgToday(tx, actor.orgId));
     const prods = await tx.select({ id: products.id, key: products.key }).from(products).where(inArray(products.id, visible));
     const keyOf = new Map(prods.map((p) => [p.id, p.key]));
@@ -308,7 +325,43 @@ async function orgPart(db: Db, actor: Actor, org: WorkbenchOrg, today: string | 
       }
     }
 
-    return { owned, tasks: myTasks, signatures, unread, following };
+    // 等我确认：我是确认人，且简报还在讨论中或可以写 PRD（已转 PRD、已废弃不计入）
+    const confirmations: WorkbenchConfirmation[] = [];
+    if (visible.length > 0) {
+      const briefRows = await tx
+        .select({
+          id: documents.id,
+          number: documents.number,
+          title: documents.title,
+          status: documents.status,
+          updatedAt: documents.updatedAt,
+          productKey: products.key,
+        })
+        .from(documentBriefs)
+        .innerJoin(documents, eq(documents.id, documentBriefs.documentId))
+        .innerJoin(products, eq(products.id, documents.productId))
+        .where(
+          and(
+            eq(documentBriefs.deciderMemberId, actor.memberId),
+            eq(documents.kind, 'brief'),
+            inArray(documents.status, ['discussing', 'ready']),
+            isNull(documents.deletedAt),
+            inArray(documents.productId, visible),
+          ),
+        );
+      for (const row of briefRows) {
+        confirmations.push({
+          org,
+          documentId: row.id,
+          displayKey: briefDisplayKey(row.productKey, row.number),
+          title: row.title,
+          status: row.status === 'ready' ? 'ready' : 'discussing',
+          updatedAt: row.updatedAt,
+        });
+      }
+    }
+
+    return { owned, tasks: myTasks, signatures, unread, following, confirmations };
   });
 }
 
@@ -331,5 +384,9 @@ export async function getWorkbench(db: Db, accountId: string, opts: { today?: st
     signatures: section(parts.flatMap((p) => p.signatures), (a, b) => a.displayKey.localeCompare(b.displayKey, 'zh-CN', { numeric: true })),
     unread: section(parts.flatMap((p) => p.unread), (a, b) => b.lastAt.getTime() - a.lastAt.getTime()),
     following: section(parts.flatMap((p) => p.following), (a, b) => a.at.getTime() - b.at.getTime()),
+    confirmations: section(
+      parts.flatMap((p) => p.confirmations),
+      (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime() || a.displayKey.localeCompare(b.displayKey, 'zh-CN', { numeric: true }),
+    ),
   };
 }

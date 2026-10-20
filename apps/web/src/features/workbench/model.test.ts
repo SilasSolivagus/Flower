@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { requirementHref, showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref } from './model';
+import { confirmationHref, requirementHref, showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref } from './model';
 
 describe('工作台链接', () => {
   const org = { id: 'o1', slug: 'acme', name: '测试组织' };
@@ -16,10 +16,16 @@ describe('工作台链接', () => {
     expect(showOrgBadge([org, { id: 'o2', slug: 'other', name: '第二组织' }])).toBe(true);
   });
 
-  it('签字行：需求链接到需求详情，PRD 链接到 PRD 详情', () => {
+  it('确认检查项：需求链接到需求详情，PRD 链接到 PRD 详情', () => {
     const s = { org, itemKey: 'k', itemLabel: '评审', ruleIndex: 0, onBehalfOf: null, title: 't' };
     expect(signatureHref({ ...s, requirementId: 'r1', documentId: null, displayKey: 'PAN-1' })).toBe('/acme/requirements/PAN-1');
     expect(signatureHref({ ...s, requirementId: null, documentId: 'd1', displayKey: 'PAN-PRD-1' })).toBe('/acme/documents/PAN-PRD-1');
+  });
+
+  it('等我确认的简报链接到简报详情', () => {
+    expect(confirmationHref({ org, documentId: 'd1', displayKey: 'PAN-B-1', title: '上传提速', status: 'discussing', updatedAt: '2026-10-09T00:00:00.000Z' })).toBe(
+      '/acme/documents/PAN-B-1',
+    );
   });
 
   it('未读评论：需求去需求详情，PRD 去 PRD 详情', () => {

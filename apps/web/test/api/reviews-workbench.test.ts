@@ -52,6 +52,7 @@ describe('工作台接口', () => {
     expect(res.status).toBe(200);
     expect(res.body.workbench.orgs.map((o: { slug: string }) => o.slug)).toEqual(['acme']);
     expect(res.body.workbench.owned.items.map((r: { title: string }) => r.title)).toContain('我负责的需求');
+    expect(res.body.workbench.confirmations).toEqual({ total: 0, items: [] });
     expect((await call(app, 'GET', '/me/workbench', { token: readToken })).status).toBe(401);
   });
 });

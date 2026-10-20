@@ -78,18 +78,18 @@ export default function OrgOverviewPage() {
         ) : products.data.length === 0 ? (
           <p className="text-muted-foreground">还没有产品。</p>
         ) : (
-          <ul className="grid grid-cols-3 gap-3">
+          <ul className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             {products.data.map((p) => (
               <li key={p.id} className="flex flex-col gap-1">
                 <Link
                   href={`/${org}/requirements?product=${p.key}`}
-                  className="flex items-center justify-between rounded-lg border bg-card px-4 py-3 hover:border-primary"
+                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg border bg-card px-4 py-3 hover:border-primary"
                 >
-                  <span>
-                    <span className="mr-2 rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs">{p.key}</span>
-                    {p.name}
+                  <span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs">{p.key}</span>
+                    <span className="break-words">{p.name}</span>
                   </span>
-                  <span className="text-xs text-muted-foreground">{PRODUCT_ROLE_LABEL[p.myRole]}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{PRODUCT_ROLE_LABEL[p.myRole]}</span>
                 </Link>
                 {p.myRole === 'admin' && !admin && (
                   <Link href={`/${org}/settings/products/${p.id}`} aria-label={`${p.name} 产品设置`} className="self-end text-xs text-primary hover:underline">
