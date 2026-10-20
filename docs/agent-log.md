@@ -21,7 +21,7 @@
 ## 记录
 
 ### 2026-10-20 · 云端 · 需求详情列出挂过的变更 PRD（C2）
-- 分支 / PR：`fix/ux-c2-change-documents`
+- 分支 / PR：`fix/ux-c2-change-documents` → `main`，PR #22
 - 做了什么：需求详情增加只读 `changeDocuments[]`。从本需求的 `requirement.updated`（`changes[].field === changeDocumentId`）重建挂过的变更 PRD，并并上当前外键。当前项置顶，其余按最近一次挂上的时间从新到旧；已删除的文档略去。`changeDocument` / `changeDocumentId` 的挂载语义不变。PRD 卡片列出这些文档，历史项也可以点开。没有加产品级变更 PRD 列表链接，没有 SQL 迁移。不碰服务器 47.115.229.192。
 - 怎么验证的：`pnpm typecheck` 通过；`pnpm --filter @flower/web lint` 0 警告；`packages/core/test/change-documents.test.ts` 12 项通过（含从未挂、只挂一份、挂 A 卸 A 再挂 B、仅有当前外键无事件，以及已删除文档略去、简报不混入）。`e2e/documents-prd-flow.spec.ts` 3 条通过，其中多份历史在 1280 与 760 下都可见，检查项仍跟随当前 PRD，页面不横向溢出。
 - 留给对方：没有挂载事件时列表只有当前这一份，不能当作完整历史（迁移直接写外键即是这种情况）。已删除文档直接略去，不标 unavailable。不要碰服务器 47.115.229.192。
