@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { documentBriefs, documents, documentTemplates, organizations, products, requirements } from '../src/db/schema';
 import { withOrg } from '../src/db/tx';
 import { BRIEF_TEMPLATE } from '../src/documents/brief-template';
+import { insertPresetBriefTemplate } from '../src/documents/templates';
 import type { Actor } from '../src/domain-types';
 import { newId } from '../src/ids';
 import { createRequirement } from '../src/requirements/requirements';
@@ -16,16 +17,55 @@ let owner: Actor;
 let productId: string;
 const orgB = newId();
 
+const SQL_0022 = readFileSync(new URL('../migrations/0022_p3c2_briefs.sql', import.meta.url), 'utf8');
+const SQL_0023 = readFileSync(new URL('../migrations/0023_p3c2_ux_copy.sql', import.meta.url), 'utf8');
 /** 迁移 0022 除前两段（开启 RLS、建策略）以外的语句：补齐预置简报模板。 */
-const BACKFILL = readFileSync(new URL('../migrations/0022_p3c2_briefs.sql', import.meta.url), 'utf8')
-  .split('--> statement-breakpoint')
+const BACKFILL = SQL_0022.split('--> statement-breakpoint')
   .map((s) => s.trim())
   .filter(Boolean)
   .slice(2);
-const COPY = readFileSync(new URL('../migrations/0023_p3c2_ux_copy.sql', import.meta.url), 'utf8')
-  .split('--> statement-breakpoint')
+const COPY = SQL_0023.split('--> statement-breakpoint')
   .map((s) => s.trim())
   .filter(Boolean);
+
+/** 取出迁移里的 `$tag$...$tag$` 快照，不含定界符。 */
+function dollar(source: string, tag: string): string {
+  const mark = `$${tag}$`;
+  const start = source.indexOf(mark);
+  const end = start < 0 ? -1 : source.indexOf(mark, start + mark.length);
+  if (start < 0 || end < 0) throw new Error(`迁移里没有 $${tag}$`);
+  return source.slice(start + mark.length, end);
+}
+
+/** `replace(replace(expr, a, b), c, d)` 的字面量，从内到外成对。 */
+function replacePairs(fragment: string): Array<[string, string]> {
+  const literals = [...fragment.matchAll(/'((?:[^']|'')*)'/g)].map((m) => m[1]!.replaceAll("''", "'"));
+  if (literals.length === 0 || literals.length % 2 !== 0) throw new Error('0023 的 replace 参数不成对');
+  const pairs: Array<[string, string]> = [];
+  for (let i = 0; i < literals.length; i += 2) pairs.push([literals[i]!, literals[i + 1]!]);
+  return pairs;
+}
+
+function sliceSql(source: string, start: string, end: string): string {
+  const from = source.indexOf(start);
+  const to = from < 0 ? -1 : source.indexOf(end, from + start.length);
+  if (from < 0 || to < 0) throw new Error(`迁移里没有 ${start} … ${end}`);
+  return source.slice(from, to);
+}
+
+function applyPairs(input: string, pairs: Array<[string, string]>): string {
+  return pairs.reduce((text, [from, to]) => text.replaceAll(from, to), input);
+}
+
+/**
+ * 0022 写入的预置模板，再套上 0023 文件里的替换。
+ * 这是当时迁移的目标，不跟当前 BRIEF_TEMPLATE 走（D6 只改了代码常量，没有新迁移）。
+ */
+const COPY_SNAPSHOT = {
+  body: applyPairs(dollar(SQL_0022, 'tpl'), replacePairs(sliceSql(SQL_0023, 'body =', 'sections ='))),
+  sections: JSON.parse(applyPairs(dollar(SQL_0022, 'sec'), replacePairs(sliceSql(SQL_0023, 'sections =', 'guidance =')))) as unknown,
+  guidance: dollar(SQL_0023, 'new'),
+};
 const runBackfill = async () => {
   for (const s of BACKFILL) await t.adminDb.execute(sql.raw(s));
 };
@@ -96,7 +136,8 @@ describe('P3-C2 数据模型', () => {
 });
 
 describe('迁移 0022 的补齐与 0023 的文案', () => {
-  it('为没有组织级简报模板的组织写入预置简报模板，0023 把文案更新成与代码常量逐字一致；可重复执行', async () => {
+  it('为没有组织级简报模板的组织写入预置简报模板，0023 写成迁移文件里的目标文案；可重复执行', async () => {
+    expect(dollar(SQL_0022, 'g')).toBe(dollar(SQL_0023, 'old'));
     await t.adminDb.delete(documentTemplates).where(eq(documentTemplates.kind, 'brief'));
     await runBackfill();
     await runBackfill();
@@ -108,10 +149,23 @@ describe('迁移 0022 的补齐与 0023 的文案', () => {
         .from(documentTemplates)
         .where(and(eq(documentTemplates.orgId, org), eq(documentTemplates.kind, 'brief')));
       expect(rows).toHaveLength(1);
-      expect(rows[0]).toMatchObject({ productId: null, name: BRIEF_TEMPLATE.name, active: true });
-      expect(rows[0]!.body).toBe(BRIEF_TEMPLATE.body);
-      expect(rows[0]!.guidance).toBe(BRIEF_TEMPLATE.guidance);
-      expect(rows[0]!.sections).toEqual(BRIEF_TEMPLATE.sections);
+      expect(rows[0]).toMatchObject({ productId: null, name: '需求简报（预置）', active: true });
+      expect(rows[0]!.body).toBe(COPY_SNAPSHOT.body);
+      expect(rows[0]!.guidance).toBe(COPY_SNAPSHOT.guidance);
+      expect(rows[0]!.sections).toEqual(COPY_SNAPSHOT.sections);
     }
+  });
+
+  it('从代码常量补齐预置简报模板时，正文、说明和小节与当前 BRIEF_TEMPLATE 一致', async () => {
+    await t.adminDb.delete(documentTemplates).where(and(eq(documentTemplates.orgId, orgB), eq(documentTemplates.kind, 'brief')));
+    await withOrg(t.db, orgB, (tx) => insertPresetBriefTemplate(tx, orgB));
+    const [row] = await t.adminDb
+      .select()
+      .from(documentTemplates)
+      .where(and(eq(documentTemplates.orgId, orgB), eq(documentTemplates.kind, 'brief')));
+    expect(row).toMatchObject({ productId: null, name: BRIEF_TEMPLATE.name, active: true });
+    expect(row!.body).toBe(BRIEF_TEMPLATE.body);
+    expect(row!.guidance).toBe(BRIEF_TEMPLATE.guidance);
+    expect(row!.sections).toEqual(BRIEF_TEMPLATE.sections);
   });
 });
