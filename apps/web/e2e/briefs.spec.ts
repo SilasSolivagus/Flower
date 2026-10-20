@@ -46,6 +46,8 @@ async function typeAtEnd(page: Page, docId: string, text: string) {
 }
 
 test('从需求新建简报：头部信息、正文与闸口、转 PRD 与互链、复制与下载 Markdown；PRD 区块不接受简报编号', async ({ page, request }) => {
+  // 新建、填正文、转 PRD、再生成和需求详情串在同一条里。CI 上默认 60s 会在收尾的页面跳转前用完。
+  test.setTimeout(120_000);
   const productId = await createProduct(request);
   await createRequirement(request, productId, '上传失败自动重试');
   await createRequirement(request, productId, '下载限速');
@@ -189,10 +191,22 @@ test('从需求新建简报：头部信息、正文与闸口、转 PRD 与互链
     await page.setViewportSize({ width: 1440, height: 900 });
   }
 
-  // 760：长标题换行，不与「已关注」重叠
+  await page.goto('/acme/requirements/PAN-2');
+  const prdCard = page.getByRole('region', { name: 'PRD', exact: true });
+  await prdCard.getByRole('button', { name: '关联已有 PRD' }).click();
+  await prdCard.getByLabel('PRD 编号').fill('PAN-B-1');
+  await prdCard.getByRole('button', { name: '关联' }).click();
+  await expect(prdCard.getByRole('alert')).toContainText('请输入 PRD 编号，例如 PAN-PRD-1');
+});
+
+test('760：简报长标题换行，不与已关注重叠，只保留一个打开当前 PRD', async ({ page, request }) => {
+  const productId = await createProduct(request);
   const longTitle = '上传失败自动重试并且需要在窄屏下完整换行显示不被已关注按钮挤碎';
-  await ok(request.patch(`/api/v1/orgs/acme/documents/${brief.document.id}`, { data: { title: longTitle } }));
-  await page.goto('/acme/documents/PAN-B-1');
+  const brief = await createBrief(request, productId, { title: longTitle });
+  await ok(request.post(`/api/v1/orgs/acme/briefs/${brief.id}/convert`, { data: {} }));
+  await login(page, OWNER.email, OWNER.password);
+
+  await page.goto(`/acme/documents/${brief.displayKey}`);
   await page.getByRole('button', { name: '关注', exact: true }).click();
   await expect(page.getByRole('button', { name: '已关注', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 760, height: 900 });
@@ -213,13 +227,6 @@ test('从需求新建简报：头部信息、正文与闸口、转 PRD 与互链
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.screenshot({ path: `${process.env.FLOWER_SHOTS}/brief-1280.png` });
   }
-
-  await page.goto('/acme/requirements/PAN-2');
-  const prdCard = page.getByRole('region', { name: 'PRD', exact: true });
-  await prdCard.getByRole('button', { name: '关联已有 PRD' }).click();
-  await prdCard.getByLabel('PRD 编号').fill('PAN-B-1');
-  await prdCard.getByRole('button', { name: '关联' }).click();
-  await expect(prdCard.getByRole('alert')).toContainText('请输入 PRD 编号，例如 PAN-PRD-1');
 });
 
 test('文档页「简报」页签：列表、状态与决策人筛选（写入地址栏）、新建；1440 与 760 下列表、含宽表的详情与需求详情不横向滚动', async ({ page, request }) => {
