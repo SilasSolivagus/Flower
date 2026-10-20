@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { EmptyState } from '@/components/empty-state';
+import { LoadingBlock, QueryError } from '@/components/load-error';
 import { MemberPicker } from '@/components/member-picker';
 import { OptionMultiSelect } from '@/components/option-multi-select';
 import { PageHeader } from '@/components/page-header';
@@ -76,7 +77,23 @@ function RequirementsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
 
-  if (products.data && products.data.length === 0) {
+  if (products.isError) {
+    return (
+      <>
+        <PageHeader title="需求" />
+        <QueryError error={products.error} noAccessMessage="你没有查看产品的权限。" retryMessage="加载产品失败，请重试。" onRetry={() => products.refetch()} />
+      </>
+    );
+  }
+  if (!products.data) {
+    return (
+      <>
+        <PageHeader title="需求" />
+        <LoadingBlock />
+      </>
+    );
+  }
+  if (products.data.length === 0) {
     return (
       <>
         <PageHeader title="需求" />
@@ -207,6 +224,16 @@ function RequirementsPage() {
         </Select>
       </div>
 
+      {!data.data && data.isError ? (
+        <div className="flex flex-col items-center gap-3 rounded-md border bg-card px-4 py-10 text-center">
+          <p className="text-[13px] text-muted-foreground">加载需求列表失败，请重试。</p>
+          <Button variant="outline" size="sm" onClick={() => data.refetch()}>
+            重试
+          </Button>
+        </div>
+      ) : !data.data ? (
+        <LoadingBlock />
+      ) : (
       <div className="overflow-hidden rounded-md border bg-card">
         <Table>
           <TableHeader>
@@ -256,7 +283,7 @@ function RequirementsPage() {
             })}
           </TableBody>
         </Table>
-        {data.data && data.data.items.length === 0 && (
+        {data.data.items.length === 0 && (
           <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
             <p className="text-[13px] text-muted-foreground">没有符合条件的需求</p>
             {requirementFilterActive(filter) && (
@@ -282,6 +309,7 @@ function RequirementsPage() {
           </div>
         )}
       </div>
+      )}
 
       <div className="flex items-center justify-end gap-2 text-[13px] text-muted-foreground">
         <span>

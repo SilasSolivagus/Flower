@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { ExpectedDateText } from '@/features/tracking/components/expected-date';
 import { itemHref } from '@/features/tracking/model';
 import type { TrackingItem } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,9 @@ export function NarrowTrackingList({
           <div className="flex flex-wrap items-center gap-2">
             <StageLabel item={i} />
             <AgingDays item={i} />
+            <span className="text-xs text-muted-foreground">
+              预计 <ExpectedDateText expectedDate={i.expectedDate} done={i.done} />
+            </span>
           </div>
         </li>
       ))}

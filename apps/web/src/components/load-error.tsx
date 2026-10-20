@@ -1,5 +1,6 @@
 import { NoAccess } from '@/components/no-access';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { isAccessDenied } from '@/lib/api';
 
 export function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
@@ -27,4 +28,14 @@ export function QueryError({
 }) {
   if (isAccessDenied(error)) return <NoAccess message={noAccessMessage} />;
   return <LoadError message={retryMessage} onRetry={onRetry} />;
+}
+
+/** 列表或关键区域还在取数：骨架加上「加载中」，避免慢网时只剩一块空白。 */
+export function LoadingBlock({ className = 'h-40' }: { className?: string }) {
+  return (
+    <div role="status" aria-live="polite" aria-busy="true" className="flex flex-col gap-2">
+      <Skeleton className={className} />
+      <p className="text-sm text-muted-foreground">加载中</p>
+    </div>
+  );
 }

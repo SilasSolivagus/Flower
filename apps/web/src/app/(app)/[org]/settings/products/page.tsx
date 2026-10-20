@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { EmptyState } from '@/components/empty-state';
 import { FormError } from '@/components/form-error';
+import { LoadingBlock, QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { RequireOrgAdmin } from '@/components/require-org-admin';
 import { Button } from '@/components/ui/button';
@@ -36,7 +37,11 @@ function ProductsPage() {
         description="每个产品有自己的需求编号前缀、流程和字段配置。"
         actions={<Button onClick={() => setOpen(true)}>新建产品</Button>}
       />
-      {products.data?.length === 0 ? (
+      {products.isError ? (
+        <QueryError error={products.error} noAccessMessage="你没有查看产品的权限。" retryMessage="加载产品失败，请重试。" onRetry={() => products.refetch()} />
+      ) : !products.data ? (
+        <LoadingBlock />
+      ) : products.data.length === 0 ? (
         <EmptyState icon={Box} title="还没有产品" description="例如「网盘」，编号前缀 PAN，需求编号会显示为 PAN-123。" />
       ) : (
         <div className="min-w-0 overflow-x-auto rounded-lg border bg-card">
@@ -49,7 +54,7 @@ function ProductsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.data?.map((p) => (
+              {products.data.map((p) => (
                 <TableRow key={p.id} className="h-10 even:bg-zebra">
                   <TableCell className="font-mono">{p.key}</TableCell>
                   <TableCell>

@@ -4,6 +4,7 @@ import { Search, Users } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { EmptyState } from '@/components/empty-state';
+import { LoadingBlock, QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { RequireOrgAdmin } from '@/components/require-org-admin';
 import { Badge } from '@/components/ui/badge';
@@ -109,7 +110,11 @@ function MembersPage() {
               含已离开
             </label>
           </div>
-          {rows.length === 0 ? (
+          {members.isError ? (
+            <QueryError error={members.error} noAccessMessage="你没有查看成员的权限。" retryMessage="加载成员失败，请重试。" onRetry={() => members.refetch()} />
+          ) : !members.data ? (
+            <LoadingBlock />
+          ) : rows.length === 0 ? (
             <EmptyState icon={Users} title="没有符合条件的成员" />
           ) : (
             <div className="min-w-0 overflow-x-auto rounded-lg border bg-card">

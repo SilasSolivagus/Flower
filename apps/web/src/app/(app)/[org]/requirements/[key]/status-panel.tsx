@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { DisabledReason } from '@/components/disabled-reason';
 import { FormError } from '@/components/form-error';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { primaryTransitionTo } from '@/features/requirements/transitions';
 import { api } from '@/lib/api';
 import { qk, requirementKeys, useApiMutation } from '@/lib/queries';
 import type { RequirementDetail } from '@/lib/types';
@@ -28,6 +30,7 @@ export function StatusPanel({ org, requirement: r }: { org: string; requirement:
     },
   });
   const canEdit = r.myRole !== 'viewer';
+  const primaryTo = primaryTransitionTo(r.stateKey, r.workflow.states, r.transitions);
   const closeForcing = () => {
     setForcing(null);
     setReason('');
@@ -43,25 +46,43 @@ export function StatusPanel({ org, requirement: r }: { org: string; requirement:
         <span className="size-2.5 rounded-full" style={{ background: state?.color }} aria-hidden="true" />
         {state?.label ?? r.stateKey}
       </p>
+      {!canEdit && r.transitions.length > 0 && <p className="mb-2 text-[12px] text-muted-foreground">只有编辑可以改状态</p>}
       <ul className="flex flex-col gap-2" aria-label="可流转到">
-        {r.transitions.map((t) => (
+        {r.transitions.map((t) => {
+          const unmetText = t.unmet.map((u) => u.message).join('；');
+          let reason: string | undefined;
+          if (!t.allowed) reason = unmetText || '现在不能改到这个状态';
+          else if (!canEdit) reason = '只有编辑可以改状态';
+          const emphasis = t.to === primaryTo ? 'primary' : 'secondary';
+          const button = (
+            <Button
+              size="sm"
+              variant={emphasis === 'primary' ? 'default' : 'outline'}
+              data-emphasis={emphasis}
+              disabled={!t.allowed || !canEdit || move.isPending}
+              onClick={() => move.mutate({ to: t.to })}
+            >
+              {t.label}
+            </Button>
+          );
+          return (
           <li key={t.to} className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
-              {t.allowed ? (
-                <Button size="sm" disabled={!canEdit || move.isPending} onClick={() => move.mutate({ to: t.to })}>
-                  {t.label}
-                </Button>
-              ) : (
+              {!t.allowed ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span className="inline-flex" tabIndex={0}>
-                      <Button size="sm" variant="outline" disabled>
-                        {t.label}
-                      </Button>
+                    <span className="inline-flex" tabIndex={0} title={reason}>
+                      {button}
                     </span>
                   </TooltipTrigger>
-                  {t.unmet.length > 0 && <TooltipContent>{t.unmet.map((u) => u.message).join('；')}</TooltipContent>}
+                  {unmetText && <TooltipContent>{unmetText}</TooltipContent>}
                 </Tooltip>
+              ) : !canEdit ? (
+                <span className="inline-flex" title={reason}>
+                  {button}
+                </span>
+              ) : (
+                button
               )}
               {!t.allowed && r.canForce && (
                 <button type="button" className="text-[12px] text-muted-foreground underline" onClick={() => setForcing({ to: t.to, label: t.label })}>
@@ -77,7 +98,8 @@ export function StatusPanel({ org, requirement: r }: { org: string; requirement:
               </ul>
             )}
           </li>
-        ))}
+          );
+        })}
       </ul>
       <Dialog open={!!forcing} onOpenChange={(o) => !o && closeForcing()}>
         <DialogContent>
@@ -91,9 +113,11 @@ export function StatusPanel({ org, requirement: r }: { org: string; requirement:
             <Button variant="outline" onClick={closeForcing}>
               取消
             </Button>
-            <Button disabled={!reason.trim() || force.isPending} onClick={() => force.mutate({ to: forcing!.to, reason })}>
-              确认流转
-            </Button>
+            <DisabledReason disabled={!reason.trim()} reason="请先填写原因">
+              <Button disabled={!reason.trim() || force.isPending} onClick={() => force.mutate({ to: forcing!.to, reason })}>
+                确认流转
+              </Button>
+            </DisabledReason>
           </DialogFooter>
         </DialogContent>
       </Dialog>

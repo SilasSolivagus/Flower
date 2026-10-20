@@ -2,6 +2,8 @@
 
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
+import { LoadingBlock, QueryError } from '@/components/load-error';
+import { NO_PERMISSION_MESSAGE } from '@/components/no-access';
 import { PageHeader } from '@/components/page-header';
 import { RequireOrgAdmin } from '@/components/require-org-admin';
 import { Button } from '@/components/ui/button';
@@ -28,7 +30,8 @@ function GeneralPage() {
     invalidate: [qk.org(org), qk.me],
     success: '已保存',
   });
-  if (!q.data) return null;
+  if (q.isError) return <QueryError error={q.error} noAccessMessage={NO_PERMISSION_MESSAGE} retryMessage="加载组织信息失败，请重试。" onRetry={() => q.refetch()} />;
+  if (!q.data) return <LoadingBlock />;
   return (
     <>
       <PageHeader crumbs={[{ label: '组织设置' }, { label: '组织信息' }]} title="组织信息" />

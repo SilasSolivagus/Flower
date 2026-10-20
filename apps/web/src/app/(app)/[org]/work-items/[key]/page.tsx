@@ -18,6 +18,7 @@ import { WikilinkTextarea } from '@/components/wikilink-textarea';
 import { useMarkNotificationsRead } from '@/features/member-notifications/use-mark-read';
 import { activePeople, canListMembers, pickerOptions } from '@/features/members/model';
 import { formatDate, formatDateTime } from '@/features/requirements/format';
+import { ExpectedDateText } from '@/features/tracking/components/expected-date';
 import { PauseDialog } from '@/features/tracking/components/pause-dialog';
 import { ProgressList } from '@/features/tracking/components/progress-list';
 import { WORK_ITEM_STATUS_LABELS } from '@/features/tracking/model';
@@ -158,7 +159,10 @@ function InfoPanel({ org, item: w }: { org: string; item: WorkItemDetail }) {
       </Field>
       <p className="text-xs leading-5 text-muted-foreground">{WORK_ITEM_REQUIREMENT_NOTE}</p>
       <Field label="启动日期">{dateInput('启动日期', 'startedOn')}</Field>
-      <Field label="预计完成日期">{dateInput('预计完成日期', 'expectedDate')}</Field>
+      <Field label="预计完成日期">
+        <ExpectedDateText expectedDate={w.expectedDate} done={w.status !== 'active'} />
+        {edit && dateInput('预计完成日期', 'expectedDate')}
+      </Field>
       <p className="text-xs text-muted-foreground">
         {w.createdBy?.displayName ?? '未知成员'} 创建于 {formatDateTime(w.createdAt)}
         {w.doneAt && ` · ${formatDate(w.doneAt)} 完成`}
