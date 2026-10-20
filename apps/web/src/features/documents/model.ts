@@ -80,11 +80,11 @@ export function briefFilterToApiQuery(f: BriefListFilter, productId: string): st
   return p.toString();
 }
 
-/** 检查进度：分数，未完成时写明还差几项。 */
-export const gateLabel = (g: { passed: number; total: number }): string => {
-  const left = g.total - g.passed;
-  return left > 0 ? `${g.passed}/${g.total}，还差 ${left} 项` : `${g.passed}/${g.total}`;
-};
+/** 检查进度：已完成/总数。 */
+export const gateLabel = (g: { passed: number; total: number }): string => `${g.passed}/${g.total}`;
+
+/** 页头与模板说明共用的「不适用」写法。 */
+export const NOT_APPLICABLE_HINT = '不适用的小节写成一行：不适用：理由（写「不涉及：理由」也同样认）。';
 
 /** 检查项里系统已查与人工勾选各通过了几项。 */
 export function gateBreakdown(items: Array<{ auto: boolean; passed: boolean }>): string {

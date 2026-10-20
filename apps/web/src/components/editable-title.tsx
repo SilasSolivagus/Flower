@@ -38,7 +38,7 @@ export function EditableTitle({
     <button
       type="button"
       disabled={!canEdit}
-      className="text-left disabled:cursor-default"
+      className="block w-full min-w-0 whitespace-normal break-words text-left disabled:cursor-default"
       onClick={() => {
         setDraft(title);
         setEditing(true);

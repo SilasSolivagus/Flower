@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { activePeople, canListMembers, pickerOptions } from '@/features/members/model';
-import { filterToApiQuery, filterToSearch, type ListFilter, parseFilter, patchFilter } from '@/features/requirements/filter';
+import { filterToApiQuery, filterToSearch, type ListFilter, parseFilter, patchFilter, requirementFilterActive } from '@/features/requirements/filter';
 import { SORT_LABEL } from '@/lib/labels';
 import { useFields, useMembers, useNodes, useOrg, useProductIterations, useProducts, useProductWorkflow, useRequirements } from '@/lib/queries';
 import type { RequirementListItem } from '@/lib/types';
@@ -256,7 +256,23 @@ function RequirementsPage() {
             })}
           </TableBody>
         </Table>
-        {data.data && data.data.items.length === 0 && <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">没有符合条件的需求</p>}
+        {data.data && data.data.items.length === 0 && (
+          <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+            <p className="text-[13px] text-muted-foreground">没有符合条件的需求</p>
+            {requirementFilterActive(filter) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setQ('');
+                  setFilter({ states: [], node: null, priority: [], platform: [], owner: null, iteration: null, q: '', page: 1 });
+                }}
+              >
+                清除筛选
+              </Button>
+            )}
+          </div>
+        )}
         {data.isError && (
           <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
             <p className="text-[13px] text-muted-foreground">加载需求列表失败，请重试。</p>

@@ -8,11 +8,12 @@ import { documentHref, gateLabel } from '@/features/documents/model';
 import type { RequirementDetail } from '@/lib/types';
 import { CreateBriefDialog } from '../../documents/create-brief-dialog';
 
-/** 需求所挂的简报：编号、标题、状态与闸口进度；没挂时可以新建并自动覆盖这条需求。 */
+/** 需求所挂的简报。已生成 PRD 时主按钮是打开它，检查进度是次要文字。没挂时可以新建并自动覆盖这条需求。 */
 export function BriefCard({ org, requirement: r }: { org: string; requirement: RequirementDetail }) {
   const canEdit = r.myRole !== 'viewer';
   const brief = r.brief;
   const [creating, setCreating] = useState(false);
+  const generated = brief?.convertedDocument ?? null;
   return (
     <section className="rounded-md border bg-card p-4" aria-labelledby="req-brief-title">
       <h2 id="req-brief-title" className="mb-2 text-sm font-semibold">
@@ -24,10 +25,15 @@ export function BriefCard({ org, requirement: r }: { org: string; requirement: R
             <span className="mr-2 font-mono text-muted-foreground">{brief.displayKey}</span>
             {brief.title}
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <DocumentStatusBadge status={brief.status} />
-            <span className="font-mono text-[12px] text-muted-foreground">检查 {gateLabel(brief.gate)}</span>
+            <span className="font-mono text-[12px] text-muted-foreground">检查记录 {gateLabel(brief.gate)}</span>
           </div>
+          {generated && (
+            <Button size="sm" className="self-start" asChild>
+              <Link href={documentHref(org, generated.displayKey)}>已生成 · 打开</Link>
+            </Button>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-2">

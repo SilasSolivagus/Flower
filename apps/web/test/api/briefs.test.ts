@@ -141,7 +141,8 @@ describe('上下文', () => {
     const text = await res.text();
     expect(text.startsWith('# PAN-B-1 上传提速\n')).toBe(true);
     expect(text).toContain('| 确认人 | 只读成员 |');
-    expect(text).toContain('## 写 PRD 前检查（3/11，还差 8 项）');
+    expect(text).toContain('## 写 PRD 前检查（3/11）');
+    expect(text).not.toContain('还差');
     expect(text).toContain('| PAN-1 | 网盘需求 |');
     const json = await call(app, 'GET', `${path}?format=json`, who.viewer!);
     expect(json.body.context.brief).toMatchObject({ displayKey: 'PAN-B-1', statusLabel: '可以写 PRD', version: 'v0.2' });

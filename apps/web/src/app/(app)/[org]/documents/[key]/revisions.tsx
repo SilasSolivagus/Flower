@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 const LINE_STYLE = { add: 'bg-primary/10 text-primary', del: 'bg-destructive/10 text-destructive line-through', same: 'text-muted-foreground' } as const;
 const LINE_MARK = { add: '+', del: '-', same: ' ' } as const;
 
-function DiffDialog({ org, docId, revisions, initial, onClose }: { org: string; docId: string; revisions: DocumentRevision[]; initial: { from: number; to: number }; onClose: () => void }) {
+function DiffDialog({ org, docId, revisions, initial, onClose, unit }: { org: string; docId: string; revisions: DocumentRevision[]; initial: { from: number; to: number }; onClose: () => void; unit: '版' | '次' }) {
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
   const diff = useDocumentDiff(org, docId, from, to);
@@ -30,7 +30,7 @@ function DiffDialog({ org, docId, revisions, initial, onClose }: { org: string; 
       <SelectContent>
         {revisions.map((r) => (
           <SelectItem key={r.number} value={String(r.number)}>
-            第 {r.number} 版
+            第 {r.number} {unit}
           </SelectItem>
         ))}
       </SelectContent>
@@ -82,8 +82,8 @@ function DiffDialog({ org, docId, revisions, initial, onClose }: { org: string; 
   );
 }
 
-/** 修订记录：版本列表（作者、时间、摘要），与上一版对比（对话框里可任选两版），恢复到旧版本（新建一版）。 */
-export function Revisions({ org, doc, onRestored, saveEditor }: { org: string; doc: DocumentDetail; onRestored: () => void; saveEditor: () => Promise<number | null> }) {
+/** 修订记录：版本列表（作者、时间、摘要），与上一版对比（对话框里可任选两版），恢复到旧版本（新建一版）。简报把「版」说成「次」。 */
+export function Revisions({ org, doc, onRestored, saveEditor, unit = '版' }: { org: string; doc: DocumentDetail; onRestored: () => void; saveEditor: () => Promise<number | null>; unit?: '版' | '次' }) {
   // 已归档的模块文档只读，不能恢复版本
   const canEdit = doc.myRole !== 'viewer' && doc.status !== 'archived';
   const list = useDocumentRevisions(org, doc.id);
@@ -103,7 +103,7 @@ export function Revisions({ org, doc, onRestored, saveEditor }: { org: string; d
   return (
     <section className="rounded-md border bg-card p-4" aria-labelledby="doc-revisions-title">
       <h2 id="doc-revisions-title" className="mb-2 text-sm font-semibold">
-        修订记录
+        {unit === '次' && doc.revisionNumber != null ? `修订记录 · 第 ${doc.revisionNumber} 次` : '修订记录'}
       </h2>
       {list.isError ? (
         <QueryError error={list.error} noAccessMessage="没有查看修订的权限。" retryMessage="加载修订失败，请重试。" onRetry={() => list.refetch()} />
@@ -114,7 +114,7 @@ export function Revisions({ org, doc, onRestored, saveEditor }: { org: string; d
           {list.data.map((r) => (
             <li key={r.number} className="flex flex-col gap-1 py-2 text-[13px]">
               <div className="flex items-center gap-2">
-                <span className="font-medium">第 {r.number} 版</span>
+                <span className="font-medium">第 {r.number} {unit}</span>
                 {r.number === doc.revisionNumber && <span className="rounded-sm bg-muted px-1.5 text-xs">当前</span>}
                 <span className="min-w-0 flex-1 truncate text-muted-foreground">{r.author?.displayName ?? '—'}</span>
                 <span className="font-mono text-xs text-muted-foreground">{formatDateTime(r.updatedAt)}</span>
@@ -127,18 +127,18 @@ export function Revisions({ org, doc, onRestored, saveEditor }: { org: string; d
               )}
               <div className="flex gap-1">
                 {r.number > 1 && (
-                  <Button size="sm" variant="ghost" className="h-6 px-2 text-[12px]" aria-label={`对比第 ${r.number} 版与上一版`} onClick={() => setDiff({ from: r.number - 1, to: r.number })}>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-[12px]" aria-label={`对比第 ${r.number} ${unit}与上一${unit}`} onClick={() => setDiff({ from: r.number - 1, to: r.number })}>
                     对比
                   </Button>
                 )}
                 {canEdit && r.number !== doc.revisionNumber && (
                   <ConfirmAction
                     trigger={
-                      <Button size="sm" variant="ghost" className="h-6 px-2 text-[12px]" aria-label={`恢复第 ${r.number} 版`} disabled={restore.isPending}>
+                      <Button size="sm" variant="ghost" className="h-6 px-2 text-[12px]" aria-label={`恢复第 ${r.number} ${unit}`} disabled={restore.isPending}>
                         恢复
                       </Button>
                     }
-                    title={`恢复到第 ${r.number} 版？`}
+                    title={`恢复到第 ${r.number} ${unit}？`}
                     description="会以这一版的内容新建一版，之前的版本都保留。编辑器里还没保存的修改会先存成一版，再被替换。"
                     confirmLabel="恢复"
                     onConfirm={() => restore.mutate(r.number)}
@@ -149,7 +149,7 @@ export function Revisions({ org, doc, onRestored, saveEditor }: { org: string; d
           ))}
         </ul>
       )}
-      {diff && list.data && <DiffDialog org={org} docId={doc.id} revisions={list.data} initial={diff} onClose={() => setDiff(null)} />}
+      {diff && list.data && <DiffDialog org={org} docId={doc.id} revisions={list.data} initial={diff} onClose={() => setDiff(null)} unit={unit} />}
     </section>
   );
 }

@@ -20,6 +20,24 @@
 
 ## 记录
 
+### 2026-10-20 · 云端 · 简报端到端不再撞 60 秒整测超时
+- 分支 / PR：`fix/ux-req-brief` → `main`，PR #24（仍是草稿）
+- 做了什么：`e2e/briefs.spec.ts` 第一条主流程加 `test.setTimeout(120_000)`。760 长标题换行、与「已关注」不重叠、只保留一个「打开当前 PRD」拆成独立用例，用接口建简报并转 PRD，不再挂在主流程末尾。未改关注按钮，未改登录。不碰服务器 47.115.229.192。
+- 怎么验证的：对照 CI run 39363069924，超时在第 196 行，关注按钮 locator 已解析。本地 `pnpm exec playwright test e2e/briefs.spec.ts`（在 `apps/web`）4 条通过：主流程 23.6s，拆出的 760 用例 2.6s。
+- 留给对方：工作台 `workbench.spec.ts` 登录后仍停在 `/login` 当作环境抖动，本轮没改。不要 merge。不要碰服务器 47.115.229.192。
+
+### 2026-10-20 · 云端 · 简报模板迁移测试不再绑当前常量（CI）
+- 分支 / PR：`fix/ux-req-brief` → `main`，PR #24（仍是草稿）
+- 做了什么：`p3c2-schema` 里 0022/0023 的断言改为对照迁移文件自己的快照（0023 的 `$new$` 说明，以及文件里的 replace）。不再要求库内文案等于当前 `BRIEF_TEMPLATE`。另加一条：`insertPresetBriefTemplate` 写入的正文、说明、小节与当前常量一致。没有新 migration，没有改 `.sql`。已存模板不回写。不碰服务器 47.115.229.192。
+- 怎么验证的：`pnpm --filter @flower/core exec vitest run test/p3c2-schema.test.ts test/brief-templates.test.ts`，2 个文件 9 项通过。
+- 留给对方：本批合完后再开 E+F。不要加 0024 去回写已存模板。不要碰服务器 47.115.229.192。
+
+### 2026-10-20 · 云端 · 需求详情与简报的主次动作和折叠（UX 批次 C+D）
+- 分支 / PR：`fix/ux-req-brief` → `main`
+- 做了什么：需求简报卡在已生成 PRD 时主按钮是「已生成 · 打开」，旁边是「检查记录 a/b」，去掉「还差 N」。流转按钮只渲染 `transitions`，不允许的禁用并在悬停时显示 unmet，原来的条件列表和「强制流转」还在。关注点下去立刻变。需求列表筛空可以「清除筛选」。简报未填的二级节默认收起，顶栏写「还有 N 节未填 · 展开全部」；写了理由的「不适用」保持展开，节头芯片与页头都用「不适用」（解析仍认「不涉及」）。侧栏标签改为「对外版本」，简报修订写成「修订记录 · 第 N 次」（PRD 仍是「版」）。窄于 md 时标题换行，关注按钮排到标题下面。xl 以下只保留标题下那一个实心主按钮。用户可见的「闸口」在界面和预置模板里已经是「写 PRD 前检查」，没有改字段名，也没有新迁移。需求详情多返回简报已转出的 PRD，文档详情多返回简报模板正文，都在原来的 GET 上，没有新 path，没有 SQL。未做 C2，未改 `decider*`，未改遮罩。不碰服务器 47.115.229.192。
+- 怎么验证的：`pnpm typecheck` 通过；web lint 0 警告。core 简报相关 25 项、web 模型与简报接口 36 项通过。`e2e/briefs.spec.ts` 3 条、`e2e/requirements.spec.ts`（含清除筛选和 unmet 悬停）、`e2e/member-notifications.spec.ts` 的关注按钮、`e2e/documents-revisions.spec.ts` 通过。1280 与 760 截了需求详情和简报页。
+- 留给对方：本批合完后再开 E+F（`fix/ux-follow-settings`）。已经保存的预置模板说明不会回写；新组织用现在的模板文案。不要碰服务器 47.115.229.192。
+
 ### 2026-10-20 · 云端 · 铃铛遮罩改挂到 body 并写死页底色（B4）
 - 分支 / PR：`fix/ux-notify-copy` → `main`，PR #23
 - 做了什么：遮罩的 `createPortal` 挪到 `Popover` 外面，挂到 `document.body`。仍是不透明 `bg-background`，并内联 `backgroundColor: var(--background)`，避免类名没铺上色时时间戳透出来。没有改成半透明黑。浮层仍是 `z-60` / `bg-popover`，点遮罩关闭。不碰服务器 47.115.229.192。

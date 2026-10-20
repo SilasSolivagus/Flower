@@ -12,6 +12,7 @@ import type { DecorationInput } from '@/features/documents/editor/decorations';
 import type { PrdEditorHandle } from '@/features/documents/editor/prd-editor';
 import { type SelectionAnchor, selectionAnchor } from '@/features/documents/editor/selection';
 import { uploadDataImages } from '@/features/documents/import';
+import { applyBriefFolds, briefSectionFolds, briefSectionKey } from '@/features/documents/brief-sections';
 import { editorAnchors, findSectionIndex, type SaveState, saveStateLabel } from '@/features/documents/model';
 import { ApiError, api, apiUpload } from '@/lib/api';
 import { briefKeys, linkKeys, qk, useApiMutation, useDocumentComments, useDocumentLinks, useMentionMembers } from '@/lib/queries';
@@ -98,6 +99,12 @@ export function EditorPane({
     [org, doc.productId],
   );
   const container = useRef<HTMLDivElement>(null);
+  const foldFrame = useRef<HTMLDivElement>(null);
+  const folds = useMemo(() => (doc.kind === 'brief' ? briefSectionFolds(doc.markdown ?? '', doc.templateBody) : []), [doc.kind, doc.markdown, doc.templateBody]);
+  const unfilledCount = folds.filter((f) => f.unfilled).length;
+  const [openKeys, setOpenKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const [marks, setMarks] = useState<Array<{ key: string; heading: string; top: number; unfilled: boolean; notApplicable: boolean }>>([]);
+  const pendingScroll = useRef<string | null>(null);
   const [pick, setPick] = useState<(SelectionAnchor & { top: number; left: number }) | null>(null);
   const [commenting, setCommenting] = useState<SelectionAnchor | null>(null);
   /** 鼠标或键盘松开时读取选区，在选区下方显示「评论」按钮。 */
@@ -263,17 +270,73 @@ export function EditorPane({
     return true;
   }, []);
 
-  // 「去改」点名小节：高亮、顶栏留空，并清掉可能留下的 section/at。
+  // 未填节默认收起。去改时先展开，再在布局完成后滚动，避免目标节还是 display:none。
+  const revealSection = useCallback(
+    (name: string) => {
+      const key = briefSectionKey(name);
+      const fold = folds.find((f) => f.key === key);
+      if (fold?.unfilled && !openKeys.has(key)) {
+        pendingScroll.current = name;
+        setOpenKeys((prev) => {
+          const next = new Set(prev);
+          next.add(key);
+          return next;
+        });
+        return true;
+      }
+      const shown = showBriefSection(name);
+      return shown;
+    },
+    [folds, openKeys, showBriefSection],
+  );
+
+  useLayoutEffect(() => {
+    if (doc.kind !== 'brief') return;
+    const root = container.current;
+    const frame = foldFrame.current;
+    if (!root || !frame) return;
+    let raf = 0;
+    const sync = () => {
+      applyBriefFolds(root, folds, openKeys);
+      const frameBox = frame.getBoundingClientRect();
+      const next = [...root.querySelectorAll<HTMLElement>('[data-content-type="heading"][data-level="2"]')].flatMap((heading) => {
+        const key = briefSectionKey(heading.textContent ?? '');
+        const fold = folds.find((f) => f.key === key);
+        if (!fold || (!fold.unfilled && !fold.notApplicable)) return [];
+        const box = heading.getBoundingClientRect();
+        return [{ key, heading: fold.heading, top: Math.round(box.top - frameBox.top + frame.scrollTop), unfilled: fold.unfilled, notApplicable: fold.notApplicable }];
+      });
+      setMarks((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+    };
+    const schedule = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(sync);
+    };
+    const obs = new MutationObserver(schedule);
+    schedule();
+    obs.observe(root, { childList: true, subtree: true });
+    const name = pendingScroll.current;
+    if (name) {
+      pendingScroll.current = null;
+      showBriefSection(name);
+    }
+    return () => {
+      cancelAnimationFrame(raf);
+      obs.disconnect();
+    };
+  }, [doc.kind, folds, openKeys, showBriefSection]);
+
+  // 「去改」点名小节：先展开未填节，再高亮并清掉可能留下的 section/at。
   useEffect(() => {
     if (doc.kind !== 'brief') return;
     const onGoto = (e: Event) => {
       const name = (e as CustomEvent<{ section?: string }>).detail?.section;
-      if (!name || !showBriefSection(name)) return;
+      if (!name || !revealSection(name)) return;
       onSectionShown?.();
     };
     window.addEventListener('flower-brief-section', onGoto);
     return () => window.removeEventListener('flower-brief-section', onGoto);
-  }, [doc.kind, onSectionShown, showBriefSection]);
+  }, [doc.kind, onSectionShown, revealSection]);
 
   // 地址栏指定了小节：等编辑器渲染出标题后滚动过去（最多等 3 秒）。简报留出顶栏空隙、闪一下，并清掉参数。
   useEffect(() => {
@@ -294,14 +357,14 @@ export function EditorPane({
       done = true;
       const head = i >= 0 ? heads[i] : undefined;
       if (doc.kind === 'brief') {
-        if (head) showBriefSection(section);
+        if (head) revealSection(section);
         onSectionShown?.();
       } else if (head) {
         head.scrollIntoView({ block: 'start' });
       }
     }, 100);
     return () => clearInterval(timer);
-  }, [section, sectionSeq, doc.kind, onSectionShown, showBriefSection]);
+  }, [section, sectionSeq, doc.kind, onSectionShown, revealSection]);
 
   // 第 16 节的表单独收窄，让「待谁定 / 是否阻塞」留在视口里
   useEffect(() => {
@@ -339,6 +402,20 @@ export function EditorPane({
         <span>第 {doc.revisionNumber} 版</span>
         <span role="status">{saveStateLabel(state, editable)}</span>
       </div>
+      {doc.kind === 'brief' && unfilledCount > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2 text-[13px]">
+          <span>还有 {unfilledCount} 节未填 ·</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2"
+            onClick={() => setOpenKeys(new Set(folds.filter((f) => f.unfilled).map((f) => f.key)))}
+          >
+            展开全部
+          </Button>
+        </div>
+      )}
       {conflict && (
         <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border-b bg-destructive/5 px-4 py-2 text-[13px] text-destructive">
           <span>文档已被其他人修改，你刚才的修改没有保存。重新加载后再编辑（需要保留的内容请先复制）。</span>
@@ -352,7 +429,31 @@ export function EditorPane({
           <FormError error={save.error} />
         </div>
       )}
-      <div ref={container} className="relative min-w-0 max-w-full px-2 py-4" onMouseUp={onSelect} onKeyUp={onSelect} onClick={onBodyClick}>
+      <div ref={foldFrame} className="relative min-w-0 max-w-full">
+        {doc.kind === 'brief' &&
+          marks.map((m) => (
+            <div key={m.key} className="pointer-events-none absolute right-3 z-20 flex gap-1" style={{ top: m.top }}>
+              {m.unfilled && (
+                <button
+                  type="button"
+                  className="brief-fold-toggle pointer-events-auto"
+                  aria-label={`${openKeys.has(m.key) ? '收起' : '展开'}「${m.heading}」`}
+                  onClick={() =>
+                    setOpenKeys((prev) => {
+                      const next = new Set(prev);
+                      if (prev.has(m.key)) next.delete(m.key);
+                      else next.add(m.key);
+                      return next;
+                    })
+                  }
+                >
+                  {openKeys.has(m.key) ? '收起' : '展开'}
+                </button>
+              )}
+              {m.notApplicable && <span className="brief-na-chip">不适用</span>}
+            </div>
+          ))}
+        <div ref={container} className="relative min-w-0 max-w-full px-2 py-4" onMouseUp={onSelect} onKeyUp={onSelect} onClick={onBodyClick}>
         {flash && <div aria-hidden className="brief-section-target pointer-events-none absolute inset-x-2 z-10" style={{ top: flash.top, height: flash.height }} />}
         <DocumentBodyEditor ref={handle} initialMarkdown={doc.markdown ?? ''} editable={editable && !conflict} onDirty={onDirty} uploadImage={uploadImage} decorations={decorations} searchLinks={editable ? searchLinks : undefined} mentionMembers={mentionMembers.data} />
         {pick && (
@@ -369,6 +470,7 @@ export function EditorPane({
             评论
           </Button>
         )}
+        </div>
       </div>
       <AnchorCommentDialog documentId={doc.id} productId={doc.productId} anchor={commenting} onClose={() => setCommenting(null)} />
     </section>

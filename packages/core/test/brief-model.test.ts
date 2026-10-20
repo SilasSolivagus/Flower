@@ -76,7 +76,7 @@ describe('闸口第 1 项：第 1–14 节没有空白', () => {
     expect(item(gate(fill(md, 5, '不涉及：只有一种对象')), 1).passed).toBe(true);
     for (const text of ['不适用：', '不适用', '不适用： ', '不涉及：', '不涉及']) {
       const g = gate(fill(md, 5, text));
-      expect(item(g, 1).reasons, text).toEqual(['「5. 对象与状态」写了不涉及，但还没写理由']);
+      expect(item(g, 1).reasons, text).toEqual(['「5. 对象与状态」写了不适用，但还没写理由']);
       expect(item(g, 1).section).toBe('5. 对象与状态');
     }
   });
@@ -176,7 +176,8 @@ describe('上下文 Markdown', () => {
     expect(out).toContain('| 关联文档 | [[PAN-PRD-1]] 旧方案；https://doc.example.com/a\\|b |');
     expect(out).toContain('| 已生成的 PRD | — |');
     expect(out).toContain('| PAN-12 | 上传 \\| 提速 | 设计中 |');
-    expect(out).toContain('## 写 PRD 前检查（2/11，还差 9 项）');
+    expect(out).toContain('## 写 PRD 前检查（2/11）');
+    expect(out).not.toContain('还差');
     expect(out).toContain('- [ ] 1. 第 1~14 节没有空白，不涉及的都写了理由：「1. 问题与目标」还没有填写；');
     expect(out).toContain('- [x] 7. 第 8 节的每条现状都有代码证据和核对日期（系统已查）\n');
     expect(out).toContain('- [ ] 2. 第 1 节的问题有数字支撑（第 2 节）\n');
@@ -184,5 +185,20 @@ describe('上下文 Markdown', () => {
     const deep = briefContextMarkdown({ ...ctx, markdown: '# 总标题\n\n```\n## 代码里的\n```\n\n## 二级\n\n###### 六级\n' });
     expect(deep).toContain('## 正文\n\n### 总标题\n\n```\n## 代码里的\n```\n\n#### 二级\n\n###### 六级\n');
     expect(briefContextMarkdown({ ...ctx, requirements: [] })).toContain('## 关联的需求\n\n还没有关联需求\n');
+  });
+});
+
+describe('用户可见的预置简报文案', () => {
+  it('模板正文、说明、小节与检查项不出现「闸口」，说明用「不适用」', () => {
+    const visible = [
+      BRIEF_TEMPLATE.body,
+      BRIEF_TEMPLATE.guidance,
+      ...BRIEF_TEMPLATE.sections.flatMap((s) => [s.heading, s.guidance]),
+      ...BRIEF_GATE_ITEMS.map((i) => i.label),
+    ].join('\n');
+    expect(visible).not.toContain('闸口');
+    expect(BRIEF_TEMPLATE.guidance).toContain('不适用的小节写成一行：不适用：理由');
+    expect(BRIEF_TEMPLATE.guidance).not.toContain('还差');
+    expect(BRIEF_TEMPLATE.sections.find((s) => s.heading.startsWith('5.'))?.guidance).toContain('不适用：理由');
   });
 });

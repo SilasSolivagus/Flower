@@ -171,6 +171,30 @@ a.wikilink-card:hover {
   overflow-wrap: anywhere;
 }
 
+/* 简报未填节：标题留着，后面的块收起。选择器要比编辑器自己的 display 更具体。 */
+.bn-editor .brief-section-collapsed {
+  display: none !important;
+}
+.brief-fold-toggle {
+  cursor: pointer;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card);
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 1.5rem;
+  color: var(--foreground);
+}
+.brief-na-chip {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card);
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 1.5rem;
+  color: var(--muted-foreground);
+}
+
 /* 「去改」滚到的小节：顶栏留空，并短暂高亮 */
 .bn-editor .brief-section-target {
   scroll-margin-top: 4.5rem;

@@ -78,7 +78,7 @@ export function BriefHeaderCard({ org, doc }: { org: string; doc: DocumentDetail
       </h2>
       <div className="flex flex-col gap-3 text-[13px]">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="brief-version">版本</Label>
+          <Label htmlFor="brief-version">对外版本</Label>
           {canEdit ? (
             <form onSubmit={saveVersion}>
               <Input id="brief-version" className="h-8" maxLength={30} value={version} onChange={(e) => setVersion(e.target.value)} onBlur={() => saveVersion()} />

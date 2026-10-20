@@ -25,7 +25,7 @@ const RULE = /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/;
 const norm = (line: string): string => (RULE.test(line) ? '' : squash(plainText(line.trim())));
 /** 小节标题的比较形式：去掉反斜杠（编辑器会写成 `1\.`）、开头的编号与空白。 */
 const headKey = (heading: string): string => normalizeHeading(heading.replace(/\\/g, ''));
-/** 界面说「不涉及：理由」；仍认「不适用」，避免已写过的简报被判未填。 */
+/** 界面写「不适用：理由」；仍认「不涉及」，避免已写过的简报被判未填。 */
 const NOT_APPLICABLE = /^(?:不涉及|不适用)(?:[:：](.*))?$/;
 
 /** 小节及其下级小节的正文行（不含本节标题行）；找不到小节时为 null。 */
@@ -91,7 +91,7 @@ function blankCheck(sections: Section[], template: Set<string>): Check {
     }
     const state = fillState(lines, template);
     if (state === 'filled') continue;
-    reasons.push(state === 'blank' ? `「${s.heading}」还没有填写` : `「${s.heading}」写了不涉及，但还没写理由`);
+    reasons.push(state === 'blank' ? `「${s.heading}」还没有填写` : `「${s.heading}」写了不适用，但还没写理由`);
     section ??= s.heading;
   }
   return { reasons, section };
@@ -240,8 +240,7 @@ export function briefContextMarkdown(ctx: BriefContext): string {
   const out = [`# ${b.displayKey} ${b.title}`, '', '| 项 | 内容 |', '| --- | --- |', ...rows.map(([k, v]) => `| ${k} | ${cell(v)} |`), '', '## 关联的需求', ''];
   if (ctx.requirements.length === 0) out.push('还没有关联需求');
   else out.push('| 编号 | 标题 | 状态 |', '| --- | --- | --- |', ...ctx.requirements.map((r) => `| ${r.displayKey} | ${cell(r.title)} | ${cell(r.state)} |`));
-  const left = ctx.gate.total - ctx.gate.passed;
-  out.push('', `## 写 PRD 前检查（${ctx.gate.passed}/${ctx.gate.total}${left > 0 ? `，还差 ${left} 项` : ''}）`, '');
+  out.push('', `## 写 PRD 前检查（${ctx.gate.passed}/${ctx.gate.total}）`, '');
   for (const i of ctx.gate.items) {
     const tail = i.auto ? `${i.passed ? '' : `：${i.reasons.join('；')}`}（系统已查）` : i.checkedBy ? `（${i.checkedBy.displayName}，${i.checkedAt}）` : '';
     out.push(`- [${i.passed ? 'x' : ' '}] ${i.no}. ${i.label}${tail}`);

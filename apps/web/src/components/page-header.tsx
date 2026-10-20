@@ -32,9 +32,9 @@ export function PageHeader({
           ))}
         </nav>
       )}
-      <div className="flex items-end gap-4">
+      <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-end md:gap-4">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h1 className="text-xl font-semibold">{title}</h1>
+          <h1 className="min-w-0 text-xl font-semibold break-words">{title}</h1>
           {description && <p className="text-[13px] text-muted-foreground">{description}</p>}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}

@@ -18,7 +18,7 @@ export function BriefSidePanel({ org, doc, onReload, saveEditor }: { org: string
       <CoveredRequirements org={org} doc={doc} invalidate={[documentKeys(org), requirementKeys(org), briefKeys(org), qk.workbench]} />
       <BriefGateCard org={org} doc={doc} />
       <BriefActionsCard org={org} doc={doc} saveEditor={saveEditor} />
-      <Revisions org={org} doc={doc} onRestored={onReload} saveEditor={saveEditor} />
+      <Revisions org={org} doc={doc} onRestored={onReload} saveEditor={saveEditor} unit="次" />
     </aside>
   );
 }
