@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { FormError } from '@/components/form-error';
+import { LoadingBlock, QueryError } from '@/components/load-error';
+import { NO_PERMISSION_MESSAGE } from '@/components/no-access';
 import { PageHeader } from '@/components/page-header';
 import { RequireOrgAdmin } from '@/components/require-org-admin';
 import { Button } from '@/components/ui/button';
@@ -61,6 +63,11 @@ function WorkflowsPage() {
           </Button>
         }
       />
+      {list.isError ? (
+        <QueryError error={list.error} noAccessMessage={NO_PERMISSION_MESSAGE} retryMessage="加载流程模板失败，请重试。" onRetry={() => list.refetch()} />
+      ) : !list.data ? (
+        <LoadingBlock />
+      ) : (
       <div className="overflow-hidden rounded-lg border bg-card">
         <Table>
           <TableHeader>
@@ -108,6 +115,7 @@ function WorkflowsPage() {
           </TableBody>
         </Table>
       </div>
+      )}
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent>
           <form

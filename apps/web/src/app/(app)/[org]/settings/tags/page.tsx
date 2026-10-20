@@ -5,6 +5,8 @@ import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { ColorSwatches } from '@/components/color-swatches';
 import { ConfirmAction } from '@/components/confirm-action';
+import { LoadingBlock, QueryError } from '@/components/load-error';
+import { NO_PERMISSION_MESSAGE } from '@/components/no-access';
 import { PageHeader } from '@/components/page-header';
 import { RequireOrgAdmin } from '@/components/require-org-admin';
 import { SortableList } from '@/components/sortable-list';
@@ -82,9 +84,14 @@ function TagsPage() {
           </Button>
         </form>
       )}
+      {tags.isError ? (
+        <QueryError error={tags.error} noAccessMessage={NO_PERMISSION_MESSAGE} retryMessage="加载职能标签失败，请重试。" onRetry={() => tags.refetch()} />
+      ) : !tags.data ? (
+        <LoadingBlock />
+      ) : (
       <div className="rounded-lg border bg-card p-2">
         <SortableList
-          items={tags.data ?? []}
+          items={tags.data}
           getId={(t) => t.id}
           onReorder={reorder}
           renderItem={(t) => (
@@ -123,6 +130,7 @@ function TagsPage() {
           )}
         />
       </div>
+      )}
     </>
   );
 }

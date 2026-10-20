@@ -4,7 +4,10 @@ import { Bot } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { ConfirmAction } from '@/components/confirm-action';
+import { DisabledReason } from '@/components/disabled-reason';
 import { EmptyState } from '@/components/empty-state';
+import { LoadingBlock, QueryError } from '@/components/load-error';
+import { NO_PERMISSION_MESSAGE } from '@/components/no-access';
 import { FormError } from '@/components/form-error';
 import { IssueTokenDialog } from '@/components/issue-token-dialog';
 import { PageHeader } from '@/components/page-header';
@@ -56,15 +59,21 @@ function AgentsPage() {
             <Button variant="outline" onClick={() => setCreating(true)}>
               创建 Agent
             </Button>
-            <Button onClick={() => setIssuing(true)} disabled={agents.length === 0}>
-              签发 Token
-            </Button>
+            <DisabledReason disabled={!!members.data && agents.length === 0} reason="还没有 Agent，不能签发 Token">
+              <Button onClick={() => setIssuing(true)} disabled={!members.data || agents.length === 0}>
+                签发 Token
+              </Button>
+            </DisabledReason>
           </>
         }
       />
       <section className="flex flex-col gap-3">
         <h2 className="font-semibold">Agent</h2>
-        {agents.length === 0 ? (
+        {members.isError ? (
+          <QueryError error={members.error} noAccessMessage={NO_PERMISSION_MESSAGE} retryMessage="加载成员失败，请重试。" onRetry={() => members.refetch()} />
+        ) : !members.data ? (
+          <LoadingBlock />
+        ) : agents.length === 0 ? (
           <EmptyState icon={Bot} title="还没有 Agent" description="例如「PRD 助手」。创建后可以在成员页调整它的产品角色。" />
         ) : (
           <div className="overflow-hidden rounded-lg border bg-card">
@@ -93,6 +102,11 @@ function AgentsPage() {
       </section>
       <section className="flex flex-col gap-3">
         <h2 className="font-semibold">Token</h2>
+        {tokens.isError ? (
+          <QueryError error={tokens.error} noAccessMessage={NO_PERMISSION_MESSAGE} retryMessage="加载 Token 失败，请重试。" onRetry={() => tokens.refetch()} />
+        ) : !tokens.data ? (
+          <LoadingBlock />
+        ) : (
         <div className="overflow-hidden rounded-lg border bg-card">
           <Table>
             <TableHeader>
@@ -108,7 +122,7 @@ function AgentsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {tokens.data?.map((t) => {
+              {tokens.data.map((t) => {
                 const s = tokenStatus(t);
                 return (
                   <TableRow key={t.id} className="h-10 even:bg-zebra">
@@ -141,6 +155,7 @@ function AgentsPage() {
             </TableBody>
           </Table>
         </div>
+        )}
       </section>
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent>

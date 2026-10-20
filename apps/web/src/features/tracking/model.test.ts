@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TrackingItem, TrackingList } from '@/lib/types';
-import { agingRows, boardColumns, DEFAULT_FILTER, filterFromParams, filterQuery, hasFilter, itemHref, ownerGroups, staleRows, targetOf, trackingHref } from './model';
+import { agingRows, boardColumns, DEFAULT_FILTER, expectedDateView, filterFromParams, filterQuery, hasFilter, itemHref, ownerGroups, staleRows, targetOf, trackingHref } from './model';
 
 const item = (over: Partial<TrackingItem>): TrackingItem => ({
   kind: 'requirement',
@@ -66,6 +66,16 @@ describe('地址栏解析', () => {
     const w = item({ kind: 'work_item', id: 'w1', displayKey: 'W-3', title: '协助', expectedDate: '2026-10-20', canEditDate: false });
     expect(itemHref('acme', w)).toBe('/acme/work-items/W-3');
     expect(targetOf(w)).toEqual({ type: 'work_item', id: 'w1', displayKey: 'W-3', title: '协助', expectedDate: '2026-10-20', canEditDate: false });
+  });
+});
+
+describe('预计日', () => {
+  it('空日期写未设置；未完成且早于今天标逾期；已完成不标', () => {
+    expect(expectedDateView(null, { done: false, today: '2026-10-20' })).toEqual({ text: '未设置', overdue: false });
+    expect(expectedDateView('', { done: false, today: '2026-10-20' })).toEqual({ text: '未设置', overdue: false });
+    expect(expectedDateView('2026-10-01', { done: false, today: '2026-10-20' })).toEqual({ text: '2026-10-01', overdue: true });
+    expect(expectedDateView('2026-10-20', { done: false, today: '2026-10-20' })).toEqual({ text: '2026-10-20', overdue: false });
+    expect(expectedDateView('2026-10-01', { done: true, today: '2026-10-20' })).toEqual({ text: '2026-10-01', overdue: false });
   });
 });
 

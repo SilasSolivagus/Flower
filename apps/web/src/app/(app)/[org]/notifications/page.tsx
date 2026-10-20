@@ -5,7 +5,7 @@ import { Bell } from 'lucide-react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { EmptyState } from '@/components/empty-state';
-import { LoadError } from '@/components/load-error';
+import { LoadError, LoadingBlock } from '@/components/load-error';
 import { NotificationItem } from '@/components/notification-bell';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -73,7 +73,9 @@ function NotificationsPage() {
       </div>
       {pages.isError ? (
         <LoadError message="加载通知失败，请重试。" onRetry={() => pages.refetch()} />
-      ) : !pages.data ? null : items.length === 0 ? (
+      ) : !pages.data ? (
+        <LoadingBlock />
+      ) : items.length === 0 ? (
         <EmptyState icon={Bell} title="没有通知" description="被 @、被指派，或关注的需求与 PRD 有变化时会出现在这里。" />
       ) : (
         <div className="flex flex-col gap-5">

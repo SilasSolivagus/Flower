@@ -3,6 +3,7 @@
 import { MailPlus } from 'lucide-react';
 import { ConfirmAction } from '@/components/confirm-action';
 import { EmptyState } from '@/components/empty-state';
+import { LoadingBlock, QueryError } from '@/components/load-error';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { invitationState } from '@/features/members/model';
@@ -18,7 +19,8 @@ export function InvitationsTab({ org }: { org: string }) {
     invalidate: [qk.invitations(org)],
     success: '邀请已撤销',
   });
-  if (!q.data) return null;
+  if (q.isError) return <QueryError error={q.error} noAccessMessage="你没有查看邀请的权限。" retryMessage="加载邀请失败，请重试。" onRetry={() => q.refetch()} />;
+  if (!q.data) return <LoadingBlock />;
   if (q.data.length === 0) return <EmptyState icon={MailPlus} title="还没有发出邀请" />;
   return (
     <div className="overflow-hidden rounded-lg border bg-card">

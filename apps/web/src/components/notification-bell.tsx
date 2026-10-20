@@ -121,8 +121,15 @@ export function NotificationBell({ org }: { org: string }) {
         </div>
         <div className="max-h-[420px] overflow-x-hidden overflow-y-auto p-1">
           {list.isError ? (
-            <p className="px-3 py-8 text-center text-[13px] text-muted-foreground">加载通知失败，请稍后再试。</p>
-          ) : !list.data ? null : items.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 px-3 py-8 text-center">
+              <p className="text-[13px] text-muted-foreground">加载通知失败，请重试。</p>
+              <Button variant="outline" size="sm" onClick={() => list.refetch()}>
+                重试
+              </Button>
+            </div>
+          ) : !list.data ? (
+            <p className="px-3 py-8 text-center text-[13px] text-muted-foreground">加载中</p>
+          ) : items.length === 0 ? (
             <p className="px-3 py-8 text-center text-[13px] text-muted-foreground">没有通知</p>
           ) : (
             groupByDay(items, now).map((g) => (

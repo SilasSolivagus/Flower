@@ -3,8 +3,9 @@
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { DisabledReason } from '@/components/disabled-reason';
 import { NO_PERMISSION_MESSAGE, NoAccess } from '@/components/no-access';
-import { QueryError } from '@/components/load-error';
+import { LoadingBlock, QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,7 +40,7 @@ export default function ProductDetailPage() {
   if (!product.data && product.isError) {
     return <QueryError error={product.error} noAccessMessage={NO_PERMISSION_MESSAGE} retryMessage="加载产品失败，请重试。" onRetry={() => product.refetch()} />;
   }
-  if (!product.data || !orgQ.data) return null;
+  if (!product.data || !orgQ.data) return <LoadingBlock />;
   if (product.data.myRole !== 'admin') return <NoAccess message={NO_PERMISSION_MESSAGE} />;
   const p = product.data;
   const orgAdmin = isOrgAdminRole(orgQ.data.me.orgRole);
@@ -75,9 +76,11 @@ export default function ProductDetailPage() {
               <Label htmlFor="pd-name">产品名称</Label>
               <div className="flex gap-2">
                 <Input id="pd-name" value={name} onChange={(e) => setName(e.target.value)} />
-                <Button onClick={() => update.mutate({ name })} disabled={update.isPending || name === p.name}>
-                  保存
-                </Button>
+                <DisabledReason disabled={name === p.name} reason="名称没有变化">
+                  <Button onClick={() => update.mutate({ name })} disabled={update.isPending || name === p.name}>
+                    保存
+                  </Button>
+                </DisabledReason>
               </div>
             </div>
             <div className="flex flex-col items-start gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">

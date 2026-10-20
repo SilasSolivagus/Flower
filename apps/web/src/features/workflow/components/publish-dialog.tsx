@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { DisabledReason } from '@/components/disabled-reason';
 import { FormError } from '@/components/form-error';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -11,12 +12,14 @@ import type { ApiError } from '@/lib/api';
 export function PublishDialog({
   nextVersion,
   disabled,
+  reason,
   pending,
   error,
   onPublish,
 }: {
   nextVersion: number;
   disabled: boolean;
+  reason?: string;
   pending: boolean;
   error: ApiError | null;
   onPublish: (note: string) => Promise<unknown>;
@@ -25,9 +28,11 @@ export function PublishDialog({
   const [note, setNote] = useState('');
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button disabled={disabled}>发布为 v{nextVersion}</Button>
-      </DialogTrigger>
+      <DisabledReason disabled={disabled} reason={reason}>
+        <DialogTrigger asChild>
+          <Button disabled={disabled}>发布为 v{nextVersion}</Button>
+        </DialogTrigger>
+      </DisabledReason>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>发布 v{nextVersion}</DialogTitle>

@@ -25,7 +25,7 @@ import { type ReactNode, useState } from 'react';
 import { activeNavKey, buildNav, type NavIcon, type NavItem } from '@/features/shell/nav';
 import { useOrg } from '@/lib/queries';
 import { cn } from '@/lib/utils';
-import { QueryError } from './load-error';
+import { LoadingBlock, QueryError } from './load-error';
 import { Logo } from './logo';
 import { NotificationBell } from './notification-bell';
 import { OrgSwitcher } from './org-switcher';
@@ -79,7 +79,13 @@ export function OrgShell({ children }: { children: ReactNode }) {
   const q = useOrg(org);
   const [settingsOpen, setSettingsOpen] = useState(false);
   if (!q.data) {
-    if (!q.isError) return null;
+    if (!q.isError) {
+      return (
+        <div className="flex h-screen items-center justify-center">
+          <LoadingBlock className="h-6 w-40" />
+        </div>
+      );
+    }
     return <QueryError error={q.error} noAccessMessage="组织不存在，或者你还不是这个组织的成员。" retryMessage="加载组织失败，请重试。" onRetry={() => q.refetch()} />;
   }
   const nav = buildNav(org, q.data.me.orgRole);

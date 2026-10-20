@@ -4,7 +4,7 @@ import { validateWorkflowBody } from '@flower/core/workflow-schema';
 import { useParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { QueryError } from '@/components/load-error';
+import { LoadingBlock, QueryError } from '@/components/load-error';
 import { NO_PERMISSION_MESSAGE } from '@/components/no-access';
 import { PageHeader } from '@/components/page-header';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -58,7 +58,7 @@ export default function WorkflowEditorPage() {
   if (!wf.data && wf.isError) {
     return <QueryError error={wf.error} noAccessMessage={NO_PERMISSION_MESSAGE} retryMessage="加载流程失败，请重试。" onRetry={() => wf.refetch()} />;
   }
-  if (!wf.data || !draft || !current) return null;
+  if (!wf.data || !draft || !current) return <LoadingBlock />;
   const def = wf.data.definition;
   const dirty = JSON.stringify(draft) !== JSON.stringify(current.body);
 
@@ -91,6 +91,7 @@ export default function WorkflowEditorPage() {
             <PublishDialog
               nextVersion={current.version + 1}
               disabled={!dirty || issues.length > 0}
+              reason={issues.length > 0 ? '还有校验问题，不能发布' : dirty ? undefined : '没有未发布的修改'}
               pending={publish.isPending}
               error={publish.error}
               onPublish={(note) => publish.mutateAsync(note)}

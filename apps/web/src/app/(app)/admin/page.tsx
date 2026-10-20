@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { LoadingBlock, QueryError } from '@/components/load-error';
 import { NoAccess } from '@/components/no-access';
 import { PlainShell } from '@/components/plain-shell';
 import { Button } from '@/components/ui/button';
@@ -36,7 +37,8 @@ function Settings() {
   });
   const [pending, setPending] = useState<{ key: SettingKey; next: boolean } | null>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
-  if (!q.data) return null;
+  if (q.isError) return <QueryError error={q.error} noAccessMessage="只有实例管理员可以查看实例设置。" retryMessage="加载实例设置失败，请重试。" onRetry={() => q.refetch()} />;
+  if (!q.data) return <LoadingBlock />;
   const row = pending ? ROWS.find((r) => r.key === pending.key) : null;
   const confirm = () => {
     if (!pending) return;
@@ -82,7 +84,7 @@ function Settings() {
 
 export default function AdminPage() {
   const me = useMe();
-  if (!me.data) return null;
+  if (!me.data) return <LoadingBlock className="h-6 w-40" />;
   return (
     <PlainShell>
       {me.data.account.isInstanceAdmin ? (

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ExpectedDateText } from '@/features/tracking/components/expected-date';
 import { itemHref } from '@/features/tracking/model';
 import type { TrackingItem } from '@/lib/types';
 import { AgingDays, LatestProgress, StageLabel, WriteButton } from './item-bits';
@@ -69,7 +70,9 @@ export function AllTable({ org, items, onWrite }: { org: string; items: Tracking
               <TableCell>
                 <LatestProgress item={i} />
               </TableCell>
-              <TableCell className="font-mono text-xs">{dash(i.expectedDate)}</TableCell>
+              <TableCell className="font-mono text-xs">
+                <ExpectedDateText expectedDate={i.expectedDate} done={i.done} />
+              </TableCell>
               <TableCell className="font-mono text-xs">{dash(i.doneOn)}</TableCell>
               <TableCell className="whitespace-nowrap font-mono text-xs">{i.wipDays} 天</TableCell>
               <TableCell className="sticky right-0 z-10 bg-card group-even:bg-zebra">

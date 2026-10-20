@@ -3,9 +3,8 @@
 import { CheckCircle2, Circle } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { LoadError } from '@/components/load-error';
+import { LoadingBlock, QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
-import { Skeleton } from '@/components/ui/skeleton';
 import { computeChecklist } from '@/features/overview/checklist';
 import { isOrgAdminRole } from '@/features/shell/nav';
 import { PRODUCT_ROLE_LABEL } from '@/lib/labels';
@@ -20,7 +19,20 @@ function Checklist({ org }: { org: string }) {
   const fields = useFields(org);
   const tokens = useTokens(org);
   const all = [members, invitations, products, workflows, fields, tokens];
-  if (all.some((q) => !q.data)) return null;
+  const failed = all.find((q) => q.isError);
+  if (failed) {
+    return (
+      <QueryError
+        error={failed.error}
+        noAccessMessage="无法读取组织配置清单。"
+        retryMessage="加载组织配置清单失败，请重试。"
+        onRetry={() => {
+          for (const q of all) void q.refetch();
+        }}
+      />
+    );
+  }
+  if (all.some((q) => !q.data)) return <LoadingBlock />;
   const items = computeChecklist(org, {
     members: members.data!,
     invitations: invitations.data!,
@@ -61,7 +73,8 @@ export default function OrgOverviewPage() {
   const { org } = useParams<{ org: string }>();
   const q = useOrg(org);
   const products = useProducts(org);
-  if (!q.data) return null;
+  if (q.isError) return <QueryError error={q.error} noAccessMessage="组织不存在，或者你还不是这个组织的成员。" retryMessage="加载组织失败，请重试。" onRetry={() => q.refetch()} />;
+  if (!q.data) return <LoadingBlock />;
   const admin = isOrgAdminRole(q.data.me.orgRole);
   return (
     <>
@@ -71,9 +84,9 @@ export default function OrgOverviewPage() {
         <h2 className="font-semibold">产品</h2>
         {!products.data ? (
           products.isError ? (
-            <LoadError message="加载产品失败，请重试。" onRetry={() => products.refetch()} />
+            <QueryError error={products.error} noAccessMessage="你没有查看产品的权限。" retryMessage="加载产品失败，请重试。" onRetry={() => products.refetch()} />
           ) : (
-            <Skeleton className="h-16" />
+            <LoadingBlock className="h-16" />
           )
         ) : products.data.length === 0 ? (
           <p className="text-muted-foreground">还没有产品。</p>

@@ -52,6 +52,21 @@ export const itemHref = (org: string, i: Pick<TrackingItem, 'kind' | 'displayKey
 /** 写进展小窗的对象。canEditDate：能否顺手改预计日期（需求为预计上线，工作项为预计完成）。 */
 export type ProgressTarget = { type: ProgressSubjectType; id: string; displayKey: string; title: string; expectedDate: string | null; canEditDate: boolean };
 
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** 本地日历日 YYYY-MM-DD，用来和预计日比较，不走 UTC。 */
+export function localDateIso(now: Date): string {
+  return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+}
+
+export type ExpectedDateView = { text: string; overdue: boolean };
+
+/** 空日期写「未设置」。未完成且日期早于今天则为逾期。日期是 YYYY-MM-DD，按字符串比较。 */
+export function expectedDateView(expectedDate: string | null | undefined, opts: { done: boolean; today: string }): ExpectedDateView {
+  if (!expectedDate) return { text: '未设置', overdue: false };
+  return { text: expectedDate, overdue: !opts.done && expectedDate < opts.today };
+}
+
 export const targetOf = (i: TrackingItem): ProgressTarget => ({
   type: i.kind,
   id: i.id,
