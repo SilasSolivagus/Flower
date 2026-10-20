@@ -93,14 +93,32 @@ async function phraseLineCount(root: Locator, phrase: string): Promise<number> {
   }, phrase);
 }
 
-/** 浮层矩形内的点应命中浮层自己，而不是背后列表的时间戳。 */
-async function popoverCoversPoint(page: Page, panel: Locator, dx: number, dy: number): Promise<boolean> {
-  const box = await panel.boundingBox();
-  if (!box) return false;
-  return page.evaluate(({ x, y }) => {
-    const hit = document.elementFromPoint(x, y);
-    return !!hit?.closest('[data-slot="popover-content"]');
-  }, { x: box.x + box.width - dx, y: box.y + dy });
+/** 通知页上的时间戳不能被点到：浮层或背后的不透明遮罩挡住。 */
+async function pageTimestampsCovered(page: Page): Promise<void> {
+  const result = await page.evaluate(() => {
+    const backdrop = document.querySelector('[data-notification-backdrop]');
+    const panel = document.querySelector('[data-slot="popover-content"]');
+    if (!backdrop || !panel) return { ok: false, reason: '缺少遮罩或浮层' };
+    const backdropStyle = getComputedStyle(backdrop);
+    const opaque = backdropStyle.backgroundColor.replace(/\s/g, '').match(/^rgba?\(\d+,\d+,\d+(?:,1)?\)$/);
+    if (!opaque || Number(backdropStyle.zIndex) >= Number(getComputedStyle(panel).zIndex)) {
+      return { ok: false, reason: `遮罩 ${backdropStyle.backgroundColor} z=${backdropStyle.zIndex}，浮层 z=${getComputedStyle(panel).zIndex}` };
+    }
+    const stamp = /刚刚|\d+ 分钟前|\d+ 小时前|\d+ 天前|\d{2}-\d{2}/;
+    const stamps = [...document.querySelectorAll('main span.font-mono')].filter((el) => stamp.test(el.textContent ?? ''));
+    if (stamps.length === 0) return { ok: false, reason: '通知页上没有时间戳' };
+    const misses: string[] = [];
+    for (const el of stamps) {
+      const r = el.getBoundingClientRect();
+      const x = Math.min(window.innerWidth - 1, Math.max(0, r.left + r.width / 2));
+      const y = Math.min(window.innerHeight - 1, Math.max(0, r.top + r.height / 2));
+      const hit = document.elementFromPoint(x, y);
+      const covered = !!hit?.closest('[data-notification-backdrop], [data-slot="popover-content"]');
+      if (!covered) misses.push(`${(el.textContent ?? '').trim()} → ${hit?.tagName ?? 'null'}`);
+    }
+    return { ok: misses.length === 0, misses, count: stamps.length };
+  });
+  expect(result.ok, JSON.stringify(result)).toBe(true);
 }
 
 test('通知中心分区、任命职责、铃铛不折断关键词且未读角标不与背后时间戳重叠', async ({ page, request }) => {
@@ -140,14 +158,14 @@ test('通知中心分区、任命职责、铃铛不折断关键词且未读角�
   const phrase = panel.locator('span.whitespace-nowrap', { hasText: '已生成 PRD' });
   await expect(phrase).toBeVisible();
   expect(await phraseLineCount(phrase, '已生成 PRD')).toBe(1);
-  expect(await popoverCoversPoint(page, panel, 28, 72)).toBeTruthy();
+  await pageTimestampsCovered(page);
   await expectNoPageOverflow(page);
   await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/notify-bell-1280.png', fullPage: false });
 
   await page.setViewportSize({ width: 760, height: 900 });
   await expect(panel).toBeVisible();
   expect(await phraseLineCount(phrase, '已生成 PRD')).toBe(1);
-  expect(await popoverCoversPoint(page, panel, 28, 72)).toBeTruthy();
+  await pageTimestampsCovered(page);
   await expectNoPageOverflow(page);
   await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/notify-bell-760.png', fullPage: false });
   await zhang.ctx.dispose();

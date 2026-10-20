@@ -4,6 +4,7 @@ import { Bell } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { actorLabel, BELL_TABS, type BellTab, groupByDay, notificationCopySegments, relativeTime, unreadBadge } from '@/features/member-notifications/model';
@@ -77,6 +78,12 @@ export function NotificationBell({ org }: { org: string }) {
         if (v) setNow(new Date());
       }}
     >
+      {open &&
+        createPortal(
+          // 不透明全屏遮罩：380px 浮层右缘盖不住通知页右侧时间戳，半透明会透字。
+          <div aria-hidden="true" data-notification-backdrop="" className="fixed inset-0 z-[55] bg-background" onPointerDown={() => setOpen(false)} />,
+          document.body,
+        )}
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative overflow-visible" aria-label={badge ? `通知，${count.data} 条未读` : '通知'}>
           <Bell className="size-4" aria-hidden="true" />
