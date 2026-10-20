@@ -5,6 +5,7 @@ import { FormError } from '@/components/form-error';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { qk, requirementKeys, useApiMutation } from '@/lib/queries';
 import type { RequirementDetail } from '@/lib/types';
@@ -46,9 +47,22 @@ export function StatusPanel({ org, requirement: r }: { org: string; requirement:
         {r.transitions.map((t) => (
           <li key={t.to} className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
-              <Button size="sm" variant={t.allowed ? 'default' : 'outline'} disabled={!t.allowed || !canEdit || move.isPending} onClick={() => move.mutate({ to: t.to })}>
-                {t.label}
-              </Button>
+              {t.allowed ? (
+                <Button size="sm" disabled={!canEdit || move.isPending} onClick={() => move.mutate({ to: t.to })}>
+                  {t.label}
+                </Button>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="inline-flex" tabIndex={0}>
+                      <Button size="sm" variant="outline" disabled>
+                        {t.label}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {t.unmet.length > 0 && <TooltipContent>{t.unmet.map((u) => u.message).join('；')}</TooltipContent>}
+                </Tooltip>
+              )}
               {!t.allowed && r.canForce && (
                 <button type="button" className="text-[12px] text-muted-foreground underline" onClick={() => setForcing({ to: t.to, label: t.label })}>
                   强制流转

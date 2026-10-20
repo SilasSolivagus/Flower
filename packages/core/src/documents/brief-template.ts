@@ -10,7 +10,7 @@ export const BRIEF_SECTIONS: ReadonlyArray<{ no: number; heading: string; guidan
   { no: 2, heading: '2. 数据依据', guidance: '取数口径必须和第 7 节一致' },
   { no: 3, heading: '3. 受影响用户', guidance: '估出影响人数与付费用户占比' },
   { no: 4, heading: '4. 场景清单', guidance: '边界情况逐条写：刚好等于阈值、进行中状态变化、多端同时操作、撤销与恢复' },
-  { no: 5, heading: '5. 对象与状态', guidance: '有多状态、多层级、多个相似对象时必填；不涉及时写「不涉及：理由」（也可写「不适用：理由」）' },
+  { no: 5, heading: '5. 对象与状态', guidance: '有多状态、多层级、多个相似对象时必填；不适用时写「不适用：理由」（也可写「不涉及：理由」）' },
   { no: 6, heading: '6. 规则与方案', guidance: '核心规则一句话；未定的数值列进第 16 节' },
   { no: 7, heading: '7. 计算口径与算法', guidance: '涉及阈值、计数、排名、计费、配额时必填；每个指标写公式、口径与至少 3 个算例' },
   { no: 8, heading: '8. 现状核对', guidance: '实读代码；每条现状写证据（仓库 文件:行号 / 提交号）与核对日期' },
@@ -257,8 +257,8 @@ const BODY = `## 1. 问题与目标
 `;
 
 const GUIDANCE = `- 简报记录的是讨论到当前为止的结论，不是会议流水账。结论被推翻时直接改正文，推翻的过程记进第 15 节「决策日志」。
-- 每节都要有内容。不涉及就写：不涉及：……理由（写「不适用：理由」也同样认）。
-- 写 PRD 前尽量勾完检查项；未勾完也能生成，系统会列出还差的项。`;
+- 每节都要有内容。不适用的小节写成一行：不适用：理由（写「不涉及：理由」也同样认）。
+- 写 PRD 前尽量勾完检查项；未勾完也能生成。`;
 
 export const BRIEF_TEMPLATE: { name: string; guidance: string; body: string; sections: TemplateSection[] } = {
   name: '需求简报（预置）',

@@ -56,8 +56,15 @@ export type RequirementDetail = RequirementListItem & {
   changeDocuments: ChangeDocumentHistoryItem[];
   /** 所挂 PRD 上作用于 PRD 的检查项（覆盖的需求共享）。 */
   documentCheckItems: CheckItemView[];
-  /** 所挂的需求简报（P3-C2）与闸口进度。 */
-  brief: { id: string; displayKey: string; title: string; status: DocumentStatus; gate: { passed: number; total: number } } | null;
+  /** 所挂的需求简报与检查进度。convertedDocument 为这份简报最近一次转出、且尚未删除的 PRD。 */
+  brief: {
+    id: string;
+    displayKey: string;
+    title: string;
+    status: DocumentStatus;
+    gate: { passed: number; total: number };
+    convertedDocument: { id: string; displayKey: string; title: string } | null;
+  } | null;
   transitions: TransitionOption[];
   joinIterationUnmet: UnmetCondition[];
   history: Array<{ from: string | null; to: string; actor: MemberRef | null; forced: boolean; reason: string | null; at: Date }>;
@@ -144,6 +151,14 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
           .where(and(eq(documents.id, row.briefDocumentId), isNull(documents.deletedAt)))
       : [];
     const briefGate = briefRow ? (await briefGatesTx(tx, [briefRow])).get(briefRow.doc.id)! : null;
+    const convertedId = briefRow?.header.convertedDocumentId ?? null;
+    const [converted] = convertedId
+      ? await tx
+          .select({ id: documents.id, number: documents.number, title: documents.title, key: products.key })
+          .from(documents)
+          .innerJoin(products, eq(products.id, documents.productId))
+          .where(and(eq(documents.id, convertedId), isNull(documents.deletedAt), isNull(products.deletedAt)))
+      : [];
 
     const names = await memberNames(tx, [
       ...history.map((h) => h.actorMemberId),
@@ -214,6 +229,7 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
               title: briefRow.doc.title,
               status: briefRow.doc.status,
               gate: { passed: briefGate.passed, total: briefGate.total },
+              convertedDocument: converted ? { id: converted.id, displayKey: documentDisplayKey(converted.key, converted.number), title: converted.title } : null,
             }
           : null,
       transitions: availableTransitions(body, row.stateKey, ctx, lookup),

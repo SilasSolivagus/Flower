@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_FILTER, filterToApiQuery, filterToSearch, parseFilter, patchFilter } from './filter';
+import { EMPTY_FILTER, filterToApiQuery, filterToSearch, parseFilter, patchFilter, requirementFilterActive } from './filter';
 
 describe('需求筛选条件', () => {
   it('从网址读取，缺省值不写回网址，写回的顺序固定', () => {
@@ -22,5 +22,13 @@ describe('需求筛选条件', () => {
     const f = { ...EMPTY_FILTER, page: 4 };
     expect(patchFilter(f, { priority: ['p0'] }).page).toBe(1);
     expect(patchFilter(f, { page: 5 }).page).toBe(5);
+  });
+
+  it('只有产品或排序时不算已筛选', () => {
+    expect(requirementFilterActive(EMPTY_FILTER)).toBe(false);
+    expect(requirementFilterActive({ ...EMPTY_FILTER, product: 'PAN', sort: 'number' })).toBe(false);
+    expect(requirementFilterActive({ ...EMPTY_FILTER, states: ['backlog'] })).toBe(true);
+    expect(requirementFilterActive({ ...EMPTY_FILTER, q: '  ' })).toBe(false);
+    expect(requirementFilterActive({ ...EMPTY_FILTER, page: 2 })).toBe(true);
   });
 });

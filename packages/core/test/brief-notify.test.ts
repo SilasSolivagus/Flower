@@ -75,6 +75,7 @@ describe('需求详情里的简报', () => {
       title: '第二份简报',
       status: 'discussing',
       gate: { passed: 2, total: 11 },
+      convertedDocument: null,
     });
     await unlinkDocumentRequirement(t.db, editor, brief.id, r.id);
     expect((await getRequirementByKey(t.db, editor, r.displayKey)).brief).toBeNull();

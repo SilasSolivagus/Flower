@@ -42,6 +42,9 @@ test('需求列表：新建、按状态和优先级筛选、搜索编号', async
   await page.goto('/acme/requirements');
   await page.getByRole('tab', { name: /待开始/ }).click();
   await expect(page.getByText('没有符合条件的需求')).toBeVisible();
+  await page.getByRole('button', { name: '清除筛选' }).click();
+  await expect(page.getByRole('link', { name: '回收站保留 30 天' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '分享链接支持设置密码' })).toBeVisible();
 });
 
 test('搜索框防抖期间切换其他筛选不丢失已输入的文字', async ({ page, request }) => {
@@ -100,6 +103,8 @@ test('需求详情：看到卡在哪、设置检查项后流转、强制流转�
   await expect(page.getByTestId('current-state')).toHaveText('收集');
   await expect(page.getByRole('button', { name: '待开发' })).toBeDisabled();
   await expect(page.getByText('「可行性」需为通过（当前：未开始）')).toBeVisible();
+  await page.getByRole('button', { name: '待开发' }).locator('xpath=..').hover();
+  await expect(page.getByRole('tooltip')).toContainText('「可行性」需为通过（当前：未开始）');
 
   await page.getByRole('combobox', { name: '可行性状态' }).click();
   await page.getByRole('option', { name: '通过' }).click();

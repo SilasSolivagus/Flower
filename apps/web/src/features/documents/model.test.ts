@@ -190,7 +190,7 @@ describe('简报列表与链接', () => {
   });
 
   it('检查进度、生成 PRD 的结果提示；简报状态有颜色', () => {
-    expect(gateLabel({ passed: 7, total: 11 })).toBe('7/11，还差 4 项');
+    expect(gateLabel({ passed: 7, total: 11 })).toBe('7/11');
     expect(gateLabel({ passed: 11, total: 11 })).toBe('11/11');
     expect(gateBreakdown([{ auto: true, passed: true }, { auto: true, passed: false }, { auto: false, passed: true }])).toBe('系统 1 · 人工 1');
     expect(briefFilterSummary({ product: 'PAN', status: 'ready', decider: 'm1' }, '林澄')).toBe('可以写 PRD、确认人 林澄');

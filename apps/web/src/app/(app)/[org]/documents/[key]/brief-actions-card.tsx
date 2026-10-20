@@ -179,7 +179,10 @@ export function BriefActionsCard({ org, doc, saveEditor }: Props) {
           {converted.title}
         </p>
       )}
-      <BriefPrimaryActions org={org} doc={doc} saveEditor={saveEditor} />
+      {/* 窄屏的主按钮在标题下的进度条里，这里只在 xl 及以上显示，避免同时出现两个实心按钮。 */}
+      <div className="max-xl:hidden">
+        <BriefPrimaryActions org={org} doc={doc} saveEditor={saveEditor} />
+      </div>
       <div className="mt-2 flex flex-wrap gap-2">
         <Button size="sm" variant="outline" disabled={copy.isPending} onClick={() => copy.mutate(undefined)}>
           复制为文本

@@ -67,7 +67,12 @@ test('从需求新建简报：头部信息、正文与闸口、转 PRD 与互链
   const side = page.getByRole('complementary');
   await expect(side.getByRole('region', { name: '状态' })).toContainText('讨论中');
   await expect(side.getByRole('region', { name: '关联的需求' })).toContainText('PAN-1');
-  await expect(page.getByText('不涉及的小节写成一行：不涉及：……理由')).toBeVisible();
+  await expect(page.locator('p').filter({ hasText: '不适用的小节写成一行：不适用：理由' })).toBeVisible();
+  await expect(page.getByText('闸口')).toHaveCount(0);
+  await expect(page.getByRole('region', { name: '正文' })).toContainText('还有 18 节未填');
+  await expect(side.getByRole('region', { name: /修订记录/ })).toContainText('修订记录 · 第 1 次');
+  await expect(side.getByLabel('对外版本')).toHaveValue('v0.1');
+  await expect(page.getByRole('button', { name: '生成 PRD' })).toHaveCount(1);
 
   // 确认人是当前用户时，标题下有任务条
   const me = await json<{ me: { memberId: string } }>(request.get('/api/v1/orgs/acme'));
@@ -77,8 +82,8 @@ test('从需求新建简报：头部信息、正文与闸口、转 PRD 与互链
 
   // 基本信息：版本、确认人、参与角色、关联文档
   const header = side.getByRole('region', { name: '基本信息' });
-  await header.getByLabel('版本').fill('v0.2');
-  await header.getByLabel('版本').press('Enter');
+  await header.getByLabel('对外版本').fill('v0.2');
+  await header.getByLabel('对外版本').press('Enter');
   await header.getByRole('combobox', { name: '确认人' }).click();
   await page.getByRole('option', { name: '决策人甲' }).click();
   await expect(header.getByRole('combobox', { name: '确认人' })).toHaveText('决策人甲');
@@ -96,12 +101,14 @@ test('从需求新建简报：头部信息、正文与闸口、转 PRD 与互链
   const brief = await json<{ document: { id: string; version: number } }>(request.get('/api/v1/orgs/acme/documents/PAN-B-1'));
   await ok(request.put(`/api/v1/orgs/acme/documents/${brief.document.id}/content`, { data: { baseVersion: brief.document.version, markdown: filledBrief() } }));
   await page.reload();
-  await expect(header.getByLabel('版本')).toHaveValue('v0.2');
+  await expect(header.getByLabel('对外版本')).toHaveValue('v0.2');
   const gate = side.getByRole('region', { name: '写 PRD 前检查' });
   await expect(gate.getByRole('note')).toContainText('未勾完也可以生成 PRD。');
-  await expect(gate).toContainText('2/11，还差 9 项');
+  await expect(gate).toContainText('2/11');
+  await expect(gate).not.toContainText('还差');
   await expect(gate).toContainText('系统 2 · 人工 0');
-  await expect(gate.getByRole('listitem', { name: '检查 1', exact: true })).toContainText('「14. 分工」写了不涉及，但还没写理由');
+  await expect(gate.getByRole('listitem', { name: '检查 1', exact: true })).toContainText('「14. 分工」写了不适用，但还没写理由');
+  await expect(page.locator('.brief-na-chip', { hasText: '不适用' }).first()).toBeVisible();
   await expect(gate.getByRole('listitem', { name: '检查 7', exact: true }).getByLabel('通过', { exact: true })).toBeVisible();
   await gate.getByRole('button', { name: '去改「14. 分工」' }).click();
   await expect(page.locator('.brief-section-target')).toBeVisible();
@@ -110,14 +117,17 @@ test('从需求新建简报：头部信息、正文与闸口、转 PRD 与互链
   await expect(page).not.toHaveURL(/[?&]section=/);
   await expect(page.locator('.brief-section-target')).toHaveCount(0);
 
-  // 在编辑器里补上理由：自动保存后检查第 1 项通过
+  // 第 14 节未填，默认收起；先展开再在末尾补理由，自动保存后检查第 1 项通过
+  await page.getByRole('button', { name: '展开全部' }).click();
   expect((await typeAtEnd(page, brief.document.id, '暂不涉及分工')).ok()).toBeTruthy();
-  await expect(gate).toContainText('3/11，还差 8 项');
+  await expect(gate).toContainText('3/11');
+  await expect(gate).not.toContainText('还差');
   await expect(gate.getByRole('listitem', { name: '检查 1', exact: true }).getByLabel('通过', { exact: true })).toBeVisible();
 
   // 人工勾选
   await gate.getByRole('checkbox', { name: '勾选检查 2' }).click();
-  await expect(gate).toContainText('4/11，还差 7 项');
+  await expect(gate).toContainText('4/11');
+  await expect(gate).not.toContainText('还差');
   await expect(gate.getByRole('listitem', { name: '检查 2', exact: true })).toContainText(OWNER.name);
 
   // 复制与下载文本
@@ -127,7 +137,8 @@ test('从需求新建简报：头部信息、正文与闸口、转 PRD 与互链
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toContain('# PAN-B-1 上传失败自动重试');
   expect(copied).toContain('| 确认人 | 决策人甲 |');
-  expect(copied).toContain('## 写 PRD 前检查（4/11，还差 7 项）');
+  expect(copied).toContain('## 写 PRD 前检查（4/11）');
+  expect(copied).not.toContain('还差');
   const downloading = page.waitForEvent('download');
   await actions.getByRole('button', { name: '下载 .md' }).click();
   const file = await downloading;
@@ -167,7 +178,42 @@ test('从需求新建简报：头部信息、正文与闸口、转 PRD 与互链
   const briefCard = page.getByRole('region', { name: '简报', exact: true });
   await expect(briefCard.getByRole('link', { name: /PAN-B-1/ })).toBeVisible();
   await expect(briefCard).toContainText('已生成 PRD');
-  await expect(briefCard).toContainText('检查 4/11，还差 7 项');
+  await expect(briefCard).toContainText('检查记录 4/11');
+  await expect(briefCard).not.toContainText('还差');
+  await expect(briefCard.getByRole('link', { name: '已生成 · 打开' })).toBeVisible();
+  if (process.env.FLOWER_SHOTS) {
+    for (const width of [1280, 760]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.screenshot({ path: `${process.env.FLOWER_SHOTS}/req-detail-${width}.png` });
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+  }
+
+  // 760：长标题换行，不与「已关注」重叠
+  const longTitle = '上传失败自动重试并且需要在窄屏下完整换行显示不被已关注按钮挤碎';
+  await ok(request.patch(`/api/v1/orgs/acme/documents/${brief.document.id}`, { data: { title: longTitle } }));
+  await page.goto('/acme/documents/PAN-B-1');
+  await page.getByRole('button', { name: '关注', exact: true }).click();
+  await expect(page.getByRole('button', { name: '已关注', exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 760, height: 900 });
+  const title = page.getByRole('heading', { level: 1 });
+  await expect(title).toContainText(longTitle);
+  await expect.poll(async () => title.evaluate((el) => el.scrollWidth <= el.clientWidth + 2)).toBe(true);
+  const overlapsFollow = await page.evaluate(() => {
+    const box = document.querySelector('h1')?.getBoundingClientRect();
+    const follow = [...document.querySelectorAll('button')].find((b) => b.getAttribute('aria-pressed') === 'true')?.getBoundingClientRect();
+    if (!box || !follow) return true;
+    const separated = box.bottom <= follow.top + 1 || follow.bottom <= box.top + 1 || box.right <= follow.left + 1 || follow.right <= box.left + 1;
+    return !separated;
+  });
+  expect(overlapsFollow).toBe(false);
+  await expect(page.getByRole('link', { name: '打开当前 PRD' })).toHaveCount(1);
+  if (process.env.FLOWER_SHOTS) {
+    await page.screenshot({ path: `${process.env.FLOWER_SHOTS}/brief-760.png` });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.screenshot({ path: `${process.env.FLOWER_SHOTS}/brief-1280.png` });
+  }
+
   await page.goto('/acme/requirements/PAN-2');
   const prdCard = page.getByRole('region', { name: 'PRD', exact: true });
   await prdCard.getByRole('button', { name: '关联已有 PRD' }).click();
@@ -235,7 +281,10 @@ test('文档页「简报」页签：列表、状态与决策人筛选（写入�
     await expectNoPageOverflow(page);
     await page.goto('/acme/documents/PAN-B-1');
     const body = page.getByRole('region', { name: '正文' });
-    // 预置模板第 10 节是 5 列宽表；等编辑器画出来再量，避免骨架屏时误判为不溢出
+    await expect(body).toContainText('还有 18 节未填');
+    await expect(page.getByRole('button', { name: '生成 PRD' })).toHaveCount(1);
+    // 未填节默认收起；展开后再量第 10 节宽表，避免骨架屏或 display:none 时误判
+    await page.getByRole('button', { name: '展开全部' }).click();
     await expect(body.getByText('10. 影响面与兼容')).toBeVisible();
     const wideTable = body.locator('table').filter({ hasText: '端 / 对象' });
     await expect(wideTable).toBeVisible();
@@ -251,7 +300,8 @@ test('文档页「简报」页签：列表、状态与决策人筛选（写入�
         }),
       )
       .toBe(true);
-    await expect(page.getByRole('complementary').getByRole('region', { name: '写 PRD 前检查' })).toContainText('2/11，还差 9 项');
+    await expect(page.getByRole('complementary').getByRole('region', { name: '写 PRD 前检查' })).toContainText('2/11');
+    await expect(page.getByRole('complementary')).not.toContainText('还差');
     if (width === 760) await expect(page.getByRole('region', { name: '简报进度' })).toBeVisible();
     await expectNoPageOverflow(page);
     await page.goto('/acme/requirements/PAN-1');
@@ -261,6 +311,7 @@ test('文档页「简报」页签：列表、状态与决策人筛选（写入�
 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/acme/documents/PAN-B-3');
+  await page.getByRole('button', { name: '展开全部' }).click();
   const blocking = page.getByRole('region', { name: '正文' }).getByText('是否阻塞 PRD', { exact: true });
   await expect(blocking).toBeVisible();
   await expect

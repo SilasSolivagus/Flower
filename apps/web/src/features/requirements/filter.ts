@@ -66,3 +66,8 @@ export function filterToApiQuery(f: ListFilter, pageSize = 50): string {
 export function patchFilter(f: ListFilter, patch: Partial<ListFilter>): ListFilter {
   return { ...f, ...patch, page: patch.page ?? 1 };
 }
+
+/** 除产品与排序外，还有会缩小结果的条件。空列表时用来决定是否给出「清除筛选」。 */
+export function requirementFilterActive(f: ListFilter): boolean {
+  return f.states.length > 0 || !!f.node || f.priority.length > 0 || f.platform.length > 0 || !!f.owner || !!f.iteration || f.q.trim() !== '' || f.page > 1;
+}

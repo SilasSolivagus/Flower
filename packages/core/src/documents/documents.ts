@@ -74,6 +74,8 @@ export type DocumentDetail = DocumentListItem & {
   sourceBrief: { id: string; displayKey: string; title: string } | null;
   /** 所用模板的说明，显示在编辑器上方；没有模板或说明为空时为空。 */
   templateGuidance: string | null;
+  /** 简报所用模板正文，供页面按与服务端相同的规则判断小节是否已填。其他文档为空。 */
+  templateBody: string | null;
   createdAt: Date;
 };
 export type RevisionListItem = {
@@ -196,7 +198,7 @@ async function detailOf(tx: Tx, actor: Actor, doc: DocRow): Promise<DocumentDeta
           .where(and(eq(documentBriefs.convertedDocumentId, doc.id), isNull(documents.deletedAt)))
           .limit(1)
       : [];
-  const [tpl] = doc.templateId ? await tx.select({ guidance: documentTemplates.guidance }).from(documentTemplates).where(eq(documentTemplates.id, doc.templateId)) : [];
+  const [tpl] = doc.templateId ? await tx.select({ guidance: documentTemplates.guidance, body: documentTemplates.body }).from(documentTemplates).where(eq(documentTemplates.id, doc.templateId)) : [];
   return {
     ...base!,
     productKey,
@@ -212,6 +214,7 @@ async function detailOf(tx: Tx, actor: Actor, doc: DocRow): Promise<DocumentDeta
     brief: header ? await briefHeaderTx(tx, header) : null,
     sourceBrief: source ? { id: source.id, displayKey: briefDisplayKey(productKey, source.number), title: source.title } : null,
     templateGuidance: tpl?.guidance.trim() ? tpl.guidance : null,
+    templateBody: doc.kind === 'brief' && tpl ? tpl.body : null,
     createdAt: doc.createdAt,
   };
 }

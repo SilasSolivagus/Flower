@@ -9,7 +9,7 @@ import { FollowButton } from '@/components/follow-button';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
-import { briefsHref, documentHref, moduleDocsHref } from '@/features/documents/model';
+import { briefsHref, documentHref, moduleDocsHref, NOT_APPLICABLE_HINT } from '@/features/documents/model';
 import { useMarkNotificationsRead } from '@/features/member-notifications/use-mark-read';
 import { api } from '@/lib/api';
 import { documentKeys, useApiMutation, useDocument } from '@/lib/queries';
@@ -89,7 +89,7 @@ function DocumentPage() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-w-0 flex-col gap-4">
           {d.kind === 'brief' && <BriefNarrowBar org={org} doc={d} saveEditor={saveEditor} />}
-          {d.kind === 'brief' && <p className="text-[13px] text-muted-foreground">不涉及的小节写成一行：不涉及：……理由（写「不适用：理由」也同样认）。</p>}
+          {d.kind === 'brief' && <p className="text-[13px] text-muted-foreground">{NOT_APPLICABLE_HINT}</p>}
           {d.templateGuidance && (
             <section aria-label="模板说明" className="whitespace-pre-wrap rounded-md border bg-muted/40 px-4 py-3 text-[13px] leading-6 text-muted-foreground">
               {d.templateGuidance}
