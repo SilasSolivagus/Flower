@@ -29,7 +29,7 @@ const PEOPLE = [
   { field: 'authorMemberId', key: 'author', label: '作者' },
 ] as const;
 
-/** 简报头部信息：版本、提出人、决策人、参与方、作者、关联文档。每改一项保存一次。 */
+/** 简报头部信息：版本、提出人、确认人、参与方、作者、关联文档。每改一项保存一次。 */
 export function BriefHeaderCard({ org, doc }: { org: string; doc: DocumentDetail }) {
   const h = doc.brief!;
   const canEdit = doc.myRole !== 'viewer';

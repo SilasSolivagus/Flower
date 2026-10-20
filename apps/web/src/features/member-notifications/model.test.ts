@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NotificationSettings } from '@/lib/types';
-import { actorLabel, groupByDay, pageApiQuery, pageUrlQuery, parseNotificationFilter, prefCell, relativeTime, unreadBadge } from './model';
+import { actorLabel, groupByDay, groupInbox, notificationCopySegments, pageApiQuery, pageUrlQuery, parseNotificationFilter, prefCell, relativeTime, unreadBadge } from './model';
 
 const NOW = new Date('2026-10-12T10:00:00Z');
 const TZ = 'Asia/Shanghai';
@@ -29,6 +29,30 @@ describe('铃铛与列表', () => {
       { label: '更早', items: [earlier] },
     ]);
     expect(groupByDay([earlier], NOW, TZ).map((g) => g.label)).toEqual(['更早']);
+  });
+
+  it('通知中心：要你做的事在前，关注动态在后；空的分区不出现', () => {
+    const mention = { kind: 'mentioned' as const, id: 'm' };
+    const assigned = { kind: 'assigned' as const, id: 'a' };
+    const follow = { kind: 'followed_change' as const, id: 'f' };
+    const alert = { kind: 'system_alert' as const, id: 's' };
+    const signoff = { kind: 'signoff_due' as const, id: 'g' };
+    expect(groupInbox([follow, mention, alert, assigned, signoff])).toEqual([
+      { label: '要你做的事', items: [mention, assigned, signoff] },
+      { label: '全部动态', items: [follow, alert] },
+    ]);
+    expect(groupInbox([follow])).toEqual([{ label: '全部动态', items: [follow] }]);
+    expect(groupInbox([])).toEqual([]);
+  });
+
+  it('中英关键词整段保留，例如「已生成 PRD」不断开', () => {
+    expect(notificationCopySegments('把简报状态从「讨论中」改为「已生成 PRD」')).toEqual([
+      { text: '把简报状态从「讨论中」改为「', keep: false },
+      { text: '已生成 PRD', keep: true },
+      { text: '」', keep: false },
+    ]);
+    expect(notificationCopySegments('改为「可以写 PRD」').filter((s) => s.keep).map((s) => s.text)).toEqual(['可以写 PRD']);
+    expect(notificationCopySegments('把你设为需求负责人')).toEqual([{ text: '把你设为需求负责人', keep: false }]);
   });
 
   it('操作人：当前姓名；系统告警为「系统」', () => {

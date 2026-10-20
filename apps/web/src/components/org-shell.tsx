@@ -106,7 +106,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
         )}
       </nav>
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-12 items-center justify-end gap-1 border-b bg-card px-6">
+        <div className="relative z-40 flex h-12 items-center justify-end gap-1 border-b bg-card px-6">
           <NotificationBell org={org} />
           <UserMenu />
         </div>

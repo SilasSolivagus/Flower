@@ -10,7 +10,7 @@ import { NotificationItem } from '@/components/notification-bell';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { type NotificationPageFilter, pageApiQuery, pageUrlQuery, parseNotificationFilter } from '@/features/member-notifications/model';
+import { groupInbox, type NotificationPageFilter, pageApiQuery, pageUrlQuery, parseNotificationFilter } from '@/features/member-notifications/model';
 import { api } from '@/lib/api';
 import { inboxKeys, useApiMutation, useNotificationPages } from '@/lib/queries';
 import type { MemberNotification } from '@/lib/types';
@@ -40,7 +40,7 @@ function NotificationsPage() {
       <PageHeader
         crumbs={[{ label: '通知' }]}
         title="通知"
-        description="被 @、被指派、关注对象变化、等你签字与系统告警。通知偏好在个人设置里修改。"
+        description="要你做的事排在前面，其余是关注动态和系统告警。通知偏好在个人设置里修改。"
         actions={
           <Button variant="outline" onClick={() => readAll.mutate(undefined)} disabled={readAll.isPending}>
             全部标为已读
@@ -76,13 +76,20 @@ function NotificationsPage() {
       ) : !pages.data ? null : items.length === 0 ? (
         <EmptyState icon={Bell} title="没有通知" description="被 @、被指派，或关注的需求与 PRD 有变化时会出现在这里。" />
       ) : (
-        <ul aria-label="通知列表" className="flex flex-col divide-y rounded-md border bg-card">
-          {items.map((n) => (
-            <li key={n.id} className="px-1 py-0.5">
-              <NotificationItem n={n} now={now} onOpen={open} />
-            </li>
+        <div className="flex flex-col gap-5">
+          {groupInbox(items).map((section) => (
+            <section key={section.label} aria-label={section.label} className="flex flex-col gap-2">
+              <h2 className="text-sm font-medium">{section.label}</h2>
+              <ul aria-label={section.label} className="flex flex-col divide-y rounded-md border bg-card">
+                {section.items.map((n) => (
+                  <li key={n.id} className="px-1 py-0.5">
+                    <NotificationItem n={n} now={now} onOpen={open} />
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
       {pages.hasNextPage && (
         <Button variant="outline" className="self-center" onClick={() => pages.fetchNextPage()} disabled={pages.isFetchingNextPage}>
