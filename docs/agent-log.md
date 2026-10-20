@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-20 · 云端 · 铃铛遮罩改挂到 body 并写死页底色（B4）
+- 分支 / PR：`fix/ux-notify-copy` → `main`，PR #23
+- 做了什么：遮罩的 `createPortal` 挪到 `Popover` 外面，挂到 `document.body`。仍是不透明 `bg-background`，并内联 `backgroundColor: var(--background)`，避免类名没铺上色时时间戳透出来。没有改成半透明黑。浮层仍是 `z-60` / `bg-popover`，点遮罩关闭。不碰服务器 47.115.229.192。
+- 怎么验证的：`pnpm typecheck` 通过；web lint 0 警告。`e2e/member-notifications.spec.ts` 4 条通过。遮罩是 `body` 的子节点，铺满视口，背景不透明且低于浮层；通知页时间戳中心要么点在遮罩上，要么点在浮层上。1280 与 760 截图里列表区是页底色，背后的「…前」不可见。
+- 留给对方：不要把遮罩改成半透明。已经发出的通知正文仍不回写。不要碰服务器 47.115.229.192。
+
 ### 2026-10-20 · 云端 · 铃铛打开时遮住背后通知时间戳（B4）
 - 分支 / PR：`fix/ux-notify-copy` → `main`，PR #23
 - 做了什么：闸口 4 挡合。380px 浮层右缘盖不住通知页右侧的「13 小时前」。铃铛打开时在 `document.body` 加不透明 `fixed inset-0` 遮罩（`z-55`、`bg-background`），浮层仍是 `z-60` / `bg-popover`。点遮罩关闭。没有加宽浮层。B1/B2/B3/B6 未改。没有新 API，没有 SQL 迁移，不改 `decider*`。不碰服务器 47.115.229.192。

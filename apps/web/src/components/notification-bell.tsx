@@ -71,19 +71,26 @@ export function NotificationBell({ org }: { org: string }) {
     router.push(n.url);
   };
   return (
-    <Popover
-      open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (v) setNow(new Date());
-      }}
-    >
+    <>
       {open &&
         createPortal(
-          // 不透明全屏遮罩：380px 浮层右缘盖不住通知页右侧时间戳，半透明会透字。
-          <div aria-hidden="true" data-notification-backdrop="" className="fixed inset-0 z-[55] bg-background" onPointerDown={() => setOpen(false)} />,
+          // 不透明页底色，铺满视口。内联变量避免 portal 到 body 后类名没铺上色，时间戳仍透出来。
+          <div
+            aria-hidden="true"
+            data-notification-backdrop=""
+            className="fixed inset-0 z-[55] bg-background"
+            style={{ backgroundColor: 'var(--background)' }}
+            onPointerDown={() => setOpen(false)}
+          />,
           document.body,
         )}
+      <Popover
+        open={open}
+        onOpenChange={(v) => {
+          setOpen(v);
+          if (v) setNow(new Date());
+        }}
+      >
       <PopoverTrigger asChild>
         <Button variant="ghost" size="icon" className="relative overflow-visible" aria-label={badge ? `通知，${count.data} 条未读` : '通知'}>
           <Bell className="size-4" aria-hidden="true" />
@@ -137,6 +144,7 @@ export function NotificationBell({ org }: { org: string }) {
           </Link>
         </div>
       </PopoverContent>
-    </Popover>
+      </Popover>
+    </>
   );
 }
