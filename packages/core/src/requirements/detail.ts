@@ -29,6 +29,7 @@ import { joinIterationUnmet } from '../iterations/membership';
 import { type LinkCard, linkCardsFor, sourceKey } from '../links/cards';
 import { taskDisplayKey } from '../links/syntax';
 import { type RequirementTracking, trackingView } from '../tracking/requirement-tracking';
+import { type ChangeDocumentHistoryItem, loadChangeDocuments } from './change-documents';
 import { buildCheckItemViews, type CheckItemView, requirementCheckStates } from './check-views';
 import { effectiveFields, memberNames, productWorkflowBody } from './context';
 import { displayKey, hydrateList, type MemberRef, type OptionRef, type RequirementListItem } from './requirements';
@@ -46,8 +47,13 @@ export type RequirementDetail = RequirementListItem & {
   workflow: { states: Array<{ key: string; label: string; color: string; category: string; group: string; order: number }> };
   fields: Array<{ key: string; label: string; cardinality: 'single' | 'multi'; options: OptionRef[] }>;
   checkItems: CheckItemView[];
-  /** 所挂的变更 PRD。 */
+  /** 当前所挂的变更 PRD。与 changeDocuments 里 current 为 true 的那一项（去掉 current、linkedAt）一致。 */
   changeDocument: { id: string; displayKey: string; title: string; status: DocumentStatus; source: 'native' | 'external' } | null;
+  /**
+   * 本需求挂过的变更 PRD，含当前。当前置顶，其余按最近一次挂上的时间从新到旧。
+   * 已删除的文档略去。没有 changeDocumentId 事件时只含当前外键，不能当作完整历史。
+   */
+  changeDocuments: ChangeDocumentHistoryItem[];
   /** 所挂 PRD 上作用于 PRD 的检查项（覆盖的需求共享）。 */
   documentCheckItems: CheckItemView[];
   /** 所挂的需求简报（P3-C2）与闸口进度。 */
@@ -129,6 +135,7 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
     const taskRows = await tx.select().from(tasks).where(eq(tasks.requirementId, row.id)).orderBy(asc(tasks.planStart), asc(tasks.createdAt));
     const aliasRows = await tx.select({ alias: entityAliases.alias }).from(entityAliases).where(eq(entityAliases.entityId, row.id));
     const [docRow] = row.changeDocumentId ? await tx.select().from(documents).where(and(eq(documents.id, row.changeDocumentId), isNull(documents.deletedAt))) : [];
+    const changeDocuments = await loadChangeDocuments(tx, row, product!.key);
     const [briefRow] = row.briefDocumentId
       ? await tx
           .select({ doc: documents, header: documentBriefs })
@@ -197,6 +204,7 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
       fields: fieldList,
       checkItems,
       changeDocument: docRow ? { id: docRow.id, displayKey: documentDisplayKey(product!.key, docRow.number), title: docRow.title, status: docRow.status, source: docRow.source } : null,
+      changeDocuments,
       documentCheckItems,
       brief:
         briefRow && briefGate

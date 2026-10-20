@@ -1,6 +1,7 @@
+import { mkdirSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { applyPrdWorkflow, createDocument, createProduct, createRequirement, login, OWNER, setupInstance } from './helpers';
+import { applyPrdWorkflow, createDocument, createProduct, createRequirement, expectNoPageOverflow, login, ok, OWNER, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -74,4 +75,57 @@ test('需求已经挂在一份 PRD 上时，尝试把它关联到另一份 PRD �
   await side.getByRole('region', { name: '覆盖的需求' }).getByLabel('需求编号').fill(req.displayKey);
   await side.getByRole('button', { name: '关联' }).click();
   await expect(side.getByText(`${req.displayKey} 已挂在 PAN-PRD-1 上，请先从那份 PRD 移出`)).toBeVisible();
+});
+
+test('需求先后挂过两份 PRD 时，详情同时列出历史和当前，检查项跟随当前', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  await applyPrdWorkflow(request, productId);
+  const req = await createRequirement(request, productId, '分片上传');
+  const a = await createDocument(request, productId, {
+    title: 'PRD 甲：历史上挂过的一份，标题很长用来确认窄屏下会被截断而不是把页面撑开',
+    externalUrl: 'https://doc.weixin.qq.com/doc/w3_hist_a',
+    requirementIds: [req.id],
+  });
+  await ok(request.post(`/api/v1/orgs/acme/documents/${a.id}/transitions`, { data: { to: 'review' } }));
+  await ok(request.post(`/api/v1/orgs/acme/documents/${a.id}/transitions`, { data: { to: 'approved' } }));
+  await ok(request.delete(`/api/v1/orgs/acme/documents/${a.id}/requirements/${req.id}`));
+  const b = await createDocument(request, productId, {
+    title: 'PRD 乙',
+    externalUrl: 'https://doc.weixin.qq.com/doc/w3_hist_b',
+    requirementIds: [req.id],
+  });
+  await login(page, OWNER.email, OWNER.password);
+
+  mkdirSync('/opt/cursor/artifacts', { recursive: true });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/acme/requirements/${req.displayKey}`);
+  const card = page.getByRole('region', { name: 'PRD', exact: true });
+  const items = card.getByRole('listitem');
+  await expect(items).toHaveCount(2);
+  await expect(items.nth(0)).toContainText(b.displayKey);
+  await expect(items.nth(0)).toContainText('PRD 乙');
+  await expect(items.nth(0)).toContainText('当前');
+  await expect(items.nth(0)).toHaveAttribute('aria-current', 'true');
+  await expect(items.nth(1)).toContainText(a.displayKey);
+  await expect(items.nth(1)).toContainText('PRD 甲');
+  await expect(items.nth(1)).not.toHaveAttribute('aria-current', 'true');
+  await expect(card.getByText('还没有挂 PRD')).toHaveCount(0);
+  await expect(card.getByRole('link', { name: /查看全部/ })).toHaveCount(0);
+  const hrefs = await card.getByRole('link').evaluateAll((els) => els.map((el) => el.getAttribute('href')));
+  expect(hrefs).toEqual([`/acme/documents/${b.displayKey}`, `/acme/documents/${a.displayKey}`]);
+  const checks = page.getByRole('region', { name: '检查项', exact: true });
+  await expect(checks.getByRole('listitem', { name: 'PRD', exact: true })).toContainText('进行中');
+  await expect(checks.getByRole('listitem', { name: 'PRD', exact: true })).toContainText('跟随 PRD');
+  await expectNoPageOverflow(page);
+  await card.screenshot({ path: '/opt/cursor/artifacts/c2-change-documents-1280.png' });
+
+  await page.setViewportSize({ width: 760, height: 900 });
+  await expect(items.nth(0)).toContainText(b.displayKey);
+  await expect(items.nth(1)).toContainText(a.displayKey);
+  await expectNoPageOverflow(page);
+  await card.screenshot({ path: '/opt/cursor/artifacts/c2-change-documents-760.png' });
+
+  await card.getByRole('link', { name: new RegExp(a.displayKey) }).click();
+  await page.waitForURL(`**/acme/documents/${a.displayKey}`);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('PRD 甲');
 });

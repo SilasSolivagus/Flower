@@ -12,15 +12,16 @@ import { documentKeys, qk, requirementKeys, useApiMutation } from '@/lib/queries
 import type { RequirementDetail } from '@/lib/types';
 import { CreateDocumentDialog } from '../../documents/create-dialog';
 
-/** 需求所挂的 PRD：标题、状态、来源；没挂时可以新建或关联已有 PRD。 */
+/** 本需求挂过的变更 PRD：当前置顶，历史同样可点开。没挂当前这份时可以新建或关联已有 PRD。 */
 export function PrdCard({ org, requirement: r }: { org: string; requirement: RequirementDetail }) {
   const canEdit = r.myRole !== 'viewer';
-  const doc = r.changeDocument;
+  const current = r.changeDocument;
+  const docs = r.changeDocuments;
   const [creating, setCreating] = useState(false);
   const [linking, setLinking] = useState(false);
   const [key, setKey] = useState('');
   const invalidate = [requirementKeys(org), documentKeys(org), qk.workbench];
-  const unlink = useApiMutation(() => api(`/orgs/${org}/documents/${doc!.id}/requirements/${r.id}`, { method: 'DELETE' }), { invalidate, success: '已移出 PRD' });
+  const unlink = useApiMutation(() => api(`/orgs/${org}/documents/${current!.id}/requirements/${r.id}`, { method: 'DELETE' }), { invalidate, success: '已移出 PRD' });
   const link = useApiMutation(
     async (k: string) => {
       const found = await api<{ document: { id: string; kind: string } }>(`/orgs/${org}/documents/${encodeURIComponent(k.trim().toUpperCase())}`);
@@ -43,25 +44,37 @@ export function PrdCard({ org, requirement: r }: { org: string; requirement: Req
       <h2 id="req-prd-title" className="mb-2 text-sm font-semibold">
         PRD
       </h2>
-      {doc ? (
-        <div className="flex flex-col gap-2">
-          <Link href={documentHref(org, doc.displayKey)} className="text-[13px] hover:underline">
-            <span className="mr-2 font-mono text-muted-foreground">{doc.displayKey}</span>
-            {doc.title}
-          </Link>
-          <div className="flex items-center gap-3">
-            <DocumentStatusBadge status={doc.status} />
-            <span className="text-[12px] text-muted-foreground">{doc.source === 'native' ? 'Flower 文档' : '外部链接'}</span>
-          </div>
-          {canEdit && (
-            <Button size="sm" variant="ghost" className="self-start" disabled={unlink.isPending} onClick={() => unlink.mutate(undefined)}>
-              移出 PRD
-            </Button>
-          )}
-        </div>
+      {docs.length > 0 ? (
+        <ul className="mb-2 flex flex-col gap-3" aria-label="挂过的 PRD">
+          {docs.map((doc) => (
+            <li key={doc.id} className="flex min-w-0 flex-col gap-1" aria-current={doc.current ? 'true' : undefined}>
+              <div className="flex min-w-0 items-center gap-2">
+                <Link
+                  href={documentHref(org, doc.displayKey)}
+                  className={doc.current ? 'flex min-w-0 items-baseline gap-2 text-[13px] font-medium hover:underline' : 'flex min-w-0 items-baseline gap-2 text-[13px] text-muted-foreground hover:underline'}
+                >
+                  <span className="shrink-0 font-mono">{doc.displayKey}</span>
+                  <span className="min-w-0 truncate">{doc.title}</span>
+                </Link>
+                {doc.current && <span className="shrink-0 rounded-sm bg-muted px-1.5 text-xs">当前</span>}
+              </div>
+              <div className="flex items-center gap-3">
+                <DocumentStatusBadge status={doc.status} />
+                {doc.current && <span className="text-[12px] text-muted-foreground">{doc.source === 'native' ? 'Flower 文档' : '外部链接'}</span>}
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : (
+        <p className="mb-2 text-[13px] text-muted-foreground">还没有挂 PRD</p>
+      )}
+      {current && canEdit && (
+        <Button size="sm" variant="ghost" className="self-start" disabled={unlink.isPending} onClick={() => unlink.mutate(undefined)}>
+          移出 PRD
+        </Button>
+      )}
+      {!current && (
         <div className="flex flex-col gap-2">
-          <p className="text-[13px] text-muted-foreground">还没有挂 PRD</p>
           {canEdit &&
             (linking ? (
               <form
