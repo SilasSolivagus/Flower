@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-22 · 云端 · UX 残留批次 2（需求标签、工作项列表、批量状态）
+- 分支 / PR：`fix/ux-residual-batch2` → `main`（草稿，不要 merge）
+- 做了什么：批次 2 的 20 项。组织级「需求标签」字典（新表 `requirement_tags` / `requirement_tag_links`，迁移 `0024`，RLS，不改已有表，不复用职能标签）；详情 chip 可挂可卸，删除标签级联卸挂，确认文案「会从 N 个需求上移除」。跟进表只对工作项批量改状态，单请求、逐条鉴权、部分失败说明；需求行勾选禁用。`/work-items` 与 `/tasks` 是真列表，不 302；主导航不新增，入口是跟进「只看工作项」和工作台「我的任务」的「查看全部」。失败简报「去改」沿用现码（滚动偏移 ≥56，清掉 `section=`）。已删除文档打开时说明链接失效，不用「无权访问」。迭代列表按产品筛选且计数等于行数；甘特窄屏改成标题+状态；只读 Token 单独提示。验收种子 `pnpm ux-seed:batch2`，组织 `flower_uxseed`，拒绝 47.115.229.192。另有单独提交把批次 1 面包屑遗留补上：顶层「文档」可点回列表，最后一级只显示并带 `aria-current="page"`。
+- 怎么验证的：`pnpm --filter @flower/core typecheck`、`pnpm --filter @flower/web typecheck`、`pnpm --filter @flower/migrate typecheck` 通过；`pnpm --filter @flower/web lint` 0 警告。core 110 文件、755 通过、3 跳过。web 单测 50 文件、279 通过、1 跳过。migrate 13 文件、124 通过。端到端全量 190 条：首次 187 通过、2 跳过、1 失败（主导航「需求」被设置项「需求标签」子串匹配）；`requirements.spec.ts` 改为 `exact: true` 后该条复跑通过。`e2e/ux-residual-batch2.spec.ts` 6 条通过。迁移用例「在独立库上 up → down → up」在本机 54329 的 `flower_mig_*` 上通过，没有动 3000。种子脚本没有对任何库执行（本机没有 `apps/web/.env.local`）。
+- 留给对方：已处理批次 1 留下的面包屑两条。不要 merge。不要单独把本 PR 上到 47.115.229.192。与 H5 同一窗口、排在 H5 之后；先迁 schema 再启动 flower。H5 要 rebase，H-G3「没有新迁移」的基线从 `7da2c3b1` 挪到本 PR 的合并提交；H5 合入前按 0024 重算 schema-gate 期望值。回滚 SQL 在 `packages/core/migrations/0024_requirement_tags.down.sql`，不在 journal 里。不要对 flower:local、flower_h5gate 或 47.x 跑 `down -v`。
+
 ### 2026-10-22 · 云端 · UX 残留批次 1（760 抽屉与文案）
 - 分支 / PR：`fix/ux-residual-batch1` → `main`（草稿，不要 merge）
 - 做了什么：只做批次 1 的 26 项。760 主导航改为默认关闭的汉堡 + 遮罩抽屉（Esc、遮罩、收起、点导航后关闭），1280 及以上仍是 w-60 文字侧栏。需求列表窄屏保住标题；详情把状态操作提前；查看者看到中文锁定说明。简报列表少横滑，待定问题不再重复「建议」，下载有反馈，再生成对话框标题与按钮一致，发表/添加/关联改为描边。工作台空栏可点进现有列表。文档和任务面包屑带上类型和关联需求。跟进空筛写明条件，整页只读时说明不能写进展。设置项补中文校验、谁可邀请、状态改名风险、字段不能新建的说明、看板名称对照、初始状态含义、个人设置保存反馈、Token 须先复制且列表只留前缀。用户可见的旧「决策人（测试）/简报决策人/设为决策人」在展示时换成确认人，不改字段名、不改历史迁移。没有新业务 API，没有 SQL 迁移，没有改 compose / .env / entrypoint / smoke / 镜像。不碰服务器 47.115.229.192。批次 2（标签、批量状态、/work-items 与 /tasks 列表）未做。

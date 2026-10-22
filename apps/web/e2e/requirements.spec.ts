@@ -69,7 +69,7 @@ test('导航中的"需求"可以点击', async ({ page, request }) => {
   await createProduct(request);
   await login(page, OWNER.email, OWNER.password);
   await page.goto('/acme');
-  await page.getByRole('link', { name: '需求' }).click();
+  await page.getByRole('link', { name: '需求', exact: true }).click();
   await expect(page).toHaveURL(/\/acme\/requirements/);
 });
 

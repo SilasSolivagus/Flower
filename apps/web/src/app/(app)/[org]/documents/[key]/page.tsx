@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useRef, useState } from 'react';
+import { FileX } from 'lucide-react';
 import { Backlinks } from '@/components/backlinks';
+import { EmptyState } from '@/components/empty-state';
 import { EditableTitle } from '@/components/editable-title';
 import { FollowButton } from '@/components/follow-button';
 import { QueryError } from '@/components/load-error';
@@ -11,7 +13,7 @@ import { PageHeader } from '@/components/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { briefsHref, documentHref, moduleDocsHref, NOT_APPLICABLE_HINT } from '@/features/documents/model';
 import { useMarkNotificationsRead } from '@/features/member-notifications/use-mark-read';
-import { api } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 import { documentKeys, useApiMutation, useDocument } from '@/lib/queries';
 import type { DocumentDetail } from '@/lib/types';
 import { ImportDialog } from '../import-dialog';
@@ -66,6 +68,9 @@ function DocumentPage() {
   );
 
   if (!d && q.isError) {
+    if (q.error instanceof ApiError && q.error.message === '这份文档已删除，通知里的链接已失效') {
+      return <EmptyState icon={FileX} title="这份文档已删除" description="通知里的链接已失效。" />;
+    }
     return <QueryError error={q.error} noAccessMessage="文档不存在，或你没有查看它所在产品的权限。" retryMessage="加载文档失败，请重试。" onRetry={() => q.refetch()} />;
   }
   if (!d) return <Skeleton className="h-64" />;

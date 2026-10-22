@@ -8,6 +8,7 @@ export const isOrgAdminRole = (role: OrgRole): boolean => role === 'owner' || ro
 const SETTINGS: Array<[string, string, NavIcon]> = [
   ['members', '成员', 'users'],
   ['tags', '职能标签', 'tag'],
+  ['requirement-tags', '需求标签', 'tag'],
   ['products', '产品', 'box'],
   ['workflows', '流程模板', 'flow'],
   ['fields', '字段字典', 'sliders'],

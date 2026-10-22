@@ -7,6 +7,7 @@ import { BlockerList } from '@/components/blocker-list';
 import { CheckItems } from '@/components/check-items';
 import { EditableTitle } from '@/components/editable-title';
 import { FollowButton } from '@/components/follow-button';
+import { RequirementTagChips } from '@/features/requirements/tag-chips';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -62,6 +63,7 @@ export default function RequirementPage() {
         description={r.aliases.length > 0 ? `旧编号：${r.aliases.join('、')}` : undefined}
         actions={<FollowButton org={org} type="requirement" id={r.id} />}
       />
+      <RequirementTagChips org={org} requirement={r} />
       {!canEdit && (
         <p role="status" className="rounded-md border bg-muted/40 px-3 py-2 text-[13px] leading-6 text-muted-foreground">
           你是查看者，不能修改这条需求。状态、描述、属性和跟进已锁定；需要修改时请联系产品编辑。评论仍可以发表。

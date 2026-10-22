@@ -17,6 +17,7 @@ describe('buildNav', () => {
     expect(nav.settings.map((i) => i.href)).toEqual([
       '/acme/settings/members',
       '/acme/settings/tags',
+      '/acme/settings/requirement-tags',
       '/acme/settings/products',
       '/acme/settings/workflows',
       '/acme/settings/fields',

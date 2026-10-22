@@ -18,18 +18,21 @@ export function PageHeader({
     <header className="flex flex-col gap-3">
       {crumbs.length > 0 && (
         <nav aria-label="面包屑" className="text-[13px] text-muted-foreground">
-          {crumbs.map((c, i) => (
-            <span key={i}>
-              {i > 0 && <span className="mx-1.5">/</span>}
-              {c.href ? (
-                <Link href={c.href} className="hover:text-foreground">
-                  {c.label}
-                </Link>
-              ) : (
-                c.label
-              )}
-            </span>
-          ))}
+          {crumbs.map((c, i) => {
+            const last = i === crumbs.length - 1;
+            return (
+              <span key={i}>
+                {i > 0 && <span className="mx-1.5">/</span>}
+                {last || !c.href ? (
+                  <span aria-current={last ? 'page' : undefined}>{c.label}</span>
+                ) : (
+                  <Link href={c.href} className="hover:text-foreground">
+                    {c.label}
+                  </Link>
+                )}
+              </span>
+            );
+          })}
         </nav>
       )}
       <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-end md:gap-4">

@@ -56,6 +56,7 @@ import type {
   RequirementComment,
   RequirementDetail,
   RequirementList,
+  RequirementTag,
   RevisionDiff,
   ReviewQueue,
   StructureNode,
@@ -68,6 +69,7 @@ import type {
   WecomAppSettings,
   Workbench,
   WorkItemDetail,
+  WorkItemListItem,
   WorkflowDefinition,
   WorkflowVersion,
 } from './types';
@@ -80,6 +82,8 @@ export const qk = {
   members: (o: string) => ['org', o, 'members'] as const,
   invitations: (o: string) => ['org', o, 'invitations'] as const,
   tags: (o: string) => ['org', o, 'tags'] as const,
+  requirementTags: (o: string) => ['org', o, 'requirement-tags'] as const,
+  workItemList: (o: string, query: string) => ['org', o, 'work-items', 'list', query] as const,
   products: (o: string) => ['org', o, 'products'] as const,
   product: (o: string, id: string) => ['org', o, 'product', id] as const,
   productMembers: (o: string, id: string) => ['org', o, 'product', id, 'members'] as const,
@@ -159,6 +163,20 @@ export const useInvitations = (o: string, enabled = true) =>
   });
 export const useFunctionTags = (o: string, enabled = true) =>
   useQuery({ queryKey: qk.tags(o), queryFn: () => api<{ tags: FunctionTag[] }>(`/orgs/${o}/function-tags`), select: (d) => d.tags, enabled });
+export const useRequirementTags = (o: string, enabled = true) =>
+  useQuery({
+    queryKey: qk.requirementTags(o),
+    queryFn: () => api<{ tags: RequirementTag[] }>(`/orgs/${o}/requirement-tags`),
+    select: (d) => d.tags,
+    enabled,
+  });
+export const workItemListKeys = (o: string) => ['org', o, 'work-items'] as const;
+export const useWorkItems = (o: string, query: string) =>
+  useQuery({
+    queryKey: qk.workItemList(o, query),
+    queryFn: () => api<{ items: WorkItemListItem[] }>(`/orgs/${o}/work-items${query ? `?${query}` : ''}`),
+    select: (d) => d.items,
+  });
 export const useProducts = (o: string) =>
   useQuery({ queryKey: qk.products(o), queryFn: () => api<{ products: Product[] }>(`/orgs/${o}/products`), select: (d) => d.products });
 export const useProduct = (o: string, id: string) =>

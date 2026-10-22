@@ -130,7 +130,12 @@ function AgentsPage() {
                     <TableCell className="font-medium">{t.name}</TableCell>
                     <TableCell>{memberName.get(t.memberId) ?? '—'}</TableCell>
                     <TableCell className="font-mono text-xs">flw_{t.prefix}_…</TableCell>
-                    <TableCell className="text-[13px]">{describeScope(t.scope, products.data ?? [])}</TableCell>
+                    <TableCell className="text-[13px]">
+                      <div>{describeScope(t.scope, products.data ?? [])}</div>
+                      {t.scope.access === 'read' && (
+                        <p className="text-xs text-muted-foreground">只读 Token 不能新建或修改数据。</p>
+                      )}
+                    </TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{day(t.lastUsedAt)}</TableCell>
                     <TableCell className="font-mono text-xs text-muted-foreground">{day(t.expiresAt)}</TableCell>
                     <TableCell>{STATUS[s]}</TableCell>

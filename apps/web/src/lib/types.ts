@@ -59,6 +59,8 @@ import type {
   ProgressView as CoreProgressView,
   ReleaseView,
   RequirementDetail as CoreRequirementDetail,
+  RequirementTagView,
+  WorkItemListItem as CoreWorkItemListItem,
   RequirementList as CoreRequirementList,
   RequirementListItem as CoreRequirementListItem,
   RequirementTracking as CoreRequirementTracking,
@@ -110,6 +112,8 @@ export type Org = Jsonify<OrgView>;
 export type OrgMe = { memberId: string; orgRole: OrgRole };
 export type Member = Jsonify<MemberView>;
 export type FunctionTag = FunctionTagView;
+export type RequirementTag = RequirementTagView;
+export type WorkItemListItem = Jsonify<CoreWorkItemListItem>;
 export type Invitation = Jsonify<InvitationView>;
 export type InvitationPreview = CoreInvitationPreview;
 export type Token = Jsonify<TokenView>;

@@ -447,6 +447,38 @@ export const requirements = pgTable(
   ],
 );
 
+/** 组织级需求标签（与职能标签分开）。名称在组织内按小写唯一。 */
+export const requirementTags = pgTable(
+  'requirement_tags',
+  {
+    id: id(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    color: text('color').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('requirement_tags_org_lower_name').on(t.orgId, sql`lower(${t.name})`)],
+);
+
+/** 需求与需求标签多对多。删除标签或需求时级联卸挂。 */
+export const requirementTagLinks = pgTable(
+  'requirement_tag_links',
+  {
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    requirementId: uuid('requirement_id')
+      .notNull()
+      .references(() => requirements.id, { onDelete: 'cascade' }),
+    tagId: uuid('tag_id')
+      .notNull()
+      .references(() => requirementTags.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.requirementId, t.tagId] })],
+);
+
 export const iterationScopeSnapshots = pgTable('iteration_scope_snapshots', {
   id: id(),
   orgId: orgRef(),

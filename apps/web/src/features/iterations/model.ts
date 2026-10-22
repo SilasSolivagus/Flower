@@ -7,6 +7,17 @@ export function editableIterationProducts(products: Product[], iteration: { prod
   return products.filter((p) => p.myRole !== 'viewer' && (!iteration.product || p.id === iteration.product.id));
 }
 
+/** 按产品筛迭代。选具体产品时不含专项；只有「全部」才列出专项。 */
+export function filterIterationsByProduct(list: Iteration[], productId: string | null): Iteration[] {
+  if (!productId) return list;
+  return list.filter((it) => it.product?.id === productId);
+}
+
+/** 分组里实际渲染的行数，用来和筛选计数对照。 */
+export function iterationRowCount(groups: IterationGroup[]): number {
+  return groups.reduce((n, g) => n + g.iterations.length, 0);
+}
+
 /** 按产品分组（产品按编号前缀排序），专项放最后；组内保持接口顺序（开始日期倒序）。 */
 export function groupIterations(list: Iteration[]): IterationGroup[] {
   const groups = new Map<string, IterationGroup & { sortKey: string }>();

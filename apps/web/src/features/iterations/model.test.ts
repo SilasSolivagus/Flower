@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Iteration, Product } from '@/lib/types';
-import { commitmentRate, editableIterationProducts, groupIterations, iterationFormError, iterationTab, linkCandidates, localToday, milestoneTimeline, STATUS_ACTIONS } from './model';
+import { commitmentRate, editableIterationProducts, filterIterationsByProduct, groupIterations, iterationFormError, iterationRowCount, iterationTab, linkCandidates, localToday, milestoneTimeline, STATUS_ACTIONS } from './model';
 
 const it0 = (over: Partial<Iteration>): Iteration => ({
   id: 'i',
@@ -61,6 +61,17 @@ describe('迭代列表模型', () => {
     expect(iterationFormError({ ...ok, endDate: '' })).toBe('请填写开始和结束日期');
     expect(iterationFormError({ ...ok, endDate: '2026-06-30' })).toBe('结束日期不能早于开始日期');
     expect(iterationFormError({ ...ok, milestones: [{ label: '发布', date: '' }] })).toBe('里程碑需要填写名称和日期');
+  });
+});
+
+describe('迭代产品筛选', () => {
+  it('选具体产品时不含专项，全部才含专项，计数等于渲染行数', () => {
+    const pan = { id: 'p1', key: 'PAN', name: '网盘' };
+    const list = [it0({ id: 'a', product: pan, name: '常规' }), it0({ id: 'b', type: 'special', name: '专项' })];
+    const filtered = filterIterationsByProduct(list, 'p1');
+    expect(filtered.map((i) => i.id)).toEqual(['a']);
+    expect(iterationRowCount(groupIterations(filtered))).toBe(1);
+    expect(iterationRowCount(groupIterations(filterIterationsByProduct(list, null)))).toBe(2);
   });
 });
 

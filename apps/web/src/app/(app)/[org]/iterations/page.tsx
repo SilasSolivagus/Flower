@@ -8,9 +8,10 @@ import { EmptyState } from '@/components/empty-state';
 import { LoadError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { groupIterations } from '@/features/iterations/model';
+import { filterIterationsByProduct, groupIterations, iterationRowCount } from '@/features/iterations/model';
 import { isOrgAdminRole } from '@/features/shell/nav';
 import { ITERATION_STATUS_LABEL } from '@/lib/labels';
 import { useIterations, useOrg, useProducts } from '@/lib/queries';
@@ -22,6 +23,7 @@ export default function IterationsPage() {
   const orgQ = useOrg(org);
   const products = useProducts(org);
   const q = useIterations(org);
+  const [productId, setProductId] = useState<string | null>(null);
   const [dialog, setDialog] = useState<{ open: boolean; iteration: Iteration | null }>({ open: false, iteration: null });
   const orgAdmin = !!orgQ.data && isOrgAdminRole(orgQ.data.me.orgRole);
   const manageableProducts = (products.data ?? []).filter((p) => p.myRole === 'admin' || p.myRole === 'editor');
@@ -36,7 +38,8 @@ export default function IterationsPage() {
     );
   }
 
-  const groups = groupIterations(q.data ?? []);
+  const groups = groupIterations(filterIterationsByProduct(q.data ?? [], productId));
+  const shown = iterationRowCount(groups);
   return (
     <>
       <PageHeader
@@ -51,6 +54,26 @@ export default function IterationsPage() {
           </>
         }
       />
+      {q.data && (
+        <div className="flex flex-wrap items-center gap-3 text-[13px]">
+          <Select value={productId ?? 'all'} onValueChange={(v) => setProductId(v === 'all' ? null : v)}>
+            <SelectTrigger className="h-8 w-44" aria-label="产品">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部</SelectItem>
+              {(products.data ?? []).map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p>
+            显示 <span className="font-mono">{shown}</span> 条
+          </p>
+        </div>
+      )}
       {!q.data ? (
         <Skeleton className="h-40" />
       ) : groups.length === 0 ? (

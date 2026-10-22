@@ -169,6 +169,13 @@
       "when": 1792401600000,
       "tag": "0023_p3c2_ux_copy",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792502400000,
+      "tag": "0024_requirement_tags",
+      "breakpoints": true
     }
   ]
 }
