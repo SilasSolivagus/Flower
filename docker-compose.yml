@@ -1,5 +1,7 @@
 # 自托管部署：cp .env.example .env，填好密码与密钥后执行 docker compose up -d
 # 密码请只用字母和数字（会拼进数据库连接串），可用 openssl rand -hex 24 生成
+# 整栈顺序：先 up postgres，再 --profile schema run --rm schema，然后 up flower。
+# schema / migrate 不在这里构建；镜像在机外构建后 load。prd-src 的小版本用 PRDSRC_IMAGE 覆盖。
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -17,7 +19,9 @@ services:
       retries: 30
 
   flower:
-    build: .
+    build:
+      context: .
+      target: runner
     image: flower:local
     restart: unless-stopped
     depends_on:
@@ -25,15 +29,13 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://flower_app:${FLOWER_APP_DB_PASSWORD:?请在 .env 中设置 FLOWER_APP_DB_PASSWORD}@postgres:5432/flower
-      DATABASE_ADMIN_URL: postgres://flower_admin:${POSTGRES_ADMIN_PASSWORD}@postgres:5432/flower
-      FLOWER_APP_DB_PASSWORD: ${FLOWER_APP_DB_PASSWORD}
       FLOWER_SECRET_KEY: ${FLOWER_SECRET_KEY:?请在 .env 中设置 FLOWER_SECRET_KEY（openssl rand -base64 48）}
       FLOWER_PUBLIC_URL: ${FLOWER_PUBLIC_URL:-http://localhost:3000}
       FLOWER_TRUSTED_PROXY_HOPS: ${FLOWER_TRUSTED_PROXY_HOPS:-0}
     volumes:
       - flower_storage:/app/data/storage
     ports:
-      - "${FLOWER_PORT:-3000}:3000"
+      - "127.0.0.1:${FLOWER_PORT:-3000}:3000"
     healthcheck:
       # 只在这条探活命令里清空代理变量，不影响应用进程本身：容器内的健康检查请求 127.0.0.1，
       # 不应走宿主机 Docker 配置里的 HTTP 代理（某些开发机的 ~/.docker/config.json 会给所有
@@ -43,7 +45,60 @@ services:
       interval: 5s
       timeout: 3s
       retries: 30
+      start_period: 20s
+
+  schema:
+    profiles: ["schema"]
+    image: flower:local
+    pull_policy: never
+    entrypoint: ["node", "migrate.mjs"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    env_file:
+      - path: .env.migrate
+        required: false
+
+  migrate:
+    profiles: ["migrate"]
+    image: flower-migrate:local
+    pull_policy: never
+    depends_on:
+      postgres:
+        condition: service_healthy
+      prd-src:
+        condition: service_healthy
+    restart: "no"
+    env_file:
+      - path: .env.migrate
+        required: false
+    environment:
+      FLOWER_STORAGE_DIR: /app/data/storage
+    volumes:
+      - flower_storage:/app/data/storage
+      - ${FLOWER_IMPORT_INPUT_DIR:-./.import/input}:/import/input:ro
+      - ${FLOWER_IMPORT_WORK_DIR:-./.import/work}:/import/work
+
+  prd-src:
+    profiles: ["migrate"]
+    image: ${PRDSRC_IMAGE:-postgres:17-alpine}
+    restart: "no"
+    env_file:
+      - path: .env.prdsrc
+        required: false
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: prd_src
+    volumes:
+      - prd_src_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d prd_src"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
 
 volumes:
   flower_pg: {}
   flower_storage: {}
+  prd_src_data: {}

@@ -3,6 +3,9 @@
 **/dist
 .git
 .env
+.env.migrate
+.env.prdsrc
+.import/
 **/.env.local
 docs
 packages/core/assets/fonts

@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-22 · 云端 · 上线前仓库加固（H5，选 F2）
+- 分支 / PR：`cursor/golive-h5-ops-1db6`（草稿，不要 merge）
+- 做了什么：按简报 a–g 与文末附录做 F2。备份脚本、`--replace` 二次确认、`LEGACY_PRD_URL`、`.env.migrate` / `.env.prdsrc`、发布手册。迁移挪到一次性 `schema` 服务；flower 不再带 admin 凭据；entrypoint 只在显式给了 admin 连接串时才迁移，然后跑版本闸。版本闸按镜像 `_journal.json` 对库 `__drizzle_migrations`，不写死编号。schema / migrate 去掉 `build`，`pull_policy: never`。没有新的 SQL 迁移。不碰 47.x。
+- 怎么验证的：`pnpm typecheck`、`pnpm --filter @flower/web lint`、`pnpm test` 通过。版本闸单测覆盖五类结果、flower_app 只读授权、drizzle 把连库错误包在 cause 里时仍报「连不上」。修前：容器里用 127.0.0.1 时 schema 约 4 秒退出 1，中文提示连不上。本机 iptables-legacy 的 FORWARD 默认 DROP，服务名 postgres 也会等满 10 秒连不上；只在这台机器把该策略改成 ACCEPT（不进仓库）。之后 schema 用主机名 postgres 退出 0。未迁移时 `up --wait` 把 flower 判为 unhealthy。修好连库后未再改冒烟脚本，`./scripts/smoke.sh` 退出 0。日志在 PR 描述。
+- 留给对方：不要 merge，不要标 ready。合仓不等于上 47.x。H-G3 起算点是 `fdf9b4c0`，本分支相对它没有新迁移。box 上的整套闸口演练未在本环境跑完的，PR 里标了未执行。
+
 ### 2026-10-22 · 云端 · UX 残留批次 2（需求标签、工作项列表、批量状态）
 - 分支 / PR：`fix/ux-residual-batch2` → `main`（草稿，不要 merge）
 - 做了什么：批次 2 的 20 项。组织级「需求标签」字典（新表 `requirement_tags` / `requirement_tag_links`，迁移 `0024`，RLS，不改已有表，不复用职能标签）；详情 chip 可挂可卸，删除标签级联卸挂，确认文案「会从 N 个需求上移除」。跟进表只对工作项批量改状态，单请求、逐条鉴权、部分失败说明；需求行勾选禁用。`/work-items` 与 `/tasks` 是真列表，不 302；主导航不新增，入口是跟进「只看工作项」和工作台「我的任务」的「查看全部」。失败简报「去改」沿用现码（滚动偏移 ≥56，清掉 `section=`）。已删除文档打开时说明链接失效，不用「无权访问」。迭代列表按产品筛选且计数等于行数；甘特窄屏改成标题+状态；只读 Token 单独提示。验收种子 `pnpm ux-seed:batch2`，组织 `flower_uxseed`，拒绝 47.115.229.192。另有单独提交把批次 1 面包屑遗留补上：顶层「文档」可点回列表，最后一级只显示并带 `aria-current="page"`。

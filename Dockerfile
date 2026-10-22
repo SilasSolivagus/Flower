@@ -15,6 +15,18 @@ RUN apk add --no-cache curl && ./scripts/fetch-fonts.sh
 COPY . .
 RUN pnpm --filter @flower/core build:migrate && pnpm --filter @flower/web build
 
+FROM base AS migrate
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
+COPY apps/web/package.json apps/web/
+COPY packages/core packages/core
+COPY packages/migrate packages/migrate
+RUN pnpm install --frozen-lockfile --filter @flower/migrate... \
+    && pnpm --filter @flower/migrate build \
+    && mkdir -p /app/data/storage \
+    && chown -R node:node /repo /app
+USER node
+ENTRYPOINT ["node", "--disable-warning=ExperimentalWarning", "packages/migrate/dist/cli.mjs"]
+
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 FLOWER_MIGRATIONS_DIR=/app/migrations FLOWER_STORAGE_DIR=/app/data/storage FLOWER_FONT_DIR=/app/fonts

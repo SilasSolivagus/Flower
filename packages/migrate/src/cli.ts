@@ -1,6 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import { parseArgs } from 'node:util';
+import { resolveReplaceConfirmation } from './confirm';
+import { resolvePrdUrl } from './env';
 import { accounts, type Actor, createDb, createLocalStorage, type Db, listProducts, resolveActor } from '@flower/core';
 import { eq } from 'drizzle-orm';
 import type { LegacyData } from './legacy-types';
@@ -14,13 +17,16 @@ import { suggestMapping } from './suggest';
 import { fileSummary, writeImport } from './write';
 
 const USAGE = `用法：
-  suggest --plane <123plane.db> --push <push.db> --prd-url <postgres url> --mapping <目录>
-  import  --plane … --push … --prd-url … --mapping <目录> --out <报告目录> [--org-slug pan123] [--org-name 123云盘]
-          [--product-key PAN] [--product-name 123云盘] [--as-of YYYY-MM-DD] [--owner-email 邮箱] [--replace] [--dry-run]
+  suggest --plane <123plane.db> --push <push.db> --mapping <目录>
+          旧 prd 库连接串读环境变量 LEGACY_PRD_URL（兼容 --prd-url，生产禁止）
+  import  --plane … --push … --mapping <目录> --out <报告目录> [--org-slug pan123] [--org-name 123云盘]
+          [--product-key PAN] [--product-name 123云盘] [--as-of YYYY-MM-DD] [--owner-email 邮箱]
+          [--replace --confirm-replace <slug>] [--dry-run]
           [--uploads <prd_uploads 导出目录>] [--storage <附件存储目录，缺省读 FLOWER_STORAGE_DIR>]
   perf --org-slug pan123 --owner-email 邮箱 [--product-key PAN] [--runs 20]（读取 DATABASE_URL）
   rejoin --org-slug pan123 --owner-email 邮箱 --accounts <账号清单.json>（读取 DATABASE_URL；重导后让已有账号重新加入）
-import 写库时读取环境变量 DATABASE_ADMIN_URL。`;
+import 写库时读取环境变量 DATABASE_ADMIN_URL。覆盖已有组织必须 --replace，且 --confirm-replace 与 --org-slug 完全一致。
+生产环境把 LEGACY_PRD_URL 放在 .env.migrate，不要把连接串写进命令行。`;
 
 function fail(msg: string): never {
   console.error(`${msg}\n\n${USAGE}`);
@@ -50,6 +56,7 @@ async function main(): Promise<void> {
       'as-of': { type: 'string', default: new Date().toISOString().slice(0, 10) },
       'owner-email': { type: 'string' },
       replace: { type: 'boolean', default: false },
+      'confirm-replace': { type: 'string' },
       'dry-run': { type: 'boolean', default: false },
       runs: { type: 'string', default: '20' },
       accounts: { type: 'string' },
@@ -57,7 +64,7 @@ async function main(): Promise<void> {
       storage: { type: 'string' },
     },
   });
-  const need = (k: 'plane' | 'push' | 'prd-url' | 'mapping' | 'out') => v[k] ?? fail(`缺少参数 --${k}`);
+  const need = (k: 'plane' | 'push' | 'mapping' | 'out') => v[k] ?? fail(`缺少参数 --${k}`);
 
   if (cmd === 'perf') {
     const url = process.env.DATABASE_URL ?? fail('perf 需要 DATABASE_URL（运行时角色）');
@@ -94,7 +101,34 @@ async function main(): Promise<void> {
     return;
   }
 
-  const data: LegacyData = { plane: loadPlane(need('plane')), push: loadPush(need('push')), prd: await loadPrd(need('prd-url')) };
+  let confirmReplace: string | undefined;
+  if (v.replace) {
+    try {
+      confirmReplace = await resolveReplaceConfirmation({
+        replace: true,
+        orgSlug: v['org-slug']!,
+        confirmFlag: v['confirm-replace'],
+        isTTY: Boolean(process.stdin.isTTY),
+        ask: async (prompt) => {
+          const rl = createInterface({ input: process.stdin, output: process.stderr });
+          try {
+            return await rl.question(prompt);
+          } finally {
+            rl.close();
+          }
+        },
+      });
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error));
+    }
+  }
+  let prdUrl: string;
+  try {
+    prdUrl = resolvePrdUrl(v['prd-url'], process.env).url;
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
+  const data: LegacyData = { plane: loadPlane(need('plane')), push: loadPush(need('push')), prd: await loadPrd(prdUrl) };
   const mappingDir = need('mapping');
 
   if (cmd === 'suggest') {
@@ -149,7 +183,7 @@ async function main(): Promise<void> {
   const { db, close } = createDb(adminUrl, { max: 2 });
   try {
     const storageDir = v.storage ?? process.env.FLOWER_STORAGE_DIR;
-    const files = await writeImport(db, plan, { replace: v.replace!, storage: storageDir ? createLocalStorage(storageDir) : undefined, uploadsDir: v.uploads });
+    const files = await writeImport(db, plan, { replace: v.replace!, confirmReplace, storage: storageDir ? createLocalStorage(storageDir) : undefined, uploadsDir: v.uploads });
     for (const line of fileSummary(storageDir, files, v.replace!)) console.log(line);
   } finally {
     await close();

@@ -88,7 +88,7 @@ describe('写入数据库', () => {
   it('组织已存在时必须加 replace；覆盖后回到导入时的数据', async () => {
     const plan = buildImportPlan(makeLegacyData(), reviewedMapping(), opts);
     await expect(writeImport(t.adminDb, plan, { replace: false })).rejects.toThrow('已存在');
-    await writeImport(t.adminDb, plan, { replace: true });
+    await writeImport(t.adminDb, plan, { replace: true, confirmReplace: 'pan123' });
     const actor = (await resolveActor(t.db, opts.owner!.accountId, 'pan123'))!;
     const [product] = await listProducts(t.db, actor);
     expect((await listRequirements(t.db, actor, product!.id)).total).toBe(5);
@@ -145,7 +145,7 @@ describe('写入数据库', () => {
     await t.adminDb.insert(documentBriefs).values({ documentId: briefDoc!.id, orgId: actor.orgId, convertedDocumentId: prd.id });
     await t.adminDb.update(requirements).set({ briefDocumentId: briefDoc!.id }).where(eq(requirements.id, created.id));
 
-    await writeImport(t.adminDb, plan, { replace: true });
+    await writeImport(t.adminDb, plan, { replace: true, confirmReplace: 'pan123' });
 
     const after = (await resolveActor(t.db, opts.owner!.accountId, 'pan123'))!;
     const [p] = await listProducts(t.db, after);
@@ -178,6 +178,27 @@ describe('写入数据库', () => {
     expect(actor.orgRole).toBe('owner');
   });
 
+  it('覆盖时没有 confirmReplace 则拒绝，原数据保持不变', async () => {
+    const plan = buildImportPlan(makeLegacyData(), reviewedMapping(), { ...opts, orgSlug: 'confirm-missing' });
+    await writeImport(t.adminDb, plan, { replace: false });
+    const actor = (await resolveActor(t.db, opts.owner!.accountId, 'confirm-missing'))!;
+    const [product] = await listProducts(t.db, actor);
+    const before = (await listRequirements(t.db, actor, product!.id)).total;
+    await expect(writeImport(t.adminDb, plan, { replace: true })).rejects.toThrow('--confirm-replace');
+    expect((await listRequirements(t.db, actor, product!.id)).total).toBe(before);
+  });
+
+  it('confirmReplace 与组织 slug 不一致则拒绝，原数据保持不变', async () => {
+    const plan = buildImportPlan(makeLegacyData(), reviewedMapping(), { ...opts, orgSlug: 'confirm-wrong' });
+    await writeImport(t.adminDb, plan, { replace: false });
+    const actor = (await resolveActor(t.db, opts.owner!.accountId, 'confirm-wrong'))!;
+    const [product] = await listProducts(t.db, actor);
+    const before = (await listRequirements(t.db, actor, product!.id)).total;
+    await expect(writeImport(t.adminDb, plan, { replace: true, confirmReplace: 'confirm-wrong ' })).rejects.toThrow('slug');
+    await expect(writeImport(t.adminDb, plan, { replace: true, confirmReplace: 'Confirm-wrong' })).rejects.toThrow('slug');
+    expect((await listRequirements(t.db, actor, product!.id)).total).toBe(before);
+  });
+
   it('计划中有问题时拒绝写入', async () => {
     const data = makeLegacyData();
     data.plane.requirements[0]!.requester = '新面孔';
@@ -191,7 +212,7 @@ describe('写入数据库', () => {
       plan_days: 0.5, delay_days: 1.5, actual_status: '', note: '', flag: '', created_at: null, alias: null,
       starred: null, ov_assignee: null, ov_status: null, ov_progress: null, manual: null,
     });
-    await writeImport(t.adminDb, buildImportPlan(data, reviewedMapping(), opts), { replace: true });
+    await writeImport(t.adminDb, buildImportPlan(data, reviewedMapping(), opts), { replace: true, confirmReplace: 'pan123' });
     const [row] = await t.adminDb.select({ planDays: tasks.planDays, delayDays: tasks.delayDays }).from(tasks).where(eq(tasks.title, '半天任务'));
     expect(row).toMatchObject({ planDays: 0.5, delayDays: 1.5 });
   });
@@ -210,7 +231,7 @@ describe('写入数据库', () => {
     for (const att of plan.rows.attachments) {
       expect((await readAttachment(t.db, actor, { attachmentId: att.id!, storage })).mime).toBe('image/png');
     }
-    await writeImport(t.adminDb, plan, { replace: true, storage, uploadsDir: uploads });
+    await writeImport(t.adminDb, plan, { replace: true, confirmReplace: 'prd123', storage, uploadsDir: uploads });
     expect((await getDocumentByKey(t.db, actor, 'PAN-PRD-1')).revisionNumber).toBe(3);
   });
 
@@ -220,7 +241,7 @@ describe('写入数据库', () => {
     const plan = buildImportPlan(data, reviewedMapping(data), { ...opts, orgSlug: 'prd-missing' });
     expect(plan.report.documents.missingFiles).toBeNull();
     expect(await writeImport(t.adminDb, plan, { replace: false, storage })).toEqual({ filesWritten: 1, filesMissing: 1 });
-    expect(await writeImport(t.adminDb, plan, { replace: true })).toEqual({ filesWritten: 0, filesMissing: 2 });
+    expect(await writeImport(t.adminDb, plan, { replace: true, confirmReplace: 'prd-missing' })).toEqual({ filesWritten: 0, filesMissing: 2 });
   });
 
   it('导入后新建的 PRD 编号接着导入的最大编号；有了新文档、评论与需求关联后仍可 replace，数量回到导入时', async () => {
@@ -235,7 +256,7 @@ describe('写入数据库', () => {
     const imported = await getDocumentByKey(t.db, actor, 'PAN-PRD-1');
     await addDocumentComment(t.db, actor, imported.id, { body: '导入后的 PRD 评论' });
 
-    await writeImport(t.adminDb, plan, { replace: true });
+    await writeImport(t.adminDb, plan, { replace: true, confirmReplace: 'prd-replace' });
 
     const count = async (table: typeof documents | typeof documentRevisions | typeof attachments | typeof comments) =>
       (await t.adminDb.select().from(table).where(eq(table.orgId, actor.orgId))).length;
@@ -268,7 +289,7 @@ describe('写入数据库', () => {
 
   it('推送配置：通道停用、配置能用同一个 FLOWER_SECRET_KEY 解开；定时推送没有排期；迁移记录写入', async () => {
     const key = 'migrate-test-secret-migrate-test-secret-01';
-    await writeImport(t.adminDb, buildImportPlan(withPushConfig(), reviewedMapping(), { ...opts, secretKey: key }), { replace: true });
+    await writeImport(t.adminDb, buildImportPlan(withPushConfig(), reviewedMapping(), { ...opts, secretKey: key }), { replace: true, confirmReplace: 'pan123' });
     const actor = (await resolveActor(t.db, opts.owner!.accountId, 'pan123'))!;
     const channels = await listChannels(t.db, actor, { secretKey: key });
     expect(channels.map((c) => [c.name, c.enabled])).toEqual(

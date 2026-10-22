@@ -82,7 +82,7 @@ export async function deleteOrgData(tx: Tx, orgId: string): Promise<void> {
 export async function writeImport(
   adminDb: Db,
   plan: ImportPlan,
-  opts: { replace: boolean; storage?: FileStorage; uploadsDir?: string },
+  opts: { replace: boolean; confirmReplace?: string; storage?: FileStorage; uploadsDir?: string },
 ): Promise<{ filesWritten: number; filesMissing: number }> {
   if (plan.report.problems.length > 0) throw new Error(`导入计划有 ${plan.report.problems.length} 个问题，拒绝写入。请先处理对账报告中的问题。`);
   const org = plan.rows.organizations[0]!;
@@ -93,6 +93,9 @@ export async function writeImport(
       // 覆盖会删掉现有的全部成员关系；计划里没有关联账号的所有者时，覆盖后就没有任何账号能进入该组织
       if (!plan.rows.members.some((m) => m.accountId && m.orgRole === 'owner')) {
         throw new Error(`覆盖组织「${org.slug}」时必须用 --owner-email 指定所有者账号，否则覆盖后没有任何账号能登录该组织`);
+      }
+      if (opts.confirmReplace !== org.slug) {
+        throw new Error(`覆盖组织「${org.slug}」必须加上 --confirm-replace ${org.slug}，且与组织 slug 完全一致`);
       }
       await deleteOrgData(tx, existing.id);
     }

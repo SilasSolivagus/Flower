@@ -19,11 +19,12 @@ PR 会跑 GitHub Actions CI（`.github/workflows/ci.yml`）：类型检查 + web
 | 类型检查 | `pnpm typecheck` |
 | web lint（CI 会跑，需零错误零警告） | `pnpm --filter @flower/web lint` |
 | 修改 schema 后生成迁移 | `pnpm --filter @flower/core db:generate` |
-| 镜像冒烟测试 | `./scripts/smoke.sh` |
+| 镜像冒烟测试 | `./scripts/smoke.sh`（禁止在生产机，以及任何还跑着别的 Flower 栈的机器上运行：退出时 `down -v`，并会覆盖 `flower:local`） |
 | 下载看板图片字体（存到已忽略的 packages/core/assets/fonts/） | `./scripts/fetch-fonts.sh` |
 | 端到端测试（需要 db:up；会占用 3100 端口，不要与 pnpm dev 同时运行） | `pnpm --filter @flower/web e2e` |
-| 生成旧数据对照表（只读副本放在 .local-data/） | `pnpm --filter @flower/migrate legacy suggest --plane "$PWD/.local-data/123plane.db" --push "$PWD/.local-data/push.db" --prd-url postgres://flower_admin:flower_admin@localhost:54329/prd_src --mapping "$PWD/.local-data/mapping"` |
-| 迁移旧数据（先加 --dry-run 看对账报告；--as-of 决定迭代与任务状态，重导沿用 docs/p1a-validation.md 记录的日期） | `pnpm --filter @flower/migrate legacy import …同上参数… --out "$PWD/.local-data/reports" --owner-email <你的账号邮箱> --uploads "$PWD/.local-data/prd_uploads" --storage "$PWD/apps/web/.flower-storage" --as-of YYYY-MM-DD [--replace] [--dry-run]` |
+| 生成旧数据对照表（只读副本放在 .local-data/） | `LEGACY_PRD_URL=postgres://flower_admin:flower_admin@localhost:54329/prd_src pnpm --filter @flower/migrate legacy suggest --plane "$PWD/.local-data/123plane.db" --push "$PWD/.local-data/push.db" --mapping "$PWD/.local-data/mapping"` |
+| 迁移旧数据（先加 --dry-run 看对账报告；--as-of 决定迭代与任务状态，重导沿用 docs/p1a-validation.md 记录的日期） | `pnpm --filter @flower/migrate legacy import …同上参数… --out "$PWD/.local-data/reports" --owner-email <你的账号邮箱> --uploads "$PWD/.local-data/prd_uploads" --storage "$PWD/apps/web/.flower-storage" --as-of YYYY-MM-DD [--replace --confirm-replace <slug>] [--dry-run]` |
+| compose 整栈 | 先 `docker compose up -d --wait postgres`，再 `docker compose --profile schema run --rm schema`，然后 `docker compose up -d --wait flower`。日常开发仍用 `pnpm db:migrate` |
 | 重导后让测试账号重新加入组织（清单 `.local-data/test-accounts.json`：`[{"email","orgRole","functionTags"}]`，不含密码） | `pnpm --filter @flower/migrate legacy rejoin --org-slug pan123 --owner-email <你的账号邮箱> --accounts "$PWD/.local-data/test-accounts.json"` |
 | 真实数据性能测量（需先导入 pan123） | `pnpm --filter @flower/migrate build && node --disable-warning=ExperimentalWarning --env-file=apps/web/.env.local packages/migrate/dist/cli.mjs perf --org-slug pan123 --owner-email <邮箱>` |
 
@@ -43,4 +44,4 @@ PR 会跑 GitHub Actions CI（`.github/workflows/ci.yml`）：类型检查 + web
 - 面向用户的错误信息用中文，通过 `AppError(code, message, details?)` 抛出。
 - 页面是客户端组件，通过 `/api/v1` 取数；只允许 `import type` 引用 `@flower/core`，以及浏览器安全的 `@flower/core/workflow-schema`、`@flower/core/schedule`、`@flower/core/markdown`、`@flower/core/links`、`@flower/core/notifications`。`markdown` 只依赖 `diff` 和类型导入，其余四个不导入任何其他模块。
 - 纯逻辑放在 `apps/web/src/features/**/model.ts` 并写 Vitest 单测；页面行为用 Playwright 覆盖，每个 spec 自己调用 `resetDatabase()`。
-- `.local-data/` 存放生产数据副本、对照表和对账报告，含员工个人信息，只在本地，不提交。迁移写入需要 `DATABASE_ADMIN_URL`；同一组织再次导入必须加 `--replace`，会先删除该组织的全部数据。prd 系统的附件文件需要先从服务器只读导出到 .local-data/prd_uploads/（导出前征得用户同意）；没有导出时导入仍可进行，报告列出缺失的文件数。
+- `.local-data/` 存放生产数据副本、对照表和对账报告，含员工个人信息，只在本地，不提交。迁移写入需要 `DATABASE_ADMIN_URL`；同一组织再次导入必须加 `--replace --confirm-replace <slug>`，会先删除该组织的全部数据。旧 prd 库连接串放在环境变量 `LEGACY_PRD_URL`（生产禁止 `--prd-url`）。prd 系统的附件文件需要先从服务器只读导出到 .local-data/prd_uploads/（导出前征得用户同意）；没有导出时导入仍可进行，报告列出缺失的文件数。
