@@ -105,7 +105,10 @@ test('模块文档详情：所属与合入记录；编辑自动保存；归档�
   await page.reload();
   await expect(page.getByRole('region', { name: '正文' })).toContainText('支持断点续传');
 
-  await page.getByRole('navigation', { name: '面包屑' }).getByRole('link', { name: '模块文档', exact: true }).click();
+  const crumbs = page.getByRole('navigation', { name: '面包屑' });
+  await expect(crumbs.locator('[aria-current="page"]')).toHaveText(mod.displayKey);
+  await expect(crumbs.getByRole('link', { name: mod.displayKey, exact: true })).toHaveCount(0);
+  await crumbs.getByRole('link', { name: '模块文档', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`view=modules&node=${upload}`));
   await expect(page.getByRole('row', { name: /^上传/ })).toHaveAttribute('aria-current', 'true');
 
@@ -115,4 +118,19 @@ test('模块文档详情：所属与合入记录；编辑自动保存；归档�
     await expect(page.getByRole('region', { name: '合入记录' })).toBeVisible();
     await expectNoPageOverflow(page);
   }
+});
+
+test('模块文档面包屑顶层「文档」回到文档列表，当前页不可点', async ({ page, request }) => {
+  const productId = await createProduct(request);
+  const storage = await createNode(request, productId, null, '存储');
+  const upload = await createNode(request, productId, storage, '上传');
+  const mod = (await json<{ document: { displayKey: string } }>(request.post(`/api/v1/orgs/acme/nodes/${upload}/module-document`))).document;
+  await login(page, OWNER.email, OWNER.password);
+  await page.goto(`/acme/documents/${mod.displayKey}`);
+  const crumbs = page.getByRole('navigation', { name: '面包屑' });
+  await expect(crumbs.locator('[aria-current="page"]')).toHaveText(mod.displayKey);
+  await expect(crumbs.getByRole('link', { name: mod.displayKey, exact: true })).toHaveCount(0);
+  await crumbs.getByRole('link', { name: '文档', exact: true }).click();
+  await expect(page).toHaveURL(/\/acme\/documents$/);
+  await expect(page.getByRole('tab', { name: '变更 PRD' })).toBeVisible();
 });
