@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · 备份哈希只记文件名，版本闸失败提示补下一步
+- 分支 / PR：`fix/h5-debt-sha256-copy`（草稿，不要 merge，不要标 ready）
+- 做了什么：`backup-flower.sh` 的 `.sha256` 在输出目录里按文件名计算，发布手册的校验改成先 `cd` 再 `sha256sum -c`。版本闸和 schema 服务的失败提示改成单行「原因。下一步：…」；`--check` 失败行加 `[Flower 启动检查]`，成功行不加。鉴权失败先核对 `.env` 密码。`failLine` 仍只取第一行，退出码仍是 1。没有新迁移。`apps/web` 未改。不碰 47.x。回滚节标题在 ce3679fc 上是 `## 回滚`。
+- 怎么验证的：`pnpm typecheck` 通过。`pnpm --filter @flower/web lint` 0 警告。core 111 文件、772 通过、3 跳过。migrate 15 文件、136 通过。web 50 文件、279 通过、1 跳过。smoke 依赖片段仍在源码里。把脚本产物目录挪走后 `sha256sum -c *.sha256` 两条 OK，文件名不以 `/` 开头。GitHub Actions 是否因账单没跑，写在 PR 正文。
+- 留给对方：不要 merge，不要标 ready。不要在 47.x 上跑。H-G3「没有新迁移」的起算点是 `ce3679fc`，本分支相对它没有新迁移。
+
 ### 2026-10-22 · 云端 · 上线前仓库加固（H5，选 F2）
 - 分支 / PR：`cursor/golive-h5-ops-1db6`（草稿，不要 merge）
 - 做了什么：按简报 a–g 与文末附录做 F2。备份脚本、`--replace` 二次确认、`LEGACY_PRD_URL`、`.env.migrate` / `.env.prdsrc`、发布手册。迁移挪到一次性 `schema` 服务；flower 不再带 admin 凭据；entrypoint 只在显式给了 admin 连接串时才迁移，然后跑版本闸。版本闸按镜像 `_journal.json` 对库 `__drizzle_migrations`，不写死编号。schema / migrate 去掉 `build`，`pull_policy: never`。没有新的 SQL 迁移。不碰 47.x。

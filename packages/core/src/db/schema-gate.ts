@@ -100,18 +100,18 @@ export function formatCompare(result: CompareResult): string {
     case 'ok':
       return `数据库结构与镜像一致（${result.latestTag}）`;
     case 'missing':
-      return `数据库还没迁移：请先运行 ${SCHEMA_CMD}`;
+      return `数据库还没迁移。下一步：运行 ${SCHEMA_CMD}`;
     case 'behind':
-      return `数据库结构落后于镜像（库 ${result.dbLabel}，镜像 ${result.imageLabel}）：请先运行 ${SCHEMA_CMD}`;
+      return `数据库结构落后于镜像（库 ${result.dbLabel}，镜像 ${result.imageLabel}）。下一步：运行 ${SCHEMA_CMD}`;
     case 'ahead':
-      return '数据库比镜像新：回滚请先恢复备份再用旧镜像，见 release-runbook';
+      return '数据库比镜像新，不能用这个旧镜像启动。下一步：先恢复备份再用旧镜像（见发布手册 docs/release-runbook.md「回滚」）';
     case 'count-mismatch':
-      return `数据库迁移条数与镜像不一致（库 ${result.appliedCount} 条，镜像 ${result.expectedCount} 条）：请先运行 ${SCHEMA_CMD}`;
+      return `数据库迁移条数与镜像不一致（库 ${result.appliedCount} 条，镜像 ${result.expectedCount} 条）。下一步：运行 ${SCHEMA_CMD}`;
   }
 }
 
 export function missingAdminUrlMessage(): string {
-  return '[Flower schema] 缺少 DATABASE_ADMIN_URL';
+  return `[Flower schema] 缺少 DATABASE_ADMIN_URL。下一步：确认它已传进 schema 容器且不为空，再重跑 ${SCHEMA_CMD}`;
 }
 
 function walk(error: unknown): unknown[] {
@@ -160,17 +160,17 @@ export function formatGateDbError(error: unknown, target: DbTarget, startedAt: n
   const codes = codesOf(error);
   const text = textOf(error);
   if (codes.includes('42501') || /permission denied/i.test(text)) {
-    return `没有权限读取迁移登记表：请重跑 schema 补授权（${SCHEMA_CMD}）`;
+    return `没有权限读取迁移登记表。下一步：重跑 schema 补授权（${SCHEMA_CMD}）`;
   }
   if (codes.includes('42P01') || codes.includes('3F000')) {
-    return `数据库还没迁移：请先运行 ${SCHEMA_CMD}`;
+    return `数据库还没迁移。下一步：运行 ${SCHEMA_CMD}`;
   }
   if (codes.some((code) => isAuth(code, text)) || isAuth('', text)) {
-    return `数据库认证失败（账号 ${target.user}，主机 ${target.host}:${target.port}）。${MAYBE_SCHEMA}`;
+    return `数据库认证失败（账号 ${target.user}，主机 ${target.host}:${target.port}）。下一步：核对 .env 里该账号的密码（特殊字符要 URL 编码）；全新空库则${MAYBE_SCHEMA}`;
   }
   const connectCode = codes.find((code) => CONNECT_CODES.has(code)) ?? '';
   const seconds = waitedSeconds(startedAt, connectCode, connectTimeoutSec);
-  return `连不上数据库主机 ${target.host}:${target.port}（${waitedPhrase(seconds)}）。${MAYBE_SCHEMA}`;
+  return `连不上数据库主机 ${target.host}:${target.port}（${waitedPhrase(seconds)}）。下一步：确认 postgres 容器已启动、DATABASE_URL 主机端口正确；全新部署则${MAYBE_SCHEMA}`;
 }
 
 /** schema 服务（迁移，不是 --check）的一行中文说明。 */
@@ -181,16 +181,16 @@ export function formatSchemaServiceFailure(error: unknown, adminUrl: string, sta
   const user = target?.user ?? '未知账号';
   const codes = codesOf(error);
   const text = textOf(error);
-  if (!target) return '[Flower schema] 连不上数据库（连接串无法解析，没有主机名）';
+  if (!target) return '[Flower schema] 连不上数据库（连接串无法解析，没有主机名）。下一步：检查 DATABASE_ADMIN_URL 格式（postgres://账号:密码@主机:端口/库名）';
   if (codes.some((code) => isAuth(code, text)) || isAuth('', text)) {
-    return `[Flower schema] 数据库认证失败（账号 ${user}，主机 ${host}:${port}）`;
+    return `[Flower schema] 数据库认证失败（账号 ${user}，主机 ${host}:${port}）。下一步：核对 .env 里 DATABASE_ADMIN_URL 的账号密码（特殊字符要 URL 编码），再重跑 ${SCHEMA_CMD}`;
   }
   const connectCode = codes.find((code) => CONNECT_CODES.has(code));
   if (connectCode) {
     const seconds = waitedSeconds(startedAt, connectCode, CONNECT_TIMEOUT_SEC);
-    return `[Flower schema] 连不上数据库主机 ${host}:${port}（${waitedPhrase(seconds)}）`;
+    return `[Flower schema] 连不上数据库主机 ${host}:${port}（${waitedPhrase(seconds)}）。下一步：确认 postgres 容器已启动后重跑 ${SCHEMA_CMD}`;
   }
-  return `[Flower schema] 迁移失败（主机 ${host}:${port}）`;
+  return `[Flower schema] 迁移失败（主机 ${host}:${port}）。下一步：看上面 postgres 报错，修好后重跑 ${SCHEMA_CMD}；不要直接起 web`;
 }
 
 export async function checkSchema(
