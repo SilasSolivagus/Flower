@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { confirmationHref, requirementHref, showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref } from './model';
+import { confirmationHref, emptySectionHref, requirementHref, showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref } from './model';
 
 describe('工作台链接', () => {
   const org = { id: 'o1', slug: 'acme', name: '测试组织' };
@@ -32,6 +32,15 @@ describe('工作台链接', () => {
     const u = { org, title: 't', unread: 1, lastAt: '2026-10-09T00:00:00.000Z' };
     expect(unreadHref({ ...u, requirementId: 'r1', documentId: null, displayKey: 'PAN-1' })).toBe('/acme/requirements/PAN-1');
     expect(unreadHref({ ...u, requirementId: null, documentId: 'd1', displayKey: 'PAN-PRD-1' })).toBe('/acme/documents/PAN-PRD-1');
+  });
+
+  it('空栏链到当前组织的现有列表', () => {
+    expect(emptySectionHref('acme', 'owned')).toBe('/acme/requirements');
+    expect(emptySectionHref('acme', 'following')).toBe('/acme/tracking');
+    expect(emptySectionHref('acme', 'tasks')).toBe('/acme/iterations');
+    expect(emptySectionHref('acme', 'signatures')).toBe('/acme/reviews');
+    expect(emptySectionHref('acme', 'confirmations')).toBe('/acme/documents?view=briefs');
+    expect(emptySectionHref('acme', 'unread')).toBe('/acme/notifications');
   });
 
   it('我负责的与等我跟进：需求去需求详情，工作项去工作项详情', () => {

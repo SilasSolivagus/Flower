@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NotificationSettings } from '@/lib/types';
-import { actorLabel, groupByDay, groupInbox, notificationCopySegments, pageApiQuery, pageUrlQuery, parseNotificationFilter, prefCell, relativeTime, unreadBadge } from './model';
+import { actorLabel, groupByDay, groupInbox, notificationCopySegments, pageApiQuery, pageUrlQuery, parseNotificationFilter, prefCell, relativeTime, scrubLegacyRoleCopy, unreadBadge } from './model';
 
 const NOW = new Date('2026-10-12T10:00:00Z');
 const TZ = 'Asia/Shanghai';
@@ -57,7 +57,11 @@ describe('铃铛与列表', () => {
 
   it('操作人：当前姓名；系统告警为「系统」', () => {
     expect(actorLabel({ kind: 'mentioned', actor: { id: 'x', displayName: '张三' } })).toBe('张三');
+    expect(actorLabel({ kind: 'mentioned', actor: { id: 'x', displayName: '决策人（测试）' } })).toBe('确认人（测试）');
     expect(actorLabel({ kind: 'system_alert', actor: null })).toBe('系统');
+    expect(scrubLegacyRoleCopy('把你设为决策人')).toBe('把你设为确认人');
+    expect(scrubLegacyRoleCopy('你是这份简报的简报决策人')).toBe('你是这份简报的简报确认人');
+    expect(scrubLegacyRoleCopy('决策人甲发表了评论')).toBe('决策人甲发表了评论');
   });
 
   it('通知页的筛选：地址栏与接口参数；不认识的值按默认', () => {

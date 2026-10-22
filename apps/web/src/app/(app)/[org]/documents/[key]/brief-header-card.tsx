@@ -171,7 +171,7 @@ export function BriefHeaderCard({ org, doc }: { org: string; doc: DocumentDetail
               <Input aria-label="引用或网址" placeholder={`${doc.productKey}-PRD-3 或 https://…`} className="h-8" value={target} onChange={(e) => setTarget(e.target.value)} />
               <div className="flex gap-2">
                 <Input aria-label="说明" placeholder="说明（选填）" className="h-8" maxLength={100} value={note} onChange={(e) => setNote(e.target.value)} />
-                <Button type="submit" size="sm" disabled={addLink.isPending || save.isPending || !target.trim()}>
+                <Button type="submit" size="sm" variant="outline" disabled={addLink.isPending || save.isPending || !target.trim()}>
                   添加
                 </Button>
               </div>

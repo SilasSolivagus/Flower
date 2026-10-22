@@ -109,12 +109,16 @@ test('F2：760 用顶栏切换设置子页，说明横排可读，成员表可�
   expect((await intro.boundingBox())!.width).toBeGreaterThan(180);
   await expectNoPageOverflow(page);
 
+  await expect(page.getByRole('navigation', { name: '主导航' })).toBeHidden();
+  await page.getByRole('button', { name: '打开导航' }).click();
   const toggle = page.locator('nav[aria-label="主导航"]').getByRole('button', { name: '组织设置' });
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await toggle.click();
   await expect(page.getByRole('navigation', { name: '主导航' }).getByRole('link', { name: '产品' })).toBeVisible();
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await page.getByRole('button', { name: '收起导航' }).click();
+  await expect(page.getByRole('navigation', { name: '主导航' })).toBeHidden();
 
   await subnav.getByRole('link', { name: '产品' }).click();
   await expect(page).toHaveURL(/\/acme\/settings\/products$/);

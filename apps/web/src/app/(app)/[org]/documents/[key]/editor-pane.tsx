@@ -459,6 +459,7 @@ export function EditorPane({
         {pick && (
           <Button
             size="sm"
+            variant={doc.kind === 'brief' ? 'outline' : 'default'}
             className="absolute z-10"
             style={{ top: pick.top, left: pick.left }}
             onMouseDown={(e) => e.preventDefault()}

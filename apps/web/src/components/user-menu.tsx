@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { LogOut, Monitor, Moon, Server, Settings, Sun } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
+import { toast } from 'sonner';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { api } from '@/lib/api';
-import { useMe } from '@/lib/queries';
+import { qk, useMe } from '@/lib/queries';
 
 export function UserMenu() {
   const router = useRouter();
@@ -58,7 +59,17 @@ export function UserMenu() {
         )}
         <DropdownMenuSeparator />
         <DropdownMenuLabel className="text-xs text-muted-foreground">主题</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={theme ?? 'light'} onValueChange={setTheme}>
+        <DropdownMenuRadioGroup
+          value={theme ?? 'light'}
+          onValueChange={(v) => {
+            setTheme(v);
+            if (v !== 'light' && v !== 'dark' && v !== 'system') return;
+            void api('/me', { method: 'PATCH', body: { preferences: { theme: v } } }).then(() => {
+              void qc.invalidateQueries({ queryKey: qk.me });
+              toast.success('主题已写入个人设置');
+            });
+          }}
+        >
           <DropdownMenuRadioItem value="light">
             <Sun className="size-4" aria-hidden="true" />
             浅色

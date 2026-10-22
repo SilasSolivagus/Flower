@@ -125,7 +125,7 @@ export function DocumentComments({ org, doc, focus = null }: { org: string; doc:
                 >
                   <WikilinkTextarea org={org} productId={doc.productId} aria-label="回复内容" className="min-h-16 text-[13px]" value={reply} onValueChange={setReply} />
                   <div className="flex gap-2">
-                    <Button type="submit" size="sm" disabled={add.isPending || !reply.trim()}>
+                    <Button type="submit" size="sm" variant={doc.kind === 'brief' ? 'outline' : 'default'} disabled={add.isPending || !reply.trim()}>
                       发送回复
                     </Button>
                     <Button type="button" size="sm" variant="ghost" onClick={() => setReplyTo(null)}>
@@ -148,7 +148,7 @@ export function DocumentComments({ org, doc, focus = null }: { org: string; doc:
         <WikilinkTextarea org={org} productId={doc.productId} aria-label="发表评论" placeholder={doc.kind === 'brief' ? '对这份简报的意见' : '对整篇 PRD 的意见'} className="min-h-20 text-[13px]" value={body} onValueChange={setBody} />
         <FormError error={add.error} />
         <div className="flex justify-end">
-          <Button type="submit" size="sm" disabled={add.isPending || !body.trim()}>
+          <Button type="submit" size="sm" variant={doc.kind === 'brief' ? 'outline' : 'default'} disabled={add.isPending || !body.trim()}>
             发表
           </Button>
         </div>

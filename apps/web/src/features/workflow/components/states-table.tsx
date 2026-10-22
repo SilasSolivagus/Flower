@@ -52,7 +52,7 @@ export function StatesTable({ body, onChange }: { body: WorkflowBody; onChange: 
             <input
               type="radio"
               name="initial-state"
-              aria-label={`以 ${s.label} 为初始状态`}
+              aria-label={`以 ${s.label} 为初始状态，新建需求会进入这一状态`}
               checked={body.initial === s.key}
               onChange={() => onChange(setInitial(body, s.key))}
               className="size-4 accent-[var(--primary)]"
@@ -75,6 +75,8 @@ export function StatesTable({ body, onChange }: { body: WorkflowBody; onChange: 
       <Button variant="outline" size="sm" className="self-start" onClick={() => onChange(addState(body, { label: '新状态', category: 'started', group: states.at(-1)?.group ?? '' }))}>
         新增状态
       </Button>
+      <p className="text-xs text-muted-foreground">标为「初始」的状态是新建需求进入的状态。</p>
+      <p className="text-xs text-muted-foreground">修改状态名称只改变需求上显示的文字，不会把需求挪到别的状态。发布后才会生效。</p>
       <p className="text-xs text-muted-foreground">类别是固定的五种，用于跨产品统计；分组用于看板分泳道。</p>
     </div>
   );

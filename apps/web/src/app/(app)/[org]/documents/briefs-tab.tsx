@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { type BriefListFilter, briefFilterSummary, briefFilterToApiQuery, documentHref, gateLabel } from '@/features/documents/model';
-import { activePeople, pickerOptions } from '@/features/members/model';
+import { activePeople, pickerOptions, scrubLegacyDisplayName } from '@/features/members/model';
 import { formatDateTime } from '@/features/requirements/format';
 import { useBriefs } from '@/lib/queries';
 import type { BriefStatus, Member, Product } from '@/lib/types';
@@ -85,16 +85,16 @@ export function BriefsTab({
         )
       ) : (
         <div className="overflow-x-auto rounded-md border bg-card">
-          <Table className="min-w-[960px] table-fixed">
+          <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-28">编号</TableHead>
                 <TableHead className="min-w-[12rem]">标题</TableHead>
                 <TableHead className="w-32">状态</TableHead>
-                <TableHead className="w-24">关联需求</TableHead>
-                <TableHead className="w-40">检查</TableHead>
+                <TableHead className="hidden w-24 lg:table-cell">关联需求</TableHead>
+                <TableHead className="hidden w-40 lg:table-cell">检查</TableHead>
                 <TableHead className="w-24">确认人</TableHead>
-                <TableHead className="w-36">更新时间</TableHead>
+                <TableHead className="w-36 whitespace-normal">更新时间</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -105,7 +105,7 @@ export function BriefsTab({
                       {b.displayKey}
                     </Link>
                   </TableCell>
-                  <TableCell className="min-w-[12rem] truncate">
+                  <TableCell className="min-w-[12rem] whitespace-normal break-words">
                     <Link href={documentHref(org, b.displayKey)} className="hover:underline">
                       {b.title}
                     </Link>
@@ -113,12 +113,12 @@ export function BriefsTab({
                   <TableCell>
                     <DocumentStatusBadge status={b.status} />
                   </TableCell>
-                  <TableCell className="font-mono text-[13px]">{b.requirementCount}</TableCell>
-                  <TableCell className="whitespace-normal font-mono text-[13px]">{gateLabel(b.gate)}</TableCell>
-                  <TableCell className="truncate text-[13px]" title={b.decider?.displayName}>
-                    {b.decider?.displayName ?? '—'}
+                  <TableCell className="hidden font-mono text-[13px] lg:table-cell">{b.requirementCount}</TableCell>
+                  <TableCell className="hidden whitespace-normal font-mono text-[13px] lg:table-cell">{gateLabel(b.gate)}</TableCell>
+                  <TableCell className="whitespace-normal text-[13px]" title={b.decider ? scrubLegacyDisplayName(b.decider.displayName) : undefined}>
+                    {b.decider ? scrubLegacyDisplayName(b.decider.displayName) : '—'}
                   </TableCell>
-                  <TableCell className="font-mono text-[13px] text-muted-foreground">{formatDateTime(b.updatedAt)}</TableCell>
+                  <TableCell className="whitespace-normal font-mono text-[13px] text-muted-foreground">{formatDateTime(b.updatedAt)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

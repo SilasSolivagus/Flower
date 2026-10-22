@@ -66,7 +66,7 @@ export function CoveredRequirements({ org, doc, invalidate }: { org: string; doc
         >
           <div className="flex gap-2">
             <Input aria-label="需求编号" placeholder={`${doc.productKey}-12, ${doc.productKey}-15`} className="h-8" value={keys} onChange={(e) => setKeys(e.target.value)} />
-            <Button type="submit" size="sm" disabled={link.isPending || !keys.trim()}>
+            <Button type="submit" size="sm" variant={doc.kind === 'brief' ? 'outline' : 'default'} disabled={link.isPending || !keys.trim()}>
               关联
             </Button>
           </div>

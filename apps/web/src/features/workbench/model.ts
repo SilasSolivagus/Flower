@@ -29,6 +29,24 @@ export function confirmationHref(c: Workbench['confirmations']['items'][number])
   return `/${c.org.slug}/documents/${c.displayKey}`;
 }
 
+/** 工作台某一栏为 0 时，空状态链到当前组织里对应的列表。不新开 /tasks 或 /work-items 列表。 */
+export function emptySectionHref(orgSlug: string, section: 'owned' | 'following' | 'tasks' | 'signatures' | 'confirmations' | 'unread'): string {
+  switch (section) {
+    case 'owned':
+      return `/${orgSlug}/requirements`;
+    case 'following':
+      return `/${orgSlug}/tracking`;
+    case 'tasks':
+      return `/${orgSlug}/iterations`;
+    case 'signatures':
+      return `/${orgSlug}/reviews`;
+    case 'confirmations':
+      return `/${orgSlug}/documents?view=briefs`;
+    case 'unread':
+      return `/${orgSlug}/notifications`;
+  }
+}
+
 /** 未读评论：需求去需求详情，PRD 去 PRD 详情（打开即标为已读）。 */
 export function unreadHref(u: Workbench['unread']['items'][number]): string {
   return u.documentId ? `/${u.org.slug}/documents/${u.displayKey}` : requirementHref(u.org, u.displayKey);

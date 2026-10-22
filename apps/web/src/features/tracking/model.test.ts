@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TrackingItem, TrackingList } from '@/lib/types';
-import { agingRows, boardColumns, DEFAULT_FILTER, expectedDateView, filterFromParams, filterQuery, hasFilter, itemHref, ownerGroups, staleRows, targetOf, trackingHref } from './model';
+import { agingRows, boardColumns, DEFAULT_FILTER, expectedDateView, filterFromParams, filterQuery, hasFilter, itemHref, ownerGroups, staleRows, targetOf, trackingFilterSummary, trackingHref } from './model';
 
 const item = (over: Partial<TrackingItem>): TrackingItem => ({
   kind: 'requirement',
@@ -59,6 +59,12 @@ describe('地址栏解析', () => {
     expect(hasFilter(DEFAULT_FILTER)).toBe(false);
     expect(hasFilter({ ...DEFAULT_FILTER, tab: 'board' })).toBe(false);
     expect(hasFilter(f)).toBe(true);
+  });
+
+  it('空筛说明点明产品、负责人和开关', () => {
+    const names = { products: [{ id: 'p1', name: '网盘' }], owners: [{ id: 'm1', displayName: '林澄' }], typeOptions: [{ id: 't1', label: '缺陷' }] };
+    expect(trackingFilterSummary(DEFAULT_FILTER, names)).toBe('');
+    expect(trackingFilterSummary({ ...DEFAULT_FILTER, product: 'p1', owner: 'gone', paused: true }, names)).toBe('当前筛选：产品：网盘，负责人：已不在列表中的负责人，只看暂停');
   });
 
   it('条目链接与写进展的对象', () => {

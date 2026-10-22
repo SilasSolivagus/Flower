@@ -58,7 +58,17 @@ export default function TaskPage() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: '迭代', href: `/${org}/iterations` }, ...(t.iteration && gantt ? [{ label: t.iteration.name, href: gantt }] : []), { label: t.displayKey }]}
+        crumbs={[
+          ...(t.requirement
+            ? [
+                { label: '需求', href: `/${org}/requirements` },
+                { label: t.requirement.displayKey, href: `/${org}/requirements/${t.requirement.displayKey}` },
+              ]
+            : []),
+          { label: '迭代', href: `/${org}/iterations` },
+          ...(t.iteration && gantt ? [{ label: t.iteration.name, href: gantt }] : []),
+          { label: t.displayKey },
+        ]}
         title={
           <span className="flex min-w-0 items-baseline gap-2">
             <span className="shrink-0 font-mono text-muted-foreground">{t.displayKey}</span>

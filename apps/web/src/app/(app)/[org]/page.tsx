@@ -2,17 +2,18 @@
 
 import { DOCUMENT_STATUS_LABELS } from '@flower/core/markdown';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { type ReactNode, useId } from 'react';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
-import { confirmationHref, showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref } from '@/features/workbench/model';
+import { confirmationHref, emptySectionHref, showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref } from '@/features/workbench/model';
 import { useWorkbench } from '@/lib/queries';
 import type { Workbench } from '@/lib/types';
 
 const ROW = 'flex h-10 items-center gap-3 px-4 text-[13px] hover:bg-muted';
 
-function Section({ title, hint, total, shown, empty, children }: { title: string; hint?: string; total: number; shown: number; empty: string; children: ReactNode }) {
+function Section({ title, hint, total, shown, empty, emptyHref, children }: { title: string; hint?: string; total: number; shown: number; empty: string; emptyHref?: string; children: ReactNode }) {
   const id = useId();
   return (
     <section aria-labelledby={id} className="flex min-w-0 flex-col rounded-lg border bg-card">
@@ -23,7 +24,17 @@ function Section({ title, hint, total, shown, empty, children }: { title: string
         </span>
         <span className="font-mono text-xs font-normal text-muted-foreground">{total}</span>
       </h2>
-      {total === 0 ? <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">{empty}</p> : <ul className="divide-y">{children}</ul>}
+      {total === 0 ? (
+        emptyHref ? (
+          <Link href={emptyHref} className="px-4 py-6 text-center text-[13px] text-primary hover:underline">
+            {empty}
+          </Link>
+        ) : (
+          <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">{empty}</p>
+        )
+      ) : (
+        <ul className="divide-y">{children}</ul>
+      )}
       {total > shown && <p className="border-t px-4 py-2 text-xs text-muted-foreground">只显示前 {shown} 条</p>}
     </section>
   );
@@ -33,11 +44,11 @@ function OrgBadge({ show, name }: { show: boolean; name: string }) {
   return show ? <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{name}</span> : null;
 }
 
-function Sections({ data }: { data: Workbench }) {
+function Sections({ org, data }: { org: string; data: Workbench }) {
   const badge = showOrgBadge(data.orgs);
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-      <Section title="我负责的需求与工作项" total={data.owned.total} shown={data.owned.items.length} empty="没有进行中的需求与工作项">
+      <Section title="我负责的需求与工作项" total={data.owned.total} shown={data.owned.items.length} empty="没有进行中的需求与工作项" emptyHref={emptySectionHref(org, 'owned')}>
         {data.owned.items.map((r) => (
           <li key={r.id}>
             <Link href={subjectHref(r)} className={ROW}>
@@ -51,7 +62,7 @@ function Sections({ data }: { data: Workbench }) {
           </li>
         ))}
       </Section>
-      <Section title="等我跟进" total={data.following.total} shown={data.following.items.length} empty="没有等你跟进的条目">
+      <Section title="等我跟进" total={data.following.total} shown={data.following.items.length} empty="没有等你跟进的条目" emptyHref={emptySectionHref(org, 'following')}>
         {data.following.items.map((f) => (
           <li key={f.id}>
             <Link href={subjectHref(f)} className={ROW}>
@@ -63,7 +74,7 @@ function Sections({ data }: { data: Workbench }) {
           </li>
         ))}
       </Section>
-      <Section title="我的任务" total={data.tasks.total} shown={data.tasks.items.length} empty="没有未完成的任务">
+      <Section title="我的任务" total={data.tasks.total} shown={data.tasks.items.length} empty="没有未完成的任务" emptyHref={emptySectionHref(org, 'tasks')}>
         {data.tasks.items.map((t) => (
           <li key={t.id}>
             <Link href={taskHref(t)} className={ROW}>
@@ -78,7 +89,7 @@ function Sections({ data }: { data: Workbench }) {
           </li>
         ))}
       </Section>
-      <Section title="等我确认" hint="检查项" total={data.signatures.total} shown={data.signatures.items.length} empty="没有等你确认的检查项">
+      <Section title="等我确认" hint="检查项" total={data.signatures.total} shown={data.signatures.items.length} empty="没有等你确认的检查项" emptyHref={emptySectionHref(org, 'signatures')}>
         {data.signatures.items.map((s) => (
           <li key={`${s.requirementId ?? s.documentId}-${s.itemKey}-${s.ruleIndex}`}>
             <Link href={signatureHref(s)} className={ROW}>
@@ -91,7 +102,7 @@ function Sections({ data }: { data: Workbench }) {
           </li>
         ))}
       </Section>
-      <Section title="等我确认" hint="简报" total={data.confirmations.total} shown={data.confirmations.items.length} empty="暂无需要你确认的简报">
+      <Section title="等我确认" hint="简报" total={data.confirmations.total} shown={data.confirmations.items.length} empty="暂无需要你确认的简报" emptyHref={emptySectionHref(org, 'confirmations')}>
         {data.confirmations.items.map((c) => (
           <li key={c.documentId}>
             <Link href={confirmationHref(c)} className={ROW}>
@@ -103,7 +114,7 @@ function Sections({ data }: { data: Workbench }) {
           </li>
         ))}
       </Section>
-      <Section title="未读评论" total={data.unread.total} shown={data.unread.items.length} empty="没有未读评论">
+      <Section title="未读评论" total={data.unread.total} shown={data.unread.items.length} empty="没有未读评论" emptyHref={emptySectionHref(org, 'unread')}>
         {data.unread.items.map((u) => (
           <li key={u.requirementId ?? u.documentId}>
             <Link href={unreadHref(u)} className={ROW}>
@@ -120,9 +131,10 @@ function Sections({ data }: { data: Workbench }) {
 }
 
 export default function WorkbenchPage() {
+  const { org } = useParams<{ org: string }>();
   const q = useWorkbench();
   let body: ReactNode;
-  if (q.data) body = <Sections data={q.data} />;
+  if (q.data) body = <Sections org={org} data={q.data} />;
   else if (q.isError) body = <QueryError error={q.error} noAccessMessage="无法读取工作台。" retryMessage="加载工作台失败，请重试。" onRetry={() => q.refetch()} />;
   else body = <Skeleton className="h-64" />;
   return (

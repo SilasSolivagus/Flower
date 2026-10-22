@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Invitation, Member } from '@/lib/types';
-import { activePeople, canListMembers, filterMembers, filterPickerOptions, invitationState, memberKind, pickerOptions } from './model';
+import { activePeople, canListMembers, filterMembers, filterPickerOptions, invitationState, memberKind, pickerOptions, scrubLegacyDisplayName } from './model';
 
 const m = (over: Partial<Member>): Member => ({
   id: 'x', kind: 'human', displayName: '成员', email: null, department: null, orgRole: 'member', status: 'active', wecomUserid: null,
@@ -13,6 +13,13 @@ const all = [
   m({ id: '4', displayName: '沈知', hasAccount: false, orgRole: 'guest', status: 'left' }),
 ];
 const f = { query: '', kind: 'all' as const, role: 'all' as const, includeLeft: false };
+
+describe('旧称呼', () => {
+  it('只替换验收用的决策人（测试），不改普通姓名', () => {
+    expect(scrubLegacyDisplayName('决策人（测试）')).toBe('确认人（测试）');
+    expect(scrubLegacyDisplayName('决策人甲')).toBe('决策人甲');
+  });
+});
 
 describe('成员筛选', () => {
   it('区分账号、无账号、Agent', () => {

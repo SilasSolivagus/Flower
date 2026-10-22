@@ -121,7 +121,13 @@ function OrgDashboardPage() {
   }
   return (
     <>
-      <PageHeader title="看板" description="按产品对比关键数字；点击产品名称进入该产品的看板。箭头表示与上一个同长度时间段相比的升降。" />
+      <PageHeader
+        title="看板"
+        description="按产品对比关键数字，这里没有开关。点击产品名称进入该产品的看板。箭头表示与上一个同长度时间段相比的升降。"
+      />
+      <p className="text-[13px] leading-6 text-muted-foreground">
+        名称对照：每周平均完成几条（吞吐量（周均））、从创建到完成的天数（前置时间中位数）、从开始做到完成的天数（流动时间中位数）、正在做的需求有多少（当前在制品）、按期发布的比例（版本按期达成率）、评审被打回的比例（驳回率）。
+      </p>
       {body}
     </>
   );

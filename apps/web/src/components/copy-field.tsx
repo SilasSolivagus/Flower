@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-export function CopyField({ label, value }: { label: string; value: string }) {
+export function CopyField({ label, value, onCopied }: { label: string; value: string; onCopied?: () => void }) {
   const id = useId();
   const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>{label}</Label>
@@ -18,18 +19,42 @@ export function CopyField({ label, value }: { label: string; value: string }) {
           type="button"
           variant="outline"
           onClick={async () => {
+            const input = document.getElementById(id) as HTMLInputElement | null;
             try {
               await navigator.clipboard.writeText(value);
               setCopied(true);
+              setFailed(false);
+              onCopied?.();
+              return;
             } catch {
-              (document.getElementById(id) as HTMLInputElement | null)?.select();
+              input?.focus();
+              input?.select();
             }
+            let manual = false;
+            try {
+              manual = document.execCommand('copy');
+            } catch {
+              manual = false;
+            }
+            if (manual) {
+              setCopied(true);
+              setFailed(false);
+              onCopied?.();
+              return;
+            }
+            setCopied(false);
+            setFailed(true);
           }}
         >
           {copied ? <Check className="size-4" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
           {copied ? '已复制' : '复制'}
         </Button>
       </div>
+      {failed && (
+        <p role="alert" className="text-sm text-destructive">
+          复制失败，请手动选中文本复制。
+        </p>
+      )}
     </div>
   );
 }

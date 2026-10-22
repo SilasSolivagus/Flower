@@ -34,7 +34,7 @@ function ConvertDialog({ org, doc, saveEditor, open, onOpenChange }: Props & { o
       try {
         return await api<BriefConvertResult>(`/orgs/${org}/briefs/${doc.id}/convert`, { method: 'POST', body: { again } });
       } catch (e) {
-        // 别处已经转过：刷新后对话框改为提示已有 PRD，并提供「再生成一份新草稿」
+        // 别处已经转过：刷新后对话框改为提示已有 PRD，并提供「再生成一份草稿」
         if (e instanceof ApiError && e.status === 409) await qc.invalidateQueries({ queryKey: documentKeys(org) });
         throw e;
       }
@@ -53,7 +53,7 @@ function ConvertDialog({ org, doc, saveEditor, open, onOpenChange }: Props & { o
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>生成 PRD</DialogTitle>
+          <DialogTitle>{converted ? '再生成一份草稿' : '生成 PRD'}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-3 text-[13px]">
           <p>用简报内容生成一份 PRD 草稿，并挂上这份简报关联的需求。已挂在别的 PRD 上的会跳过。</p>
@@ -164,7 +164,7 @@ export function BriefActionsCard({ org, doc, saveEditor }: Props) {
     a.download = downloadName(doc.displayKey, doc.title);
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-  });
+  }, { success: '已开始下载' });
   return (
     <section className="rounded-md border bg-card p-4" aria-labelledby="brief-actions-title">
       <h2 id="brief-actions-title" className="mb-2 text-sm font-semibold">

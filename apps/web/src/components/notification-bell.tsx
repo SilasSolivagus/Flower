@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { actorLabel, BELL_TABS, type BellTab, groupByDay, notificationCopySegments, relativeTime, unreadBadge } from '@/features/member-notifications/model';
+import { actorLabel, BELL_TABS, type BellTab, groupByDay, notificationCopySegments, relativeTime, scrubLegacyRoleCopy, unreadBadge } from '@/features/member-notifications/model';
 import { api } from '@/lib/api';
 import { inboxKeys, useApiMutation, useNotifications, useUnreadCount } from '@/lib/queries';
 import type { MemberNotification } from '@/lib/types';
@@ -32,20 +32,22 @@ function NotificationCopy({ text }: { text: string }) {
 /** 一条通知：「谁 做了什么」、对象标题、相对时间；未读有圆点。时间放在标题行，避免和正文或背后列表叠在一起。铃铛面板与通知页共用。 */
 export function NotificationItem({ n, now, onOpen }: { n: MemberNotification; now: Date; onOpen: (n: MemberNotification) => void }) {
   const actor = actorLabel(n);
+  const body = scrubLegacyRoleCopy(n.body);
+  const title = scrubLegacyRoleCopy(n.title);
   return (
     <button
       type="button"
-      aria-label={`${actor} ${n.body}：${n.title}${n.readAt ? '' : '（未读）'}`}
+      aria-label={`${actor} ${body}：${title}${n.readAt ? '' : '（未读）'}`}
       onClick={() => onOpen(n)}
       className="flex w-full min-w-0 items-start gap-2 rounded-md px-2 py-2 text-left hover:bg-muted"
     >
       <span aria-hidden="true" className={cn('mt-1.5 size-2 shrink-0 rounded-full', n.readAt ? 'bg-transparent' : 'bg-primary')} />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="min-w-0 break-keep text-[13px] leading-5 [overflow-wrap:break-word]">
-          <span className="font-medium">{actor}</span> <NotificationCopy text={n.body} />
+          <span className="font-medium">{actor}</span> <NotificationCopy text={body} />
         </span>
         <span className="flex min-w-0 items-baseline justify-between gap-3">
-          <span className="min-w-0 truncate text-[12px] text-muted-foreground">{n.title}</span>
+          <span className="min-w-0 truncate text-[12px] text-muted-foreground">{title}</span>
           <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{relativeTime(n.createdAt, now)}</span>
         </span>
       </span>

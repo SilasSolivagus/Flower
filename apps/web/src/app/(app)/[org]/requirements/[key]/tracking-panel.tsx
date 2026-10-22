@@ -45,18 +45,22 @@ export function TrackingPanel({ org, requirement: r }: { org: string; requiremen
       )}
       <div className="mt-3 flex flex-col gap-1.5">
         <Label htmlFor="tracking-expected">预计上线日期</Label>
-        <Input
-          id="tracking-expected"
-          key={t.expectedDate ?? ''}
-          type="date"
-          className="h-8 w-44"
-          defaultValue={t.expectedDate ?? ''}
-          disabled={!canEdit || date.isPending}
-          onBlur={(e) => {
-            const v = e.target.value;
-            if (v !== (t.expectedDate ?? '')) date.mutate(v || null);
-          }}
-        />
+        {canEdit ? (
+          <Input
+            id="tracking-expected"
+            key={t.expectedDate ?? ''}
+            type="date"
+            className="h-8 w-44"
+            defaultValue={t.expectedDate ?? ''}
+            disabled={date.isPending}
+            onBlur={(e) => {
+              const v = e.target.value;
+              if (v !== (t.expectedDate ?? '')) date.mutate(v || null);
+            }}
+          />
+        ) : (
+          <p id="tracking-expected">{t.expectedDate ?? '未设置'}。只有编辑可以改预计上线日期。</p>
+        )}
       </div>
       {canEdit && (
         <div className="mt-3 flex flex-wrap gap-2">

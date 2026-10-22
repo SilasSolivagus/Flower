@@ -78,6 +78,7 @@ test('P0 验收：从初始化到签发 Agent Token 的完整路线', async ({ p
   await page.getByRole('radio', { name: '只读' }).click();
   await page.getByRole('button', { name: '签发' }).click();
   const token = await page.getByLabel('Token（只显示一次）').inputValue();
+  await page.getByRole('button', { name: '复制' }).click();
   await page.getByRole('button', { name: '我已保存' }).click();
 
   // 8. 配置清单全部完成
