@@ -13,7 +13,27 @@ import type { Workbench } from '@/lib/types';
 
 const ROW = 'flex h-10 items-center gap-3 px-4 text-[13px] hover:bg-muted';
 
-function Section({ title, hint, total, shown, empty, emptyHref, children }: { title: string; hint?: string; total: number; shown: number; empty: string; emptyHref?: string; children: ReactNode }) {
+function Section({
+  title,
+  hint,
+  total,
+  shown,
+  empty,
+  emptyHref,
+  moreHref,
+  moreLabel,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  total: number;
+  shown: number;
+  empty: string;
+  emptyHref?: string;
+  moreHref?: string;
+  moreLabel?: string;
+  children: ReactNode;
+}) {
   const id = useId();
   return (
     <section aria-labelledby={id} className="flex min-w-0 flex-col rounded-lg border bg-card">
@@ -22,7 +42,14 @@ function Section({ title, hint, total, shown, empty, emptyHref, children }: { ti
           {title}
           {hint ? <span className="text-xs font-normal text-muted-foreground">{hint}</span> : null}
         </span>
-        <span className="font-mono text-xs font-normal text-muted-foreground">{total}</span>
+        <span className="flex items-center gap-3">
+          {moreHref && moreLabel ? (
+            <Link href={moreHref} className="text-xs font-normal text-primary hover:underline">
+              {moreLabel}
+            </Link>
+          ) : null}
+          <span className="font-mono text-xs font-normal text-muted-foreground">{total}</span>
+        </span>
       </h2>
       {total === 0 ? (
         emptyHref ? (
@@ -74,7 +101,15 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
           </li>
         ))}
       </Section>
-      <Section title="我的任务" total={data.tasks.total} shown={data.tasks.items.length} empty="没有未完成的任务" emptyHref={emptySectionHref(org, 'tasks')}>
+      <Section
+        title="我的任务"
+        total={data.tasks.total}
+        shown={data.tasks.items.length}
+        empty="没有未完成的任务"
+        emptyHref={emptySectionHref(org, 'tasks')}
+        moreHref={`/${org}/tasks`}
+        moreLabel="查看全部"
+      >
         {data.tasks.items.map((t) => (
           <li key={t.id}>
             <Link href={taskHref(t)} className={ROW}>

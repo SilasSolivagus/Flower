@@ -32,6 +32,7 @@ import { type RequirementTracking, trackingView } from '../tracking/requirement-
 import { type ChangeDocumentHistoryItem, loadChangeDocuments } from './change-documents';
 import { buildCheckItemViews, type CheckItemView, requirementCheckStates } from './check-views';
 import { effectiveFields, memberNames, productWorkflowBody } from './context';
+import { type RequirementTagRef, requirementTagsTx } from './requirement-tags';
 import { displayKey, hydrateList, type MemberRef, type OptionRef, type RequirementListItem } from './requirements';
 import { availableTransitions, type TransitionOption, type UnmetCondition } from './workflow-runtime';
 
@@ -76,6 +77,8 @@ export type RequirementDetail = RequirementListItem & {
   aliases: string[];
   /** 跟进：加入时间、是否跟进中、预计上线日期、暂停（P3-C1）。 */
   tracking: RequirementTracking;
+  /** 需求标签。没有标签时为空数组。 */
+  tags: RequirementTagRef[];
 };
 
 async function resolveKey(tx: Tx, key: string): Promise<typeof requirements.$inferSelect> {
@@ -141,6 +144,7 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
       .where(eq(requirementReleases.requirementId, row.id));
     const taskRows = await tx.select().from(tasks).where(eq(tasks.requirementId, row.id)).orderBy(asc(tasks.planStart), asc(tasks.createdAt));
     const aliasRows = await tx.select({ alias: entityAliases.alias }).from(entityAliases).where(eq(entityAliases.entityId, row.id));
+    const tags = await requirementTagsTx(tx, row.id);
     const [docRow] = row.changeDocumentId ? await tx.select().from(documents).where(and(eq(documents.id, row.changeDocumentId), isNull(documents.deletedAt))) : [];
     const changeDocuments = await loadChangeDocuments(tx, row, product!.key);
     const [briefRow] = row.briefDocumentId
@@ -262,6 +266,7 @@ export async function getRequirementByKey(db: Db, actor: Actor, key: string): Pr
       })),
       aliases: aliasRows.map((a) => a.alias).sort(),
       tracking: trackingView(row, body.states.find((s) => s.key === row.stateKey)?.category ?? 'backlog'),
+      tags,
     };
   });
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { STARRED_LIMIT } from '@flower/core/schedule';
+import Link from 'next/link';
 import { useState } from 'react';
 import { FormError } from '@/components/form-error';
 import { QueryError } from '@/components/load-error';
@@ -12,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { heatRows } from '@/features/gantt/model';
 import { activePeople, canListMembers } from '@/features/members/model';
+import { TASK_STATUS_LABEL } from '@/lib/labels';
 import { api } from '@/lib/api';
 import { taskMutationKeys, useApiMutation, useIterationGantt, useMembers, useOrg, useProducts } from '@/lib/queries';
 import type { IterationGantt } from '@/lib/types';
@@ -143,7 +145,18 @@ export function GanttTab({ org, iterationId }: { org: string; iterationId: strin
       {g.tasks.length === 0 ? (
         <p className="py-8 text-center text-muted-foreground">还没有任务</p>
       ) : (
-        <div className="overflow-x-auto rounded-md border bg-card">
+        <>
+        <ul aria-label="任务" className="divide-y rounded-md border bg-card md:hidden">
+          {g.tasks.map((t) => (
+            <li key={t.id} className="flex items-center gap-3 px-3 py-2 text-[13px]">
+              <Link href={`/${org}/tasks/${t.displayKey}`} className="min-w-0 flex-1 truncate hover:underline">
+                {t.title}
+              </Link>
+              <span className="shrink-0">{TASK_STATUS_LABEL[t.status]}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden overflow-x-auto rounded-md border bg-card md:block">
           <Table className="min-w-[1472px] table-fixed">
             <TableHeader>
               <TableRow>
@@ -169,6 +182,7 @@ export function GanttTab({ org, iterationId }: { org: string; iterationId: strin
             </TableBody>
           </Table>
         </div>
+        </>
       )}
       <Timeline tasks={g.tasks} days={g.workdays} today={g.today} />
       <LoadHeatmap org={org} title="团队负载" days={g.workdays} {...heatRows(g.tasks, g.workdays)} today={g.today} />

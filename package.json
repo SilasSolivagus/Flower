@@ -9,6 +9,7 @@
     "test": "pnpm -r --workspace-concurrency=1 test",
     "typecheck": "pnpm -r typecheck",
     "dev": "pnpm --filter @flower/web dev",
-    "db:migrate": "pnpm --filter @flower/core db:migrate"
+    "db:migrate": "pnpm --filter @flower/core db:migrate",
+    "ux-seed:batch2": "pnpm --filter @flower/core exec esbuild ../../scripts/ux-seed-batch2.ts --bundle --platform=node --format=esm --target=node22 --outfile=../../.local-data/ux-seed-batch2.mjs --external:@node-rs/argon2 --external:satori --external:@resvg/resvg-js --banner:js=\"import{createRequire}from'module';const require=createRequire(import.meta.url);\" && node --disable-warning=ExperimentalWarning --env-file=apps/web/.env.local .local-data/ux-seed-batch2.mjs"
   }
 }

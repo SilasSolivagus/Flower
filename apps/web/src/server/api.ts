@@ -27,6 +27,7 @@ import { registerTaskRoutes } from './routes/tasks';
 import { registerTemplateRoutes } from './routes/templates';
 import { registerWecomCallbackRoute, registerWecomRoutes } from './routes/wecom';
 import { registerWorkbenchRoutes } from './routes/workbench';
+import { registerRequirementTagRoutes } from './routes/requirement-tags';
 import { registerTrackingRoutes } from './routes/tracking';
 
 /**
@@ -70,6 +71,7 @@ export function createApi(deps: ApiDeps): App {
   registerDashboardRoutes(app, deps);
   registerWorkbenchRoutes(app, deps);
   registerTrackingRoutes(app, deps);
+  registerRequirementTagRoutes(app, deps);
   registerDocumentRoutes(app, deps);
   registerBriefRoutes(app, deps);
   registerTemplateRoutes(app, deps);

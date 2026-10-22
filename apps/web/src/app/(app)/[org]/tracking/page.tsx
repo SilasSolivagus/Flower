@@ -1,6 +1,7 @@
 'use client';
 
 import { ListChecks } from 'lucide-react';
+import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { type ReactNode, Suspense, useState } from 'react';
 import { EmptyState } from '@/components/empty-state';
@@ -133,7 +134,14 @@ function TrackingPage() {
       <PageHeader
         title="跟进"
         description="跨产品查看在手的需求与工作项：本阶段停留、阻塞、最新进展与下一步。"
-        actions={orgQ.data && orgQ.data.me.orgRole !== 'guest' ? <Button onClick={() => setCreating(true)}>新建工作项</Button> : undefined}
+        actions={
+          <>
+            <Button variant="outline" asChild>
+              <Link href={`/${org}/work-items`}>只看工作项</Link>
+            </Button>
+            {orgQ.data && orgQ.data.me.orgRole !== 'guest' ? <Button onClick={() => setCreating(true)}>新建工作项</Button> : null}
+          </>
+        }
       />
       {body}
     </>

@@ -1,5 +1,6 @@
 import {
   AppError,
+  batchSetWorkItemStatus,
   createProgress,
   createWorkItem,
   createWorkItemBlocker,
@@ -8,6 +9,7 @@ import {
   getTracking,
   getTrackingSettings,
   getWorkItemByKey,
+  listWorkItems,
   joinTracking,
   leaveTracking,
   listProgress,
@@ -101,7 +103,38 @@ export function registerTrackingRoutes(app: App, deps: ApiDeps): void {
     return c.json({ progress: await createProgress(deps.db, c.get('actor'), { type: 'requirement', id }, body) }, 201);
   });
 
-  // 工作项
+  // 工作项列表必须写在 :key 前面，避免被编号路由吃掉。已完成、已取消没有时间窗。
+  app.get('/orgs/:org/work-items', async (c) => {
+    const q = z
+      .object({
+        product: uuid.optional(),
+        owner: uuid.optional(),
+        paused: flag,
+        blocked: flag,
+        done: flag,
+        canceled: flag,
+        limit: z.string().regex(/^\d{1,4}$/).optional(),
+      })
+      .safeParse(c.req.query());
+    if (!q.success) throw new AppError('invalid', '筛选参数无效');
+    const { product, owner, paused, blocked, done, canceled, limit } = q.data;
+    const items = await listWorkItems(deps.db, c.get('actor'), {
+      productId: product,
+      ownerId: owner,
+      paused: !!paused,
+      blocked: !!blocked,
+      includeDone: !!done,
+      includeCanceled: !!canceled,
+      ...(limit ? { limit: Number(limit) } : {}),
+    });
+    return c.json({ items });
+  });
+
+  app.post('/orgs/:org/work-items/batch-status', async (c) => {
+    const body = await readJson(c, z.object({ ids: z.array(uuid), status: z.enum(WORK_ITEM_STATUSES) }));
+    return c.json(await batchSetWorkItemStatus(deps.db, c.get('actor'), body.ids, body.status));
+  });
+
   app.post('/orgs/:org/work-items', async (c) => {
     const body = await readJson(c, z.object({ title: z.string().max(1000), ...workItemFields }));
     return c.json({ workItem: await createWorkItem(deps.db, c.get('actor'), body) }, 201);

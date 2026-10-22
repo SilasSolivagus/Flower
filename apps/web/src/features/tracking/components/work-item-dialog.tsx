@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { activePeople, canListMembers, pickerOptions } from '@/features/members/model';
 import { api } from '@/lib/api';
-import { qk, trackingKeys, useApiMutation, useFields, useMembers, useOrg } from '@/lib/queries';
+import { qk, trackingKeys, useApiMutation, useFields, useMembers, useOrg, workItemListKeys } from '@/lib/queries';
 import type { WorkItemDetail } from '@/lib/types';
 
 const NONE = '__none';
@@ -41,7 +41,7 @@ function WorkItemForm({ org, products, onDone }: { org: string; products: Array<
         },
       }),
     {
-      invalidate: [trackingKeys(org), qk.workbench],
+      invalidate: [trackingKeys(org), workItemListKeys(org), qk.workbench],
       silentError: true,
       onSuccess: (d) => {
         toast.success(`已创建 ${d.workItem.displayKey}`);

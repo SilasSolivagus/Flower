@@ -1,24 +1,37 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ExpectedDateText } from '@/features/tracking/components/expected-date';
 import { itemHref } from '@/features/tracking/model';
 import type { TrackingItem } from '@/lib/types';
 import { AgingDays, LatestProgress, StageLabel, WriteButton } from './item-bits';
+import { BatchStatusBar } from './batch-status';
 import { NarrowTrackingList } from './narrow-list';
 
 const dash = (v: string | null | undefined): string => v || '—';
 
 /** 全部在手：每条一行。表格在自己的容器里横向滚动，标题列固定在左侧。 */
 export function AllTable({ org, items, onWrite }: { org: string; items: TrackingItem[]; onWrite: (item: TrackingItem) => void }) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const picked = new Set(selected);
+  const selectable = items.filter((i) => i.kind === 'work_item');
+  const allOn = selectable.length > 0 && selectable.every((i) => picked.has(i.id));
+  const toggle = (id: string, on: boolean) => setSelected((cur) => (on ? [...new Set([...cur, id])] : cur.filter((x) => x !== id)));
+  const toggleAll = (on: boolean) => setSelected(on ? selectable.map((i) => i.id) : []);
   return (
     <>
-      <NarrowTrackingList org={org} label="全部在手" items={items} onWrite={onWrite} className="rounded-md border bg-card" />
+      <BatchStatusBar org={org} items={items} selected={selected} onClear={() => setSelected([])} />
+      <NarrowTrackingList org={org} label="全部在手" items={items} onWrite={onWrite} className="rounded-md border bg-card" selected={picked} onToggle={toggle} />
       <div className="hidden min-w-0 rounded-md border bg-card md:block">
       <Table aria-label="全部在手" className="text-[13px]">
         <TableHeader>
           <TableRow>
+            <TableHead className="w-10">
+              <Checkbox aria-label="全选工作项" checked={allOn} disabled={selectable.length === 0} onCheckedChange={(on) => toggleAll(on === true)} />
+            </TableHead>
             <TableHead className="min-w-20">编号</TableHead>
             <TableHead className="sticky left-0 z-10 min-w-56 bg-card">标题</TableHead>
             <TableHead>负责人</TableHead>
@@ -41,6 +54,15 @@ export function AllTable({ org, items, onWrite }: { org: string; items: Tracking
         <TableBody>
           {items.map((i) => (
             <TableRow key={i.id} className="group h-10 even:bg-zebra">
+              <TableCell>
+                <Checkbox
+                  aria-label={`选择 ${i.displayKey}`}
+                  checked={i.kind === 'work_item' && picked.has(i.id)}
+                  disabled={i.kind !== 'work_item'}
+                  title={i.kind === 'work_item' ? undefined : '需求请在详情改状态'}
+                  onCheckedChange={(on) => toggle(i.id, on === true)}
+                />
+              </TableCell>
               <TableCell className="font-mono text-xs text-muted-foreground">{i.displayKey}</TableCell>
               <TableCell className="sticky left-0 z-10 max-w-72 bg-card group-even:bg-zebra">
                 <Link href={itemHref(org, i)} className="block truncate hover:underline">

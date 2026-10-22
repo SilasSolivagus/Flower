@@ -438,6 +438,9 @@ export async function getDocument(db: Db, actor: Actor, id: string): Promise<Doc
   return withOrg(db, actor.orgId, (tx) => documentDetailInTx(tx, actor, id));
 }
 
+/** 通知点进已删除文档时用这一句，页面不要把它显示成「无权访问」。 */
+export const DELETED_DOCUMENT_MESSAGE = '这份文档已删除，通知里的链接已失效';
+
 export async function getDocumentByKey(db: Db, actor: Actor, key: string): Promise<DocumentDetail> {
   const prd = parseDocumentKey(key);
   const brief = prd ? null : parseBriefKey(key);
@@ -446,7 +449,7 @@ export async function getDocumentByKey(db: Db, actor: Actor, key: string): Promi
   if (!parsed) throw new AppError('not_found', missing);
   return withOrg(db, actor.orgId, async (tx) => {
     const [row] = await tx
-      .select({ d: documents })
+      .select({ d: documents, productDeletedAt: products.deletedAt })
       .from(documents)
       .innerJoin(products, eq(products.id, documents.productId))
       .where(
@@ -454,11 +457,13 @@ export async function getDocumentByKey(db: Db, actor: Actor, key: string): Promi
           eq(products.key, parsed.productKey),
           eq(documents.number, parsed.number),
           brief ? eq(documents.kind, 'brief') : ne(documents.kind, 'brief'),
-          isNull(documents.deletedAt),
-          isNull(products.deletedAt),
         ),
       );
-    if (!row) throw new AppError('not_found', missing);
+    if (!row || row.productDeletedAt) throw new AppError('not_found', missing);
+    if (row.d.deletedAt) {
+      const role = await productRoleOf(tx, actor, row.d.productId);
+      throw new AppError('not_found', role ? DELETED_DOCUMENT_MESSAGE : missing);
+    }
     return detailOf(tx, actor, row.d);
   });
 }
