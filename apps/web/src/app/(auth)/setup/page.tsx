@@ -2,8 +2,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { FormError } from '@/components/form-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +12,6 @@ import { ApiError, api } from '@/lib/api';
 import { qk, useApiMutation, useSetupStatus } from '@/lib/queries';
 
 export default function SetupPage() {
-  const router = useRouter();
   const qc = useQueryClient();
   const status = useSetupStatus();
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -33,9 +31,19 @@ export default function SetupPage() {
     },
   );
 
-  useEffect(() => {
-    if (status.data?.initialized && step !== 3) router.replace('/login');
-  }, [status.data, step, router]);
+  if (!status.data && !status.isError) return null;
+
+  if (status.data?.initialized && step !== 3) {
+    return (
+      <div className="flex flex-col gap-4">
+        <h1 className="text-xl font-semibold">已经初始化</h1>
+        <p className="text-muted-foreground">这个实例已经完成初始化，不能再次创建管理员。请使用已有账号登录。</p>
+        <Button asChild className="self-start">
+          <Link href="/login">去登录</Link>
+        </Button>
+      </div>
+    );
+  }
 
   if (step === 3) {
     return (

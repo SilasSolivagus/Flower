@@ -102,6 +102,7 @@ function AgentsPage() {
       </section>
       <section className="flex flex-col gap-3">
         <h2 className="font-semibold">Token</h2>
+        <p className="text-[13px] text-muted-foreground">列表里的前缀不是完整密钥，签发后不能再次查看。完整内容只在签发成功时出现一次，请当场复制。</p>
         {tokens.isError ? (
           <QueryError error={tokens.error} noAccessMessage={NO_PERMISSION_MESSAGE} retryMessage="加载 Token 失败，请重试。" onRetry={() => tokens.refetch()} />
         ) : !tokens.data ? (

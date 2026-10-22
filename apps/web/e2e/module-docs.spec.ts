@@ -105,7 +105,7 @@ test('模块文档详情：所属与合入记录；编辑自动保存；归档�
   await page.reload();
   await expect(page.getByRole('region', { name: '正文' })).toContainText('支持断点续传');
 
-  await page.getByRole('navigation', { name: '面包屑' }).getByRole('link', { name: '文档' }).click();
+  await page.getByRole('navigation', { name: '面包屑' }).getByRole('link', { name: '模块文档', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`view=modules&node=${upload}`));
   await expect(page.getByRole('row', { name: /^上传/ })).toHaveAttribute('aria-current', 'true');
 

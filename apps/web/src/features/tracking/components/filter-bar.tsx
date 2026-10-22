@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DEFAULT_FILTER, hasFilter, type TrackingFilter } from '@/features/tracking/model';
+import { DEFAULT_FILTER, hasFilter, type TrackingFilter, trackingFilterSummary } from '@/features/tracking/model';
 import type { TrackingList } from '@/lib/types';
 
 const ALL = '__all';
@@ -24,6 +24,7 @@ export function TrackingFilterBar({ list, filter, onChange }: { list: TrackingLi
     ['blocked', '只看有阻塞'],
     ['done', '含最近 30 天完成'],
   ];
+  const summary = trackingFilterSummary(filter, list);
 
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-md border bg-card px-3 py-2 text-[13px]">
@@ -80,6 +81,7 @@ export function TrackingFilterBar({ list, filter, onChange }: { list: TrackingLi
           清除筛选
         </Button>
       )}
+      {summary && <p className="w-full text-xs text-muted-foreground">{summary}</p>}
     </div>
   );
 }

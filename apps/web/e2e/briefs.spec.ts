@@ -168,10 +168,11 @@ test('从需求新建简报：头部信息、正文与闸口、转 PRD 与互链
 
   // 再生成：主按钮是打开当前 PRD；需求已在 PAN-PRD-1 上，结果里列出
   await actions.getByRole('button', { name: '再生成一份草稿' }).click();
-  await expect(conv).toContainText('已生成');
-  await expect(conv).toContainText('不会挂到新草稿');
-  await expect(conv.getByRole('link', { name: '打开当前 PRD' })).toBeVisible();
-  await conv.getByRole('button', { name: '再生成一份草稿' }).click();
+  const again = page.getByRole('dialog', { name: '再生成一份草稿' });
+  await expect(again).toContainText('已生成');
+  await expect(again).toContainText('不会挂到新草稿');
+  await expect(again.getByRole('link', { name: '打开当前 PRD' })).toBeVisible();
+  await again.getByRole('button', { name: '再生成一份草稿' }).click();
   await page.waitForURL('**/acme/documents/PAN-PRD-2');
   await expect(page.getByText('以下需求已挂在其他 PRD 上，未关联到新 PRD：PAN-1（PAN-PRD-1）')).toBeVisible();
 

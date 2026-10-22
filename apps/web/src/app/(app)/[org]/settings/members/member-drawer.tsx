@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { memberKind } from '@/features/members/model';
+import { memberKind, scrubLegacyDisplayName } from '@/features/members/model';
 import { ApiError, api } from '@/lib/api';
 import { ORG_ROLE_LABEL, PRODUCT_ROLE_LABEL } from '@/lib/labels';
 import { qk, useFunctionTags, useProducts } from '@/lib/queries';
@@ -46,7 +46,7 @@ export function MemberDrawer({
   const [synced, setSynced] = useState<Member | null>(null);
   if (member && member !== synced) {
     setSynced(member);
-    setForm({ displayName: member.displayName, department: member.department ?? '', orgRole: member.orgRole, status: member.status });
+    setForm({ displayName: scrubLegacyDisplayName(member.displayName), department: member.department ?? '', orgRole: member.orgRole, status: member.status });
     setTagIds(member.functionTagIds);
     setRoles(Object.fromEntries(member.productRoles.map((r) => [r.productId, r.role])));
     setError(null);
@@ -67,9 +67,15 @@ export function MemberDrawer({
     setSaving(true);
     setError(null);
     try {
+      const shownName = scrubLegacyDisplayName(member.displayName);
       await api(`/orgs/${org}/members/${member.id}`, {
         method: 'PATCH',
-        body: { displayName: form.displayName, department: form.department || null, orgRole: form.orgRole, status: form.status },
+        body: {
+          displayName: form.displayName === shownName ? member.displayName : form.displayName,
+          department: form.department || null,
+          orgRole: form.orgRole,
+          status: form.status,
+        },
       });
       await api(`/orgs/${org}/members/${member.id}/function-tags`, { method: 'PUT', body: { tagIds } });
       if (!isAdminRole && form.status === 'active') {
@@ -107,7 +113,7 @@ export function MemberDrawer({
     <Sheet open onOpenChange={onOpenChange}>
       <SheetContent className="flex w-[420px] flex-col gap-5 overflow-y-auto sm:max-w-[420px]" aria-describedby="member-drawer-desc">
         <SheetHeader>
-          <SheetTitle>{member.displayName}</SheetTitle>
+          <SheetTitle>{scrubLegacyDisplayName(member.displayName)}</SheetTitle>
           <SheetDescription id="member-drawer-desc">
             {kind === 'account' ? <span className="font-mono">{member.email}</span> : kind === 'agent' ? 'Agent 成员' : '无账号成员'}
           </SheetDescription>

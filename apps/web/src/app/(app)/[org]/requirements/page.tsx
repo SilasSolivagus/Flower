@@ -234,20 +234,20 @@ function RequirementsPage() {
       ) : !data.data ? (
         <LoadingBlock />
       ) : (
-      <div className="overflow-hidden rounded-md border bg-card">
+      <div className="overflow-x-auto rounded-md border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="w-28">编号</TableHead>
-              <TableHead>标题</TableHead>
+              <TableHead className="min-w-[14rem]">标题</TableHead>
               <TableHead className="w-24">状态</TableHead>
-              <TableHead className="w-20">优先级</TableHead>
-              <TableHead className="w-40">平台</TableHead>
-              <TableHead className="w-28">业务域</TableHead>
-              <TableHead className="w-20">负责人</TableHead>
-              <TableHead className="w-20">提出人</TableHead>
-              <TableHead className="w-28">迭代</TableHead>
-              <TableHead className="w-24">更新</TableHead>
+              <TableHead className="hidden w-20 md:table-cell">优先级</TableHead>
+              <TableHead className="hidden w-40 xl:table-cell">平台</TableHead>
+              <TableHead className="hidden w-28 xl:table-cell">业务域</TableHead>
+              <TableHead className="hidden w-20 md:table-cell">负责人</TableHead>
+              <TableHead className="hidden w-20 xl:table-cell">提出人</TableHead>
+              <TableHead className="hidden w-28 xl:table-cell">迭代</TableHead>
+              <TableHead className="hidden w-24 xl:table-cell">更新</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -259,25 +259,25 @@ function RequirementsPage() {
                     {r.displayKey}
                     {r.legacyKey && <div className="text-[11px] text-muted-foreground">{r.legacyKey}</div>}
                   </TableCell>
-                  <TableCell className="max-w-0">
-                    <Link href={`/${org}/requirements/${r.displayKey}`} className="block truncate hover:underline">
+                  <TableCell className="min-w-[14rem] whitespace-normal break-words">
+                    <Link href={`/${org}/requirements/${r.displayKey}`} className="hover:underline">
                       {r.title}
                     </Link>
                   </TableCell>
                   <TableCell>{s ? <StateBadge label={s.label} color={s.color} /> : r.stateKey}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     {r.priority && (
                       <Badge variant="outline" style={{ borderColor: r.priority.color ?? undefined, color: r.priority.color ?? undefined }}>
                         {r.priority.label}
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="truncate text-[13px] text-muted-foreground">{r.platforms.map((p) => p.label).join('、')}</TableCell>
-                  <TableCell className="truncate text-[13px]">{r.node?.name}</TableCell>
-                  <TableCell className="truncate text-[13px]">{r.owner?.displayName}</TableCell>
-                  <TableCell className="truncate text-[13px] text-muted-foreground">{r.requester?.displayName}</TableCell>
-                  <TableCell className="truncate text-[13px]">{r.iteration?.name}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{new Date(r.updatedAt).toLocaleDateString('zh-CN')}</TableCell>
+                  <TableCell className="hidden truncate text-[13px] text-muted-foreground xl:table-cell">{r.platforms.map((p) => p.label).join('、')}</TableCell>
+                  <TableCell className="hidden truncate text-[13px] xl:table-cell">{r.node?.name}</TableCell>
+                  <TableCell className="hidden truncate text-[13px] md:table-cell">{r.owner?.displayName}</TableCell>
+                  <TableCell className="hidden truncate text-[13px] text-muted-foreground xl:table-cell">{r.requester?.displayName}</TableCell>
+                  <TableCell className="hidden truncate text-[13px] xl:table-cell">{r.iteration?.name}</TableCell>
+                  <TableCell className="hidden font-mono text-xs text-muted-foreground xl:table-cell">{new Date(r.updatedAt).toLocaleDateString('zh-CN')}</TableCell>
                 </TableRow>
               );
             })}

@@ -250,6 +250,19 @@ export function findSectionIndex(headings: string[], section: string): number {
 const PENDING_HEADING = normalizeHeading('16. 待定问题');
 const CONFIRM_FALLBACK = '请确认问题、规则、指标与上线策略。';
 
+/** 单元格里如果已经带了列名（例如「建议 3 秒」），不再加一遍，避免「建议 建议 3 秒」。 */
+function labeled(label: string, value: string | undefined): string {
+  const v = value?.trim() ?? '';
+  if (!v) return '';
+  if (v === label || v.startsWith(`${label} `) || v.startsWith(`${label}：`) || v.startsWith(`${label}:`)) return v;
+  return `${label} ${v}`;
+}
+
+function labeledWho(value: string): string {
+  if (value.startsWith('待') && value.endsWith('定')) return value;
+  return `待 ${value} 定`;
+}
+
 function tableCells(line: string): string[] {
   return line
     .trim()
@@ -278,9 +291,9 @@ export function pendingQuestionLine(markdown: string): string {
   const first = rows[0];
   if (!first) return CONFIRM_FALLBACK;
   const bits = [
-    opt >= 0 && first[opt]?.trim() ? `选项 ${first[opt]!.trim()}` : '',
-    sug >= 0 && first[sug]?.trim() ? `建议 ${first[sug]!.trim()}` : '',
-    who >= 0 && first[who]?.trim() ? `待 ${first[who]!.trim()} 定` : '',
+    labeled('选项', opt >= 0 ? first[opt] : undefined),
+    labeled('建议', sug >= 0 ? first[sug] : undefined),
+    who >= 0 && first[who]?.trim() ? labeledWho(first[who]!.trim()) : '',
   ].filter(Boolean);
   const blocking = block >= 0 && first[block]?.trim() === '是' ? '仍阻塞写 PRD。' : '';
   const more = rows.length > 1 ? `还有 ${rows.length - 1} 个。` : '';

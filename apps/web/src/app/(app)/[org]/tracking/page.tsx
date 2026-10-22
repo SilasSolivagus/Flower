@@ -27,6 +27,7 @@ import {
   type TrackingFilter,
   type TrackingTab,
   targetOf,
+  trackingFilterSummary,
   trackingHref,
 } from '@/features/tracking/model';
 import { ApiError } from '@/lib/api';
@@ -61,7 +62,7 @@ function TrackingPage() {
         <EmptyState
           icon={ListChecks}
           title="筛选参数无效"
-          description="地址栏里的筛选条件格式不正确。"
+          description="地址栏里的筛选条件格式不正确。请清除后重新选择。"
           action={
             <Button variant="outline" onClick={() => go(DEFAULT_FILTER)}>
               清除筛选
@@ -76,9 +77,16 @@ function TrackingPage() {
     }
   } else {
     const data = q.data;
+    const summary = trackingFilterSummary(filter, data);
+    const readOnly = data.items.length > 0 && data.items.every((i) => !i.canWrite);
     body = (
       <>
         <TrackingFilterBar list={data} filter={filter} onChange={go} />
+        {readOnly && (
+          <p role="status" className="text-[13px] text-muted-foreground">
+            你对这些条目没有编辑权限，不能写进展。需要修改时请联系产品编辑。
+          </p>
+        )}
         <Tabs value={filter.tab} onValueChange={(v) => go({ ...filter, tab: v as TrackingTab })}>
           <TabsList>
             {TRACKING_TABS.map((t) => (
@@ -92,7 +100,7 @@ function TrackingPage() {
               <EmptyState
                 icon={ListChecks}
                 title={filtered ? '没有符合条件的条目' : '还没有在手的工作'}
-                description={filtered ? undefined : '需求进入设计阶段后会自动加入跟进；技术支持、协调对接等工作可以新建为工作项。'}
+                description={filtered ? summary || '当前筛选没有匹配的条目。' : '需求进入设计阶段后会自动加入跟进；技术支持、协调对接等工作可以新建为工作项。'}
                 action={
                   filtered ? (
                     <Button variant="outline" onClick={() => go({ ...DEFAULT_FILTER, tab: filter.tab })}>

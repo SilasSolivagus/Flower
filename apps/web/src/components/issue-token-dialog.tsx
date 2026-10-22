@@ -37,6 +37,8 @@ export function IssueTokenDialog({
   const [access, setAccess] = useState<TokenScope['access']>('read');
   const [expiry, setExpiry] = useState<Expiry>('90d');
   const [token, setToken] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [manual, setManual] = useState(false);
   const m = useApiMutation(
     () =>
       api<{ token: string }>(`/orgs/${org}/tokens`, {
@@ -48,6 +50,8 @@ export function IssueTokenDialog({
   function close(v: boolean) {
     if (!v) {
       setToken(null);
+      setCopied(false);
+      setManual(false);
       setName('');
       setPicked([]);
       m.reset();
@@ -72,10 +76,16 @@ export function IssueTokenDialog({
         </DialogHeader>
         {token ? (
           <>
-            <CopyField label="Token（只显示一次）" value={token} />
-            <p className="text-[13px] text-muted-foreground">关闭后无法再次查看。请立即保存好这个 Token。</p>
+            <CopyField label="Token（只显示一次）" value={token} onCopied={() => setCopied(true)} />
+            <p className="text-[13px] text-muted-foreground">列表里只保留前缀，不是完整密钥。关闭后无法再次查看，请先复制并保存。</p>
+            <label className="flex items-center gap-2 text-[13px]">
+              <Checkbox checked={manual} onCheckedChange={(v) => setManual(v === true)} />
+              复制失败时，我已手动复制并保存这份密钥
+            </label>
             <DialogFooter>
-              <Button onClick={() => close(false)}>我已保存</Button>
+              <Button disabled={!copied && !manual} onClick={() => close(false)}>
+                我已保存
+              </Button>
             </DialogFooter>
           </>
         ) : (

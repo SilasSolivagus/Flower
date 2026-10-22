@@ -23,6 +23,8 @@ test('创建 Agent，签发只读 Token；Token 只能读指定产品，撤销�
   await page.getByRole('button', { name: '签发' }).click();
   const token = await page.getByLabel('Token（只显示一次）').inputValue();
   expect(token).toMatch(/^flw_/);
+  await expect(page.getByRole('button', { name: '我已保存' })).toBeDisabled();
+  await page.getByRole('button', { name: '复制' }).click();
   await page.getByRole('button', { name: '我已保存' }).click();
   await expect(page.getByRole('row', { name: /Claude Code/ }).getByText('PAN · 只读')).toBeVisible();
 

@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { filterMembers, invitationState, type MemberFilter, memberKind } from '@/features/members/model';
+import { filterMembers, invitationState, type MemberFilter, memberKind, scrubLegacyDisplayName } from '@/features/members/model';
 import { MEMBER_KIND_LABEL, ORG_ROLE_LABEL } from '@/lib/labels';
 import { useFunctionTags, useInvitations, useMembers, useOrg } from '@/lib/queries';
 import type { Member } from '@/lib/types';
@@ -133,11 +133,12 @@ function MembersPage() {
                 <TableBody>
                   {rows.map((m) => {
                     const kind = memberKind(m);
+                    const name = scrubLegacyDisplayName(m.displayName);
                     return (
                       <TableRow key={m.id} className="group h-10 even:bg-zebra">
                         <TableCell className="max-w-48">
                           <div className="flex min-w-0 flex-col">
-                            <span className="truncate font-medium">{m.displayName}</span>
+                            <span className="truncate font-medium">{name}</span>
                             <span className="truncate font-mono text-xs text-muted-foreground">
                               {m.email ?? (m.department ? `${m.department} · 未关联账号` : kind === 'agent' ? 'API 调用身份' : '—')}
                             </span>
@@ -166,7 +167,7 @@ function MembersPage() {
                           <div className="flex items-center gap-1">
                             <span className={m.wecomUserid ? 'font-mono text-[13px]' : 'text-muted-foreground'}>{m.wecomUserid ?? '—'}</span>
                             {m.kind === 'human' && (
-                              <Button variant="ghost" size="sm" className="h-7 px-2" aria-label={`修改${m.displayName}的企业微信账号`} onClick={() => setWecomFor(m)}>
+                              <Button variant="ghost" size="sm" className="h-7 px-2" aria-label={`修改${name}的企业微信账号`} onClick={() => setWecomFor(m)}>
                                 修改
                               </Button>
                             )}
@@ -176,7 +177,7 @@ function MembersPage() {
                           {m.status === 'left' ? '已离开' : '在职'}
                         </TableCell>
                         <TableCell className="sticky right-0 z-10 bg-card text-right group-even:bg-zebra">
-                          <Button variant="ghost" size="sm" aria-label={`查看${m.displayName}`} onClick={() => setSelected(m)}>
+                          <Button variant="ghost" size="sm" aria-label={`查看${name}`} onClick={() => setSelected(m)}>
                             详情
                           </Button>
                         </TableCell>

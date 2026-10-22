@@ -46,6 +46,21 @@ export function trackingHref(org: string, f: TrackingFilter): string {
 /** 是否有筛选（页签不算）。 */
 export const hasFilter = (f: TrackingFilter): boolean => !!(f.product || f.owner || f.type || f.paused || f.blocked || f.done);
 
+/** 空筛时点明当前条件。候选里找不到的 id 用占位名，方便和筛选条对上。 */
+export function trackingFilterSummary(
+  f: TrackingFilter,
+  list: { products: Array<{ id: string; name: string }>; owners: Array<{ id: string; displayName: string }>; typeOptions: Array<{ id: string; label: string }> },
+): string {
+  const bits: string[] = [];
+  if (f.product) bits.push(`产品：${list.products.find((p) => p.id === f.product)?.name ?? '看不到的产品'}`);
+  if (f.owner) bits.push(`负责人：${list.owners.find((o) => o.id === f.owner)?.displayName ?? '已不在列表中的负责人'}`);
+  if (f.type) bits.push(`类型：${list.typeOptions.find((t) => t.id === f.type)?.label ?? '已不存在的类型'}`);
+  if (f.paused) bits.push('只看暂停');
+  if (f.blocked) bits.push('只看有阻塞');
+  if (f.done) bits.push('含最近 30 天完成');
+  return bits.length === 0 ? '' : `当前筛选：${bits.join('，')}`;
+}
+
 export const itemHref = (org: string, i: Pick<TrackingItem, 'kind' | 'displayKey'>): string =>
   `/${org}/${i.kind === 'requirement' ? 'requirements' : 'work-items'}/${i.displayKey}`;
 

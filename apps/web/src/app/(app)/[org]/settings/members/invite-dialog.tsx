@@ -49,7 +49,7 @@ export function InviteDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{bindTo ? `邀请 ${bindTo.displayName} 关联账号` : '邀请成员'}</DialogTitle>
-          <DialogDescription>邀请链接 7 天内有效。系统暂不发送邮件，请把链接发给对方。</DialogDescription>
+          <DialogDescription>邀请链接 7 天内有效。系统暂不发送邮件，请把链接发给对方。只有组织管理员和所有者可以邀请成员。</DialogDescription>
         </DialogHeader>
         {link ? (
           <>

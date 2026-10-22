@@ -81,10 +81,30 @@ function DocumentPage() {
   return (
     <>
       <PageHeader
-        crumbs={[{ label: '文档', href: d.kind === 'module' ? moduleDocsHref(org, d.productKey, d.node?.id) : d.kind === 'brief' ? briefsHref(org, d.productKey) : `/${org}/documents?product=${d.productKey}` }, { label: d.displayKey }]}
+        crumbs={[
+          { label: '文档', href: `/${org}/documents` },
+          {
+            label: d.kind === 'brief' ? '简报' : d.kind === 'module' ? '模块文档' : '变更 PRD',
+            href: d.kind === 'module' ? moduleDocsHref(org, d.productKey, d.node?.id) : d.kind === 'brief' ? briefsHref(org, d.productKey) : `/${org}/documents?product=${d.productKey}`,
+          },
+          { label: d.displayKey },
+        ]}
         title={<EditableTitle displayKey={d.displayKey} title={d.title} canEdit={canEdit} onSubmit={(title, close) => patch.mutate({ title }, { onSuccess: close })} />}
         actions={<FollowButton org={org} type="document" id={d.id} />}
       />
+      {d.requirements.length > 0 && (
+        <p className="text-[13px] text-muted-foreground">
+          关联需求：
+          {d.requirements.map((r, i) => (
+            <span key={r.id}>
+              {i > 0 ? '、' : ' '}
+              <Link href={`/${org}/requirements/${r.displayKey}`} className="font-mono hover:underline">
+                {r.displayKey}
+              </Link>
+            </span>
+          ))}
+        </p>
+      )}
       {d.kind === 'brief' && <BriefTaskBanner org={org} doc={d} />}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex min-w-0 flex-col gap-4">

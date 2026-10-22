@@ -1,4 +1,5 @@
 import { MEMBER_NOTIFICATION_KINDS, type MemberNotificationKind, type NotificationPrefChannel } from '@flower/core/notifications';
+import { scrubLegacyDisplayName } from '@/features/members/model';
 import type { MemberNotification, NotificationSettings } from '@/lib/types';
 
 export const BELL_TABS = [
@@ -38,8 +39,14 @@ export function relativeTime(iso: string, now: Date, timeZone?: string): string 
   return dayOf(new Date(iso), timeZone).slice(5);
 }
 
+/** 旧通知正文里的角色称呼。已经发出的通知不回写数据库，只在展示时换成确认人。 */
+export function scrubLegacyRoleCopy(text: string): string {
+  return text.replaceAll('简报决策人', '简报确认人').replaceAll('设为决策人', '设为确认人');
+}
+
 /** 「谁」：操作人的当前姓名；系统告警为「系统」。 */
-export const actorLabel = (n: Pick<MemberNotification, 'actor' | 'kind'>): string => n.actor?.displayName ?? (n.kind === 'system_alert' ? '系统' : '有人');
+export const actorLabel = (n: Pick<MemberNotification, 'actor' | 'kind'>): string =>
+  n.actor ? scrubLegacyDisplayName(n.actor.displayName) : n.kind === 'system_alert' ? '系统' : '有人';
 
 /** 要你做的事：被 @、被指派、等你签字。关注动态和系统告警是流水。 */
 const ACTION_KINDS = new Set<MemberNotificationKind>(['mentioned', 'assigned', 'signoff_due']);

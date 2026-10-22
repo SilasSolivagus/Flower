@@ -80,6 +80,8 @@ function PersonalSettings() {
   const me = useMe();
   const { theme, setTheme } = useTheme();
   const [name, setName] = useState('');
+  const [profileSaved, setProfileSaved] = useState(false);
+  const [themeSaved, setThemeSaved] = useState(false);
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
   const [pwError, setPwError] = useState<string | null>(null);
   const [org, setOrg] = useState<string>('');
@@ -96,7 +98,10 @@ function PersonalSettings() {
   }
   const profile = useApiMutation((body: { name?: string; preferences?: { theme: 'light' | 'dark' | 'system' } }) => api('/me', { method: 'PATCH', body }), {
     invalidate: [qk.me],
-    success: '已保存',
+    onSuccess: (_data, vars) => {
+      if (vars.name !== undefined) setProfileSaved(true);
+      if (vars.preferences) setThemeSaved(true);
+    },
   });
   const password = useApiMutation(() => api('/me/password', { method: 'POST', body: { currentPassword: pw.current, newPassword: pw.next } }), {
     silentError: true,
@@ -107,6 +112,7 @@ function PersonalSettings() {
   return (
     <PlainShell>
       <h1 className="text-xl font-semibold">个人设置</h1>
+      <p className="text-[13px] text-muted-foreground">外观、姓名和通知偏好在这个个人设置页。组织设置里没有这些开关。</p>
       <section className="flex flex-col gap-4 rounded-lg border bg-card p-4">
         <h2 className="font-semibold">资料</h2>
         <div className="flex max-w-md flex-col gap-1.5">
@@ -117,9 +123,16 @@ function PersonalSettings() {
           <Label>邮箱</Label>
           <Input value={me.data.account.email} readOnly className="font-mono" />
         </div>
-        <Button className="self-start" onClick={() => profile.mutate({ name })} disabled={profile.isPending}>
-          保存资料
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button className="self-start" onClick={() => profile.mutate({ name })} disabled={profile.isPending}>
+            保存资料
+          </Button>
+          {profileSaved && (
+            <p role="status" className="text-sm text-muted-foreground">
+              资料已保存
+            </p>
+          )}
+        </div>
       </section>
       <section className="flex flex-col gap-3 rounded-lg border bg-card p-4">
         <h2 className="font-semibold">主题</h2>
@@ -139,6 +152,11 @@ function PersonalSettings() {
             <SelectItem value="system">跟随系统</SelectItem>
           </SelectContent>
         </Select>
+        {themeSaved && (
+          <p role="status" className="text-sm text-muted-foreground">
+            主题已保存，已写入个人设置。
+          </p>
+        )}
       </section>
       <form
         className="flex flex-col gap-4 rounded-lg border bg-card p-4"

@@ -44,9 +44,25 @@ export default function InvitePage() {
           以 {me.data.account.name} 的身份加入
         </Button>
       ) : (
-        <p className="text-muted-foreground">
-          这个邀请发给了 <span className="font-mono">{p.email}</span>，而你当前登录的是 <span className="font-mono">{me.data.account.email}</span>。请退出后用受邀邮箱登录。
-        </p>
+        <div className="flex flex-col gap-3">
+          <p className="text-muted-foreground">
+            这个邀请发给了 <span className="font-mono">{p.email}</span>，而你当前登录的是 <span className="font-mono">{me.data.account.email}</span>。请退出后用受邀邮箱登录。
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="self-start"
+            onClick={() => {
+              void (async () => {
+                await api('/auth/logout', { method: 'POST' });
+                qc.clear();
+                router.replace('/login');
+              })();
+            }}
+          >
+            退出登录
+          </Button>
+        </div>
       );
   } else if (p && p.accountExists) {
     body = (

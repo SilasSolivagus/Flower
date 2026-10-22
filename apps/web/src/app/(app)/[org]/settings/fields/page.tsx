@@ -28,7 +28,7 @@ function FieldsPage() {
       <PageHeader
         crumbs={[{ label: '组织设置' }, { label: '字段字典' }]}
         title="字段字典"
-        description="字典实时生效。产品可以覆盖某个字段，之后独立维护自己的选项。"
+        description="字典实时生效。产品可以覆盖某个字段，之后独立维护自己的选项。字段是预置的，这里不能新建字段。单选表示一条需求只能选一个选项，多选可以选多个。"
         actions={
           <Select value={scope} onValueChange={setScope}>
             <SelectTrigger className="w-48" aria-label="查看范围">

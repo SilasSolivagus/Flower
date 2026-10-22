@@ -69,10 +69,12 @@ export function ProgressList({ org, target, canWrite }: { org: string; target: P
         <h2 id="progress-title" className="text-sm font-semibold">
           进展记录 <span className="font-mono text-xs text-muted-foreground">{entries.length}</span>
         </h2>
-        {canWrite && (
+        {canWrite ? (
           <Button size="sm" variant="outline" onClick={() => setWriting(true)}>
             写进展
           </Button>
+        ) : (
+          <p className="text-[12px] text-muted-foreground">只有编辑可以写进展</p>
         )}
       </div>
       {q.isError ? (
