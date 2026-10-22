@@ -3,6 +3,9 @@ node_modules/
 dist/
 .env
 .env.local
+.env.migrate
+.env.prdsrc
+.import/
 *.tsbuildinfo
 test-results/
 playwright-report/

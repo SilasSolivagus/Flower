@@ -190,7 +190,8 @@ P2-A 验证中记下的留观项（非阻塞）：编辑器保存后 `setQueryDa
 ## 暂缓项（已排进计划或待定）
 
 - 已在 P0-B 计划中：成员离开时清理产品角色并吊销 Token、登录限流、过期会话清理、修改密码放进同一事务。
-- 仍待定：生产环境是否强制 `FLOWER_PUBLIC_URL`；实例级操作的审计记录（`domain_events.org_id` 不能为空）；迁移改为一次性 compose 服务；邀请绑定占位成员时，接受者已有"离开"记录的处理方式。
+- 仍待定：生产环境是否强制 `FLOWER_PUBLIC_URL`；实例级操作的审计记录（`domain_events.org_id` 不能为空）；邀请绑定占位成员时，接受者已有"离开"记录的处理方式。
+- 已定（F2）：数据库结构迁移改为一次性 compose 服务 `schema`（镜像与应用相同），应用容器不再带 admin 连接串；导入用 `migrate` 与临时库 `prd-src`。见 `docs/release-runbook.md`。
 
 ## 注意事项
 
