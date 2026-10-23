@@ -4,19 +4,21 @@ import { expect, type APIRequestContext, type APIResponse, type Locator, type Pa
 import { resetDatabase } from './db';
 import { applyReviewWorkflow, createBrief, createIteration, createMember, createProduct, createRequirement, json, login, ok, OWNER, setupInstance } from './helpers';
 
-/** 设 WB_SHOT=1 时把截图写到 docs/dux-e/：满负荷 1280、1440、1536、1920，以及部分有数据 1280。 */
+/** 设 WB_SHOT=1 时把截图写到 docs/dux-e/：满负荷 1280、1440、1536、1920、1920 多组织，以及部分有数据 1280。 */
 const SHOT_DIR = path.resolve(__dirname, '../../../docs/dux-e');
 const LONG_ITERATION = '迭代0105名字很长用来确认进度百分比还在';
+const LONG_ORG = '华东区域联合交付与质量保障中心';
 const REGIONS = ['我负责的需求', '等我跟进', '我的任务', '等我确认 检查项', '等我确认 简报', '未读评论'] as const;
 /** 宽度阈值留 0.5px，避免亚像素把刚好达标的量测打成失败。 */
 const SLACK = 0.5;
 const TITLE_CHARS = 8;
-const TITLE_WIDTH = 104;
 const ITERATION_WIDTH = 32;
 
 type TaskRowMetric = {
   title: string;
   titleChars: number;
+  titleLetters: number;
+  titleShown: string;
   titleWidth: number;
   iterationWidth: number;
   planWidth: number;
@@ -29,8 +31,8 @@ type Bot = { post: (url: string, opts: { data: unknown }) => Promise<APIResponse
 
 /**
  * 可见宽是元素边框盒与卡片可视区、裁切父级的交集。
- * 标题自带 min-w 只能撑起自己的布局盒，盒子伸出卡片或被父级裁掉的部分不算。
- * 可见字符只计字形大半落在这个交集里的字，ellipsis 不计入。
+ * 标题字数不含空格；省略号盖住的字形、以及大半落在裁切区外的字形都不算。
+ * 可见宽不能靠标题自己的 min-w 单独过关。
  */
 async function taskRowMetrics(region: Locator): Promise<TaskRowMetric[]> {
   return region.locator('ul > li > a').evaluateAll((rows) => {
@@ -64,30 +66,46 @@ async function taskRowMetrics(region: Locator): Promise<TaskRowMetric[]> {
       }
       return { left, right, width: Math.max(0, right - left), full: rect.width };
     };
-    const visibleChars = (el: Element, left: number, right: number) => {
+    const isLetter = (ch: string) => !/\s/u.test(ch);
+    const lettersOf = (value: string) => Array.from(value).filter(isLetter).join('');
+    const visibleLetters = (el: Element, left: number, right: number) => {
+      const style = getComputedStyle(el);
+      let limit = right;
+      if (style.textOverflow.includes('ellipsis') && el.scrollWidth > el.clientWidth + 0.5) {
+        const canvas = document.createElement('canvas').getContext('2d');
+        if (canvas) {
+          canvas.font = style.font;
+          const ellipsis = canvas.measureText('…').width;
+          const pad = Number.parseFloat(style.paddingRight) || 0;
+          const border = Number.parseFloat(style.borderRightWidth) || 0;
+          limit = Math.min(limit, el.getBoundingClientRect().right - border - pad - ellipsis);
+        }
+      }
       const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
       const range = document.createRange();
-      let count = 0;
+      let shown = '';
       for (let text = walker.nextNode(); text; text = walker.nextNode()) {
         const value = text.textContent ?? '';
         for (let i = 0; i < value.length; i++) {
+          const ch = value[i] ?? '';
+          if (!isLetter(ch)) continue;
           range.setStart(text, i);
           range.setEnd(text, i + 1);
           for (const glyph of range.getClientRects()) {
             if (glyph.width <= 0 || glyph.height <= 0) continue;
-            const overlap = Math.min(glyph.right, right) - Math.max(glyph.left, left);
+            const overlap = Math.min(glyph.right, limit) - Math.max(glyph.left, left);
             if (overlap >= glyph.width / 2) {
-              count += 1;
+              shown += ch;
               break;
             }
           }
         }
       }
-      return count;
+      return shown;
     };
     return rows.map((row) => {
       const title = row.querySelector('span.flex-1');
-      const iteration = row.querySelector('span[title]');
+      const iteration = row.querySelector('span.max-w-24');
       const spans = [...row.querySelectorAll('span')];
       const plan = spans.find((span) => span.textContent === '未排期' || /^\d{4}-\d{2}-\d{2}$/.test(span.textContent ?? ''));
       const progress = spans.find((span) => /^\d+%$/.test(span.textContent ?? ''));
@@ -96,9 +114,13 @@ async function taskRowMetrics(region: Locator): Promise<TaskRowMetric[]> {
       const iterationBox = visibleSpan(iteration);
       const planBox = visibleSpan(plan);
       const progressBox = visibleSpan(progress);
+      const titleText = title.textContent ?? '';
+      const titleShown = visibleLetters(title, titleBox.left, titleBox.right);
       return {
-        title: title.textContent ?? '',
-        titleChars: visibleChars(title, titleBox.left, titleBox.right),
+        title: titleText,
+        titleChars: Array.from(titleShown).length,
+        titleLetters: lettersOf(titleText).length,
+        titleShown,
         titleWidth: titleBox.width,
         iterationWidth: iterationBox.width,
         planWidth: planBox.width,
@@ -113,8 +135,8 @@ async function taskRowMetrics(region: Locator): Promise<TaskRowMetric[]> {
 function expectTaskRowsReadable(rows: TaskRowMetric[]) {
   expect(rows.length).toBeGreaterThan(0);
   for (const row of rows) {
-    const readable = row.titleChars >= TITLE_CHARS || row.titleWidth >= TITLE_WIDTH - SLACK;
-    expect(readable, `${row.title} 可见字符 ${row.titleChars}，可见宽 ${row.titleWidth.toFixed(1)}px`).toBe(true);
+    const need = Math.min(TITLE_CHARS, row.titleLetters);
+    expect(row.titleChars, `${row.title} 可见字 ${row.titleChars}（${row.titleShown}），全文非空格 ${row.titleLetters}，可见宽 ${row.titleWidth.toFixed(1)}px`).toBeGreaterThanOrEqual(need);
     expect(row.iterationWidth, `${row.title} 迭代名`).toBeGreaterThanOrEqual(ITERATION_WIDTH - SLACK);
     expect(row.planWidth, `${row.title} 计划日`).toBeGreaterThanOrEqual(row.planFull - SLACK);
     expect(row.progressWidth, `${row.title} 进度`).toBeGreaterThanOrEqual(row.progressFull - SLACK);
@@ -122,13 +144,13 @@ function expectTaskRowsReadable(rows: TaskRowMetric[]) {
 }
 
 function noteMetrics(label: string, cardWidth: number, rows: TaskRowMetric[]) {
-  test.info().annotations.push({
-    type: label,
-    description: JSON.stringify({
+  const description = JSON.stringify({
       card: Math.round(cardWidth),
       rows: rows.map((row) => ({
         title: row.title,
         chars: row.titleChars,
+        letters: row.titleLetters,
+        shown: row.titleShown,
         titleWidth: Number(row.titleWidth.toFixed(1)),
         iterationWidth: Number(row.iterationWidth.toFixed(1)),
         planWidth: Number(row.planWidth.toFixed(1)),
@@ -136,8 +158,8 @@ function noteMetrics(label: string, cardWidth: number, rows: TaskRowMetric[]) {
         progressWidth: Number(row.progressWidth.toFixed(1)),
         progressFull: Number(row.progressFull.toFixed(1)),
       })),
-    }),
   });
+  test.info().annotations.push({ type: label, description });
 }
 
 async function columnTops(page: Page) {
@@ -209,7 +231,7 @@ test.beforeEach(async ({ request }) => {
   await setupInstance(request);
 });
 
-test('1280 与 1536 两列，任务标题可见字符不少于 8 或可见宽不少于 104px', async ({ page, request, playwright }) => {
+test('1280 与 1536 两列，任务标题可见字不少于全文与 8 的较小值', async ({ page, request, playwright }) => {
   await seedFullWorkbench(request, playwright);
   await login(page, OWNER.email, OWNER.password);
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -274,6 +296,7 @@ test('1280 与 1536 两列，任务标题可见字符不少于 8 或可见宽不
   const at1920 = await columnTops(page);
   expectColumns(at1920, 3);
   const rows1920 = await taskRowMetrics(tasks);
+  expectTaskRowsReadable(rows1920);
   noteMetrics('TITLE_1920', at1920.tasks.width, rows1920);
   await shot(page, 'workbench-full-1920.png');
 
@@ -314,11 +337,43 @@ test('多组织徽标下，1536 与 1920 的任务进度不被裁切', async ({ 
   const at1920 = await columnTops(page);
   expectColumns(at1920, 3);
   const rows1920 = await taskRowMetrics(tasks);
-  for (const row of rows1920) {
-    expect(row.progressWidth, `${row.title} 进度`).toBeGreaterThanOrEqual(row.progressFull - SLACK);
-    expect(row.planWidth, `${row.title} 计划日`).toBeGreaterThanOrEqual(row.planFull - SLACK);
-  }
+  expectTaskRowsReadable(rows1920);
   noteMetrics('BADGE_1920', at1920.tasks.width, rows1920);
+});
+
+test('单组织、侧栏展开、1920 任务标题、迭代和进度可读', async ({ page, request, playwright }) => {
+  await seedFullWorkbench(request, playwright);
+  const tasks = await openWorkbench(page, 1920);
+  await expect(page.getByTestId('org-nav')).toHaveAttribute('data-collapsed', 'false');
+  await expect(page.getByRole('button', { name: '收起侧栏' })).toBeVisible();
+  expectColumns(await columnTops(page), 3);
+  const scheduled = tasks.getByRole('link', { name: /联调任务 2/ });
+  await expect(scheduled.getByText('PAN-2', { exact: true })).toBeVisible();
+  await expect(scheduled.getByText(LONG_ITERATION, { exact: true })).toBeVisible();
+  await expect(scheduled.getByText('2026-01-06', { exact: true })).toBeVisible();
+  await expect(scheduled.getByText('100%', { exact: true })).toBeVisible();
+  const rows = await taskRowMetrics(tasks);
+  expectTaskRowsReadable(rows);
+  noteMetrics('SOLO_1920', (await columnTops(page)).tasks.width, rows);
+});
+
+test('多组织长名称、1920 任务标题可读', async ({ page, request, playwright }) => {
+  await seedFullWorkbench(request, playwright);
+  await ok(request.patch('/api/v1/orgs/acme', { data: { name: LONG_ORG } }));
+  await ok(request.post('/api/v1/orgs', { data: { name: '华北平台与客户成功长期协同组', slug: 'north' } }));
+  const tasks = await openWorkbench(page, 1920);
+  await expect(page.getByTestId('org-nav')).toHaveAttribute('data-collapsed', 'false');
+  expectColumns(await columnTops(page), 3);
+  const scheduled = tasks.getByRole('link', { name: /联调任务 2/ });
+  const badge = scheduled.getByTitle(LONG_ORG);
+  await expect(badge).toBeVisible();
+  await expect(scheduled.getByText('PAN-2', { exact: true })).toBeVisible();
+  await expect(scheduled.getByText(LONG_ITERATION, { exact: true })).toBeVisible();
+  await expect(scheduled.getByText('2026-01-06', { exact: true })).toBeVisible();
+  const rows = await taskRowMetrics(tasks);
+  expectTaskRowsReadable(rows);
+  noteMetrics('LONG_ORG_1920', (await columnTops(page)).tasks.width, rows);
+  await shot(page, 'workbench-full-1920-multiorg.png');
 });
 
 test('侧栏收起后 1536 仍是两列，任务行可读，页头仍能收起', async ({ page, request, playwright }) => {

@@ -12,6 +12,8 @@ import { useWorkbench } from '@/lib/queries';
 import type { Workbench } from '@/lib/types';
 
 const ROW = 'flex h-10 min-w-0 items-center gap-3 overflow-hidden px-4 text-[13px] hover:bg-muted';
+/** 任务行字段比别的区块多。间距收一档，避免 1280 两列和 1920 三列把长标题挤到 8 字以下。 */
+const TASK_ROW = 'flex h-10 min-w-0 items-center gap-2 overflow-hidden px-4 text-[13px] hover:bg-muted';
 const WORKBENCH_ABOUT = '汇总你在所有组织里负责的需求与工作项、等你跟进的条目、指派给你的任务、等你确认的简报、等你确认的检查项和未读评论。';
 
 const EMPTY_LINKS: Array<{ label: string; section: Parameters<typeof emptySectionHref>[1] }> = [
@@ -77,8 +79,21 @@ function Section({
   );
 }
 
-function OrgBadge({ show, name }: { show: boolean; name: string }) {
-  return show ? <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{name}</span> : null;
+/** 三列时徽标收到 3.5em。4em 时标题只剩 108px，第 8 个字的中线还差约 0.5px，被省略号挡住。 */
+function OrgBadge({ show, name, compactAt3xl = false }: { show: boolean; name: string; compactAt3xl?: boolean }) {
+  if (!show) return null;
+  return (
+    <span
+      title={compactAt3xl ? name : undefined}
+      className={
+        compactAt3xl
+          ? 'shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-xs text-muted-foreground 3xl:min-w-0 3xl:max-w-[3.5em] 3xl:shrink 3xl:truncate'
+          : 'shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-xs text-muted-foreground'
+      }
+    >
+      {name}
+    </span>
+  );
 }
 
 function WorkbenchDescription() {
@@ -161,8 +176,8 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
       >
         {data.tasks.items.map((t) => (
           <li key={t.id}>
-            <Link href={taskHref(t)} className={ROW}>
-              <OrgBadge show={badge} name={t.org.name} />
+            <Link href={taskHref(t)} className={TASK_ROW}>
+              <OrgBadge show={badge} name={t.org.name} compactAt3xl />
               <span className="shrink-0 font-mono text-xs text-muted-foreground">{t.displayKey}</span>
               <span className="min-w-[64px] flex-1 truncate">{t.title}</span>
               {t.requirement && <span className="shrink-0 font-mono text-xs text-muted-foreground">{t.requirement.displayKey}</span>}
