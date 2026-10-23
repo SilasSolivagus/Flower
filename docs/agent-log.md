@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · e2e 重置前只终止 flower_app 后端
+- 分支 / PR：`cursor/fix-e2e-reset-deadlock-a9e4`（草稿，不要 merge，不要标 ready）
+- 做了什么：`resetDatabase` 在列出表之后、TRUNCATE 之前，最多等 2 秒让本库非 idle 的 flower_app 结束，再 `pg_terminate_backend` 终止其余 flower_app（不含本连接，不含 flower_admin）。40P01 仍最多重试 5 次。没有改业务表锁、db.spec、迁移、compose、CI。不碰 47.x。
+- 怎么验证的：`pnpm typecheck` 通过。`pnpm --filter @flower/web lint` 0 警告。`e2e/db.spec.ts` 1 条通过；Postgres 只记下这一条故意死锁（TRUNCATE 为受害者，对方是 `SELECT 1 FROM "instance_settings"`）。另用 flower_app 持 AccessShare：约 2 秒后连接被关掉（CONNECTION_CLOSED），不是 40P01，flower_admin 连接还在，没有新的死锁日志。`e2e/auth.spec.ts` 3 条通过。全量 e2e 以本 PR 的 CI 为准。
+- 留给对方：不要 merge，不要标 ready。独立草稿，不要叠到 #31 / #32。合仓不等于部署，不碰 47.x。
+
 ### 2026-10-23 · 云端 · 备份哈希只记文件名，版本闸失败提示补下一步
 - 分支 / PR：`fix/h5-debt-sha256-copy`（草稿，不要 merge，不要标 ready）
 - 做了什么：`backup-flower.sh` 的 `.sha256` 在输出目录里按文件名计算，发布手册的校验改成先 `cd` 再 `sha256sum -c`。版本闸和 schema 服务的失败提示改成单行「原因。下一步：…」；`--check` 失败行加 `[Flower 启动检查]`，成功行不加。鉴权失败先核对 `.env` 密码。`failLine` 仍只取第一行，退出码仍是 1。没有新迁移。`apps/web` 未改。不碰 47.x。回滚节标题在 ce3679fc 上是 `## 回滚`。
