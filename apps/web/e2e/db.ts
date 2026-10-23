@@ -6,8 +6,9 @@ const ADMIN = 'postgres://flower_admin:flower_admin@localhost:54329';
 export const E2E_DB = 'flower_e2e';
 export const E2E_APP_PASSWORD = 'flower_app_test';
 /**
- * 用例之间先等 flower_app 的非 idle 查询结束，再截断。
- * 上限取建议区间（2–5 秒）的下沿，空闲时立刻返回，避免拖慢整轮 e2e。
+ * 用例之间先等 flower_app 的非 idle 查询结束。
+ * 数到 0 就跳过终止；只有超时后仍 busy 才终止那些非 idle 后端。
+ * 上限 2 秒，空闲时立刻返回，避免拖慢整轮 e2e。
  */
 const APP_BACKEND_DRAIN_MS = 2_000;
 const APP_BACKEND_POLL_MS = 50;
@@ -59,7 +60,7 @@ async function countBusyAppBackends(sql: AdminSql): Promise<number> {
   return Number(rows[0]?.n ?? 0);
 }
 
-/** 短等 flower_app 没有非 idle 活动。超时仍返回，随后终止剩余的应用后端。 */
+/** 短等 flower_app 没有非 idle 活动。超时仍返回；调用方再数一次，只有仍 busy 才终止。 */
 async function waitForAppBackendsIdle(sql: AdminSql): Promise<void> {
   const deadline = Date.now() + APP_BACKEND_DRAIN_MS;
   while (Date.now() < deadline) {
@@ -71,16 +72,17 @@ async function waitForAppBackendsIdle(sql: AdminSql): Promise<void> {
 }
 
 /**
- * 终止同一库上 usename = flower_app 且不是本连接的后端（含 idle 连接池）。
- * 只按这个角色过滤：不终止 flower_admin，避免拆掉 admin 短连接和故意死锁事务。
+ * 只终止同一库上仍非 idle 的 flower_app（active、idle in transaction 等）。
+ * 不终止 idle 连接池，也不终止 flower_admin（admin 短连接和 db.spec 的故意死锁事务都要留下）。
  */
-async function terminateAppBackends(sql: AdminSql): Promise<void> {
+async function terminateBusyAppBackends(sql: AdminSql): Promise<void> {
   await sql`
     SELECT pg_terminate_backend(pid)
     FROM pg_stat_activity
     WHERE datname = current_database()
       AND pid <> pg_backend_pid()
       AND usename = 'flower_app'
+      AND state <> 'idle'
   `;
 }
 
@@ -95,8 +97,9 @@ async function terminateAppBackends(sql: AdminSql): Promise<void> {
  * TRUNCATE 需要 AccessExclusiveLock。上一个用例关掉页面后，next dev 的连接池里可能还有
  * flower_app 的 SELECT 持着 AccessShareLock；两边锁序相反时 Postgres 报 40P01。业务查询
  * 被选为受害者时，重试 TRUNCATE 也救不回已经失败的请求，页面会空。因此先短等非 idle 的
- * flower_app 结束，再终止本库上其余 flower_app 后端，然后才 TRUNCATE。
- * 故意死锁用例用 flower_admin 持 AccessShare，不会被终止，仍靠下面的 40P01 重试（最多 5 次）。
+ * flower_app 结束。等到 0 就不再终止连接：无条件踢掉 idle 池会让后续请求 CONNECTION_CLOSED。
+ * 只有超时后仍 busy 才终止那些 state <> 'idle' 的 flower_app。故意死锁用例用 flower_admin
+ * 持 AccessShare，不会被终止，仍靠下面的 40P01 重试（最多 5 次）。
  */
 export async function resetDatabase(): Promise<void> {
   const sql = postgres(`${ADMIN}/${E2E_DB}`, { max: 1, onnotice: () => {} });
@@ -107,7 +110,9 @@ export async function resetDatabase(): Promise<void> {
     if (tables.length > 0) {
       const names = tables.map((t) => `"${t.tablename}"`).join(', ');
       await waitForAppBackendsIdle(sql);
-      await terminateAppBackends(sql);
+      if ((await countBusyAppBackends(sql)) > 0) {
+        await terminateBusyAppBackends(sql);
+      }
       for (let attempt = 1; ; attempt++) {
         try {
           await sql.unsafe(`TRUNCATE TABLE ${names} RESTART IDENTITY CASCADE`);
