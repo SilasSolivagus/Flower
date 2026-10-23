@@ -139,11 +139,36 @@ test('G8：组织名空值有中文校验；邀请写明谁可邀请；个人设
   await expect(page.getByRole('status').filter({ hasText: '资料已保存' })).toBeVisible();
 });
 
-test('工作台空栏可以点进现有列表', async ({ page, request }) => {
+test('工作台全空是一条矮提示，并能点进现有列表', async ({ page, request }) => {
   await setupInstance(request);
   await login(page, OWNER.email, OWNER.password);
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/acme');
-  await expect(page.getByRole('link', { name: '没有进行中的需求与工作项' })).toHaveAttribute('href', '/acme/requirements');
-  await expect(page.getByRole('link', { name: '没有未完成的任务' })).toHaveAttribute('href', '/acme/iterations');
-  await expect(page.getByRole('link', { name: '没有未读评论' })).toHaveAttribute('href', '/acme/notifications');
+  await expect(page.getByRole('heading', { name: '工作台', level: 1 })).toBeVisible();
+  const empty = page.getByRole('group', { name: '工作台空态' });
+  await expect(empty.getByRole('status')).toHaveText('没有需要你处理的条目。');
+  await expect(page.getByRole('region', { name: /我负责的需求|等我跟进|我的任务|等我确认|未读评论/ })).toHaveCount(0);
+  const links = page.getByRole('navigation', { name: '去列表' });
+  await expect(links.getByRole('link', { name: '需求', exact: true })).toHaveAttribute('href', '/acme/requirements');
+  await expect(links.getByRole('link', { name: '任务', exact: true })).toHaveAttribute('href', '/acme/iterations');
+  await expect(links.getByRole('link', { name: '未读评论', exact: true })).toHaveAttribute('href', '/acme/notifications');
+  const about = page.getByRole('button', { name: '了解更多' });
+  await expect(about).toBeVisible();
+  await expect(about).toHaveAttribute('aria-expanded', 'false');
+  const aboutId = await about.getAttribute('aria-controls');
+  expect(aboutId).toBeTruthy();
+  const aboutBody = page.locator(`[id="${aboutId}"]`);
+  await expect(aboutBody).toBeHidden();
+  const bar = (await empty.boundingBox())!;
+  expect(bar.height).toBeLessThan(56);
+  await about.click();
+  const collapse = page.getByRole('button', { name: '收起', exact: true });
+  await expect(collapse).toHaveAttribute('aria-expanded', 'true');
+  await expect(collapse).toHaveAttribute('aria-controls', aboutId!);
+  await expect(aboutBody).toBeVisible();
+  await expect(aboutBody).toContainText('汇总你在所有组织里负责的需求与工作项');
+  await collapse.click();
+  await expect(about).toHaveAttribute('aria-expanded', 'false');
+  await expect(about).toHaveText('了解更多');
+  await expect(aboutBody).toBeHidden();
 });

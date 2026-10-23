@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { confirmationHref, emptySectionHref, requirementHref, showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref } from './model';
+import { confirmationHref, emptySectionHref, requirementHref, showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref, workbenchIsEmpty } from './model';
 
 describe('工作台链接', () => {
   const org = { id: 'o1', slug: 'acme', name: '测试组织' };
@@ -32,6 +32,13 @@ describe('工作台链接', () => {
     const u = { org, title: 't', unread: 1, lastAt: '2026-10-09T00:00:00.000Z' };
     expect(unreadHref({ ...u, requirementId: 'r1', documentId: null, displayKey: 'PAN-1' })).toBe('/acme/requirements/PAN-1');
     expect(unreadHref({ ...u, requirementId: null, documentId: 'd1', displayKey: 'PAN-PRD-1' })).toBe('/acme/documents/PAN-PRD-1');
+  });
+
+  it('六块总数都是 0 才算全空；任一块有数就保持分块', () => {
+    const empty = { owned: { total: 0 }, following: { total: 0 }, tasks: { total: 0 }, signatures: { total: 0 }, confirmations: { total: 0 }, unread: { total: 0 } };
+    expect(workbenchIsEmpty(empty)).toBe(true);
+    expect(workbenchIsEmpty({ ...empty, tasks: { total: 1 } })).toBe(false);
+    expect(workbenchIsEmpty({ ...empty, unread: { total: 2 } })).toBe(false);
   });
 
   it('空栏链到当前组织的现有列表', () => {

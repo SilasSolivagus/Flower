@@ -19,6 +19,20 @@ export function taskHref(t: Workbench['tasks']['items'][number]): string {
 /** 只有加入了多个组织时才在每行标出组织名。 */
 export const showOrgBadge = (orgs: Workbench['orgs']): boolean => orgs.length > 1;
 
+type Counted = { total: number };
+
+/** 六块都是 0 时工作台全空。有任意一块有数则仍分块列出。 */
+export function workbenchIsEmpty(data: {
+  owned: Counted;
+  following: Counted;
+  tasks: Counted;
+  signatures: Counted;
+  confirmations: Counted;
+  unread: Counted;
+}): boolean {
+  return data.owned.total === 0 && data.following.total === 0 && data.tasks.total === 0 && data.signatures.total === 0 && data.confirmations.total === 0 && data.unread.total === 0;
+}
+
 /** 等我确认的检查项：需求上的去需求详情，PRD 上的去 PRD 详情。 */
 export function signatureHref(s: Workbench['signatures']['items'][number]): string {
   return s.documentId ? `/${s.org.slug}/documents/${s.displayKey}` : requirementHref(s.org, s.displayKey);

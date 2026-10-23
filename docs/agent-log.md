@@ -20,6 +20,30 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · 工作台 1280 改两列，任务标题不再被挤没（FIX-3）
+- 分支 / PR：`fix/dux-e-workbench-density`（草稿 #39，不要 merge，不要标 ready）
+- 做了什么：已处理同日 FIX-3。工作台网格从 `xl:grid-cols-3` 改为 `xl:grid-cols-2 2xl:grid-cols-3`。1280 与 1440 是两列，1536 才三列。任务标题加 `min-w-[64px]`，迭代名去掉 `shrink-0`、保留截断，并加上 `title` 以便悬停看全名。端到端在 1280 断言任务标题的可见宽度（算上父级 overflow 裁切）不少于 64px，计划日和进度的右边界不超出行。截图覆盖 `docs/dux-e/workbench-full-1280.png`、`docs/dux-e/workbench-partial-1280.png`，并新增 `docs/dux-e/workbench-full-1536.png`。没有 masonry，没有改共享组件、后端和计数接口。不碰 47.x。
+- 怎么验证的：`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。Playwright：`layout`、`tasks`、`ux-residual-batch1`、`work-items`、`workbench`、`dux-e-workbench-density` 共 20 条通过。1280 任务卡宽 480px，有计划日的长标题可见宽度 96px，未排期的短标题 130px。1536 任务卡宽 400px，六条标题可见宽度都是 64px。进度和计划日右边界都在行内。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰 47.x。回滚：网格改回 `xl:grid-cols-3`，标题去掉 `min-w-[64px]`，迭代名加回 `shrink-0` 并去掉 `title`。截图用 `WB_SHOT=1` 重跑 `dux-e-workbench-density` 会写回 `docs/dux-e/`。
+
+### 2026-10-23 · 云端 · 工作台卡片按内容定高（FIX-2）
+- 分支 / PR：`fix/dux-e-workbench-density`（草稿 #39，不要 merge，不要标 ready）
+- 做了什么：已处理同日 FIX-2。工作台网格加 `items-start`，卡片按内容定高，不再把同一行拉齐。空文案改为顶对齐、`py-2`，不再在被拉高的卡里垂直居中。任务行迭代名 `min-w-0 max-w-24 shrink-0 truncate`，进度百分比 `shrink-0`，长迭代名截断、不挤掉百分比。1280 的编号、迭代、计划日断言改成逐字段 `toBeVisible()`。「了解更多」展开后再点一次，回到 `aria-expanded=false` 和「了解更多」。满负荷造数在 `apps/web/e2e/dux-e-workbench-density.spec.ts`；截图在 `docs/dux-e/workbench-full-1280.png` 与 `docs/dux-e/workbench-partial-1280.png`。没有 masonry，没有改共享组件、后端和计数接口。不碰 47.x。
+- 怎么验证的：`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。Playwright：`layout`、`tasks`、`ux-residual-batch1`、`work-items`、`workbench`、`dux-e-workbench-density` 共 20 条通过。1280 实测：6 条数据卡 289px，12 条检查项 535px，同行的 6 条简报/未读仍是 289px。部分有数据时空块 80px，空文案距卡顶 43px；有数据卡仍是 289px。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰 47.x。回滚：去掉网格 `items-start`，空文案改回居中。截图用 `WB_SHOT=1` 重跑 `dux-e-workbench-density` 会写回 `docs/dux-e/`。
+
+### 2026-10-23 · 云端 · 工作台任务行恢复计划日，页头按钮可收起（FIX-1）
+- 分支 / PR：`fix/dux-e-workbench-density`（草稿 #39，不要 merge，不要标 ready）
+- 做了什么：已处理同日组验的 FIX-1。任务行不再按卡宽隐藏需求编号、迭代名、计划日，「未排期」在 1280 上重新可见。`@container` 随这段隐藏逻辑去掉。页头「了解更多」带 `aria-controls` 和 `aria-expanded`，展开后按钮文案变成「收起」。端到端里空态 `status` 收在「工作台空态」组内。补了 1280 满负荷和部分有数据截图，只记录不改布局。没有新计数接口，没有改共享组件，没有动后端。不碰 47.x。
+- 怎么验证的：`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。Playwright：`layout`、`tasks`、`ux-residual-batch1`、`work-items`、`workbench` 通过（矮提示那条在收起按钮改成 exact 后复跑通过）。1280 满负荷：六块都有条目；短标题任务行文字含需求编号、迭代名、「未排期」，该行 `scrollWidth` 等于 `clientWidth`。同行里检查项 12 条（高 535）把只有 6 条的简报和未读评论也拉到 535，6 条卡本身约 289。部分有数据（跟进、检查项、简报清成 0）：六张卡都是 289，空块被拉到同行有数据卡的高度，空文案垂直居中。截图在 PR 描述。006-B 不自标硬过。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰 47.x。空块被拉高只记录，本提交不修。回滚仍是网格改回 `xl:grid-cols-2`、页头恢复原长 description、去掉全空矮条。
+
+### 2026-10-23 · 云端 · 工作台密度与页头收束（DUX-006/007）
+- 分支 / PR：`fix/dux-e-workbench-density`（草稿，不要 merge，不要标 ready）
+- 做了什么：只做切片 E。工作台六块总数都是 0 时改成一条矮提示（「没有需要你处理的条目。」加去需求、跟进、任务、检查项、简报、未读评论的链接），不再铺六块等高空卡。有任意一块有数时仍分块列表。网格从 `xl:grid-cols-2` 改为 `xl:grid-cols-3`；行 `min-w-0` 截断，任务行的需求编号、迭代名、计划日在卡宽不够时先藏，标题和进度留着。页头说明收成一行「你负责、跟进、任务和待确认的条目。」加「了解更多」，展开后才是原来的长句。`PageHeader` 的说明从 `p` 换成同样式的 `div`，好放下按钮；其它页文案没改。没有新计数接口，没有改壳 max-w、需求列表/详情、甘特。不碰 47.x。
+- 怎么验证的：`workbenchIsEmpty` 单测 8 项通过。`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。Playwright：`layout`、`tasks`、`ux-residual-batch1`、`work-items`、`workbench` 共 19 条通过。1280 空态截图：主区是一条矮提示，没有六块空卡；页头是一行加「了解更多」。1280 有数据截图：三列，有条目的卡是单行列表。006-A 自检过。006-B 满负荷未截，标待确认。007-A 软项：一行说明不压住下面的区块。计数 API 未做、未覆盖。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰 47.x。回滚：网格改回 `xl:grid-cols-2`，页头恢复原长 description，去掉全空矮条。006-B 等满负荷 1280 截图后再升硬闸。未做 F（DUX-008～010）、未读/逾期计数。
+
 ### 2026-10-23 · 云端 · 需求列表次要列默认不显示
 - 分支 / PR：`fix/dux-c-list-columns`（草稿，不要 merge，不要标 ready）
 - 做了什么：只做 DUX-005。需求列表不再渲染「平台」「业务域」「提出人」「更新」。编号、标题、状态仍常显；优先级、负责人、迭代从 md 起显示（迭代从 xl 升到 md）。没有列设置，没有新的 localStorage。筛条、PRE-01 的 `related`、壳宽、详情、甘特、工作台、API 都没改。行高仍是 `h-10`。不碰 47.x。

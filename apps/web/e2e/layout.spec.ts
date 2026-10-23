@@ -87,6 +87,7 @@ test('工作台：800px 下四个区块单列排列、标题不被挤没；1440p
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect.poll(async () => Math.abs((await owned.boundingBox())!.y - (await following.boundingBox())!.y)).toBeLessThan(1);
+  await expect.poll(async () => (await tasks.boundingBox())!.y).toBeGreaterThan((await owned.boundingBox())!.y + (await owned.boundingBox())!.height - 1);
   await expect.poll(async () => Math.abs((await tasks.boundingBox())!.y - (await sign.boundingBox())!.y)).toBeLessThan(1);
   await expectNoPageOverflow(page);
 });
