@@ -147,8 +147,13 @@ export const qk = {
 
 export const useSetupStatus = () => useQuery({ queryKey: qk.setup, queryFn: () => api<InstanceStatus>('/setup/status') });
 export const useMe = () => useQuery({ queryKey: qk.me, queryFn: () => api<{ account: Account; orgs: MyOrg[] }>('/me') });
-export const useWorkbench = () =>
-  useQuery({ queryKey: qk.workbench, queryFn: () => api<{ workbench: Workbench }>('/me/workbench'), select: (d) => d.workbench });
+export const useWorkbench = (org: string) =>
+  useQuery({
+    queryKey: [...qk.workbench, org],
+    queryFn: () => api<{ workbench: Workbench }>(`/me/workbench?org=${encodeURIComponent(org)}`),
+    select: (d) => d.workbench,
+    enabled: !!org,
+  });
 export const useInstanceSettings = () => useQuery({ queryKey: qk.instance, queryFn: () => api<InstanceStatus>('/instance/settings') });
 export const useOrg = (o: string) =>
   useQuery({ queryKey: qk.org(o), queryFn: () => api<{ org: Org; me: OrgMe }>(`/orgs/${o}`) });

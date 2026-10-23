@@ -1,5 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { confirmationHref, emptySectionHref, requirementHref, showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref, workbenchIsEmpty } from './model';
+import {
+  confirmationHref,
+  emptySectionHref,
+  formatIterationRange,
+  iterationGanttHref,
+  iterationHref,
+  iterationsHref,
+  nowIterationEmptyKind,
+  nowIterationSubtitle,
+  nowIterationTaskHref,
+  openNowIterationId,
+  requirementHref,
+  showOrgBadge,
+  signatureHref,
+  subjectHref,
+  taskHref,
+  unreadHref,
+  workbenchIsEmpty,
+} from './model';
 
 describe('工作台链接', () => {
   const org = { id: 'o1', slug: 'acme', name: '测试组织' };
@@ -53,5 +71,32 @@ describe('工作台链接', () => {
   it('我负责的与等我跟进：需求去需求详情，工作项去工作项详情', () => {
     expect(subjectHref({ org, kind: 'requirement', displayKey: 'PAN-3' })).toBe('/acme/requirements/PAN-3');
     expect(subjectHref({ org, kind: 'work_item', displayKey: 'W-2' })).toBe('/acme/work-items/W-2');
+  });
+
+  it('此刻迭代：详情与甘特链接，任务行跟 taskHref 同一规则', () => {
+    expect(iterationsHref('acme')).toBe('/acme/iterations');
+    expect(iterationHref('acme', 'i1')).toBe('/acme/iterations/i1');
+    expect(iterationGanttHref('acme', 'i1')).toBe('/acme/iterations/i1?tab=gantt');
+    expect(nowIterationTaskHref('acme', 'i1', { requirement: { displayKey: 'PAN-2' } })).toBe('/acme/requirements/PAN-2');
+    expect(nowIterationTaskHref('acme', 'i1', { requirement: null })).toBe('/acme/iterations/i1?tab=gantt');
+  });
+
+  it('此刻迭代默认展开第一条；收起后保持收起；条目消失时回到第一条', () => {
+    expect(openNowIterationId(undefined, ['a', 'b'])).toBe('a');
+    expect(openNowIterationId(undefined, [])).toBeNull();
+    expect(openNowIterationId(null, ['a', 'b'])).toBeNull();
+    expect(openNowIterationId('b', ['a', 'b'])).toBe('b');
+    expect(openNowIterationId('gone', ['a', 'b'])).toBe('a');
+  });
+
+  it('此刻迭代空态：没有可见迭代，和有迭代但不是此刻，分开', () => {
+    expect(nowIterationEmptyKind('present')).toBeNull();
+    expect(nowIterationEmptyKind('none')).toBe('none');
+    expect(nowIterationEmptyKind('no_now')).toBe('no_now');
+    expect(nowIterationEmptyKind('unscoped')).toBe('no_now');
+    expect(formatIterationRange('2026-10-23', '2026-10-23')).toBe('2026-10-23');
+    expect(formatIterationRange('2026-10-20', '2026-10-30')).toBe('2026-10-20 至 2026-10-30');
+    expect(nowIterationSubtitle({ product: { name: '网盘' }, startDate: '2026-10-20', endDate: '2026-10-30' }, '进行中')).toBe('网盘 · 2026-10-20 至 2026-10-30 · 进行中');
+    expect(nowIterationSubtitle({ product: null, startDate: '2026-10-23', endDate: '2026-10-23' }, '进行中')).toBe('专项 · 2026-10-23 · 进行中');
   });
 });

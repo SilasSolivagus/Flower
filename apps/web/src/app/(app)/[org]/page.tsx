@@ -7,6 +7,7 @@ import { type ReactNode, useId, useState } from 'react';
 import { QueryError } from '@/components/load-error';
 import { PageHeader } from '@/components/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
+import { NowIterationBlock } from '@/features/workbench/now-iteration';
 import { confirmationHref, emptySectionHref, showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref, workbenchIsEmpty } from '@/features/workbench/model';
 import { useWorkbench } from '@/lib/queries';
 import type { Workbench } from '@/lib/types';
@@ -234,10 +235,16 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
 
 export default function WorkbenchPage() {
   const { org } = useParams<{ org: string }>();
-  const q = useWorkbench();
+  const q = useWorkbench(org);
   let body: ReactNode;
-  if (q.data) body = <Sections org={org} data={q.data} />;
-  else if (q.isError) body = <QueryError error={q.error} noAccessMessage="无法读取工作台。" retryMessage="加载工作台失败，请重试。" onRetry={() => q.refetch()} />;
+  if (q.data) {
+    body = (
+      <>
+        <NowIterationBlock org={org} workbench={q.data} />
+        <Sections org={org} data={q.data} />
+      </>
+    );
+  } else if (q.isError) body = <QueryError error={q.error} noAccessMessage="无法读取工作台。" retryMessage="加载工作台失败，请重试。" onRetry={() => q.refetch()} />;
   else body = <Skeleton className="h-64" />;
   return (
     <>

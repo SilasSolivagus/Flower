@@ -53,6 +53,15 @@ describe('工作台接口', () => {
     expect(res.body.workbench.orgs.map((o: { slug: string }) => o.slug)).toEqual(['acme']);
     expect(res.body.workbench.owned.items.map((r: { title: string }) => r.title)).toContain('我负责的需求');
     expect(res.body.workbench.confirmations).toEqual({ total: 0, items: [] });
+    expect(res.body.workbench.nowIterations).toEqual([]);
+    expect(res.body.workbench.nowIterationPresence).toBe('unscoped');
+    const scoped = await call(app, 'GET', '/me/workbench?org=acme', { session });
+    expect(scoped.status).toBe(200);
+    expect(Array.isArray(scoped.body.workbench.nowIterations)).toBe(true);
+    expect(scoped.body.workbench.owned.items.map((r: { title: string }) => r.title)).toContain('我负责的需求');
+    const missing = await call(app, 'GET', '/me/workbench?org=missing', { session });
+    expect(missing.status).toBe(200);
+    expect(missing.body.workbench.nowIterations).toEqual([]);
     expect((await call(app, 'GET', '/me/workbench', { token: readToken })).status).toBe(401);
   });
 });

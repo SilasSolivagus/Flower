@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · 工作台「此刻迭代」（RW Phase 1）
+- 分支 / PR：`fix/rw-phase1-now-iteration`（草稿，不要 merge，不要标 ready）
+- 做了什么：Silas 已拍 Q1～Q7。`GET /me/workbench?org=` 在当前组织里选出 `status=active` 且上海自然日闭区间含今天的可见迭代（专项一并参与），服务端一次算好概览、我的未完成任务和 active 阻塞。工作台 PageHeader 下、六块 grid 之上多一行「此刻迭代」；六块列规则没改。没有 schema 迁移。不碰 47.x，不做 Phase 2～4。合仓不等于部署。
+- 怎么验证的：`packages/core/test/now-iterations.test.ts` 9 条（选择规则、org、可见性、上海 00:00/23:59）。`workbench.test.ts` 9 条、工作台 model 与 reviews-workbench 接口测试通过。`pnpm typecheck` 通过。`pnpm --filter @flower/web lint` 0 警告。Playwright：`workbench-now-iteration` 6 条、`workbench` 4 条、`dux-e-workbench-density` 5 条通过。1280 有数据时区块在六块之上，加载期间没有 `/gantt` 请求；空态矮条。1440/1536 仍两列，1920 三列。CI 账单挂，不得称三绿。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰生产。回滚：去掉页面上的此刻迭代区块，`useWorkbench` 不再带 `org`，`getWorkbench` 去掉 `nowIterations` / `nowIterationPresence` / `planningHint`。没有改表，不需要回滚数据库。六块跨组织汇总保持原样。
+
 ### 2026-10-23 · 云端 · 甘特空态与迭代列表底高（DUX-008/009/010）
 - 分支 / PR：`fix/dux-f-gantt-polish`（草稿 #41，不要 merge，不要标 ready）
 - 做了什么：任务表 `min-w` 从 1472 收到 960，列按这个宽度重排，表卡上的 `overflow-x-auto` 留着。没有开始日期时，时间轴改成一行矮空态。无任务，或整体、理论、落后、遗留四项都是 0，概览不再铺四张卡，改成一行摘要。迭代列表分组卡片加 `h-fit`、`shrink-0`，按内容定高。没有改甘特引擎、排期算法、需求详情和列表列，也没有动后端。不碰生产。
