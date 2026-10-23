@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · push 状态「设计中」不改检查项
+- 分支 / PR：`fix/import-push-status-designing`（草稿，不要 merge，不要标 ready）
+- 做了什么：`PUSH_STATUS_TO_CHECK` 增加 `设计中: null`，与「已搁置」一样不写背景、可行性、行业。有评审时仍按评审结果。没有新迁移，没有改 API、suggest、apps/web，也没有改其它映射。不碰 47.x。P1–P3 的对照表改动不在本 PR。
+- 怎么验证的：`pnpm typecheck` 通过。migrate 不连库的单测 12 个文件、119 通过，其中「设计中」3 条单独再跑通过。本环境没有 Docker，54329 上的库测（migrate 的 write / rejoin / perf，以及 core、web）没跑，交给 GitHub Actions。相对 `d913dc51` 没有新迁移。
+- 留给对方：不要 merge，不要标 ready。不要在 47.x 上跑。H-G3「没有新迁移」的起算点是 `d913dc51`。端到端若红，对照 main@d913dc51 的已知失败再记，不要写成三绿。
+
 ### 2026-10-23 · 云端 · ux-seed:batch2 改用合法 slug，并支持只清不种
 - 分支 / PR：`cursor/ux-seed-batch2-slug-clean-8447` → `main`，PR #31（草稿，不要 merge，不要标 ready）。与 P4 分开。
 - 做了什么：验收组织 slug 从 `flower_uxseed` 改为 `flower-uxseed`。脚本启动时用 `packages/core/src/tenancy/orgs.ts` 的 `SLUG_RE` 做硬校验。无参时组织已存在就报错并提示 `--clean`；`--clean` 仍是清完再种；新增 `--clean-only` 只删不种，组织本就不存在时退出 0。两个开关同时出现则报错。删除仍按 slug，先卸需求标签再 `deleteOrgData`。`package.json` 的 `ux-seed:batch2` 命令没改。没有新迁移，没改 `apps/web`、compose、CI。不碰 47.x。Docker compose 项目名可以仍是 `flower_uxseed`，那不是组织 slug。
