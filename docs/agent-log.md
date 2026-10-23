@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · 左导航图标轨与需求详情右栏可收起
+- 分支 / PR：`fix/pre02-collapse-panels`（草稿，不要 merge，不要标 ready）
+- 做了什么：只做 PRE-02。桌面（xl，1280）左导航可收到 56px 图标轨（`xl:w-14`），展开仍是 `w-60`。需求详情右栏在 lg 及以上整列收成 40px 把手，状态卡一并收起，中间列变宽；状态历史仍留在主列。偏好只写 localStorage：`flower.shell.navCollapsed`、`flower.req.detail.asideCollapsed`（`1` 收起，`0` 或没有则展开）。760 抽屉仍是宽 240 的文字导航，汉堡、Esc、遮罩、收起都在；桌面收起偏好不会把窄屏右栏藏掉。没有新 API，没有迁移，没有账号同步。不做 DUX-002 / DUX-003 / DUX-004。不碰 47.x。已变基到 main@e24e042c（PRE-01 已合入）；冲突只在本日志，列表与 `related=me` 未改。
+- 怎么验证的：变基到 main@e24e042c 之后复跑：`collapse` 与 `shell-width` 单测 10 项通过。`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。端到端 `e2e/pre02-collapse.spec.ts` 通过；`e2e/ux-residual-batch1.spec.ts` 7 项通过（含 760 汉堡，以及 PRE-01 改过的列表入口）。变基前在 1280 量过：展开导航 240、主区 1040、叙事列 640、右栏 320；收左后导航 56、主区 1224、叙事列 824；再收右后叙事列 1104，右栏 `display:none`。刷新后两个 key 仍是 `1`。760 且两个偏好都是收起时，导航默认隐藏，抽屉打开宽 240、文字可见，跟进和状态仍在单列里，Esc 能关上。截图在 PR 描述。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰 47.x。回滚：去掉收展按钮和 class 分支，恢复常显 `w-60` 与 `lg:grid-cols-[minmax(0,1fr)_320px]`。状态历史还在主列，DUX-002/003/004 未做。
+
 ### 2026-10-23 · 云端 · 需求列表默认筛我的（PRE-01）
 - 分支 / PR：`fix/pre01-related-me`（草稿，不要 merge，不要标 ready）
 - 做了什么：现有 `GET /orgs/:org/products/:id/requirements` 增加 `related=me`。命中负责人、提出人，或 `requirement_assignments.memberId` 为当前成员（exists，同一人多行不重复）。省略 `related` 仍是产品内可读全量。`related` 不是 `me` 返回 400 `INVALID_RELATED`；与 `owner` 或 `requester` 同时传返回 400 `RELATED_CONFLICT`。总数在服务端 OR 之后 count。列表默认「我的」，顶栏可切「看全部」，偏好只写 localStorage `flower.req.relatedScope`（`me`|`all`）。选了负责人时请求改走全部并带 `owner`，不与 `related=me` 同发。没有新接口，没有迁移，不碰 47.x。不做 PRE-02，不做切片 B。
