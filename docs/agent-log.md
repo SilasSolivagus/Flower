@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-24 · 云端 · 工作台按人格区分默认布局（RW Phase 2）
+- 分支 / PR：`feat/rw-phase2-persona-layout`（草稿，不要 merge，不要标 ready）
+- 做了什么：单一工作台页按 `PERSONA_LAYOUTS` 调整六块顺序、强调和默认折叠，以及「此刻迭代」里已有字段的默认展开。解析顺序是 URL `?persona=`（只预览）→ `accounts.preferences.workbenchPersona` → 职能标签别名 → 中性（Phase 1）。偏好扩 jsonb 可选键，`PATCH /me` 放行该键，没有 schema 迁移，不下发 `resolvedPersona`，不改权限。外接槽只显示「即将接入」，没有假数据，也没有外链。不做 Phase 3/4、列表默认筛、软债和 47.x。合仓不等于部署。
+- 怎么验证的：`persona.test.ts` 覆盖映射、未命中中性、多标签优先级和并列。`auth` 单测覆盖偏好合并与 zod 拒绝未知值。Playwright：`workbench-persona` 5 条、`workbench-now-iteration` 6 条、`workbench` 4 条、`dux-e-workbench-density` 5 条、`layout` 4 条通过。1280 中性 / 产品 / 研发和 1920 中性截图在 PR 描述里。`pnpm --filter @flower/web lint` 0 警告，web 与 core `typecheck` 通过。不是 CI，不得称三绿。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰生产。回滚：去掉布局表、视角切换和 `workbenchPersona` 类型/zod；jsonb 里残留的键可以留着。没有改表。
+
 ### 2026-10-24 · 云端 · 失败简报「去改」补上琥珀色高亮
 - 分支 / PR：`fix/sd02-brief-goto-highlight`（草稿 #45，不要 merge，不要标 ready）
 - 做了什么：SD-02。点失败简报「去改」时，琥珀色遮罩画在编辑器外面，样式却写在 `.bn-editor .brief-section-target` 上，选不中这块遮罩，所以只滚动、没有琥珀色。选择器改成 `.brief-section-target`，动画仍是 1.6 秒。滚动仍留 72px（上方空隙 ≥56）。没有小节的检查项不显示「去改」。点完以及带着 `section` / `at` 打开时清掉这两个参数。已再 rebase 到 main@`f70e5148`（#44 已合入）。日志里 SD-01、SD-02、SD-03 的记录都留着。不碰 47.x，没有 schema，不含 Phase 2、H4/H5。合仓不等于部署。

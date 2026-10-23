@@ -5,10 +5,11 @@ import { useId, useState } from 'react';
 import { ITERATION_STATUS_LABEL } from '@/lib/labels';
 import type { Workbench } from '@/lib/types';
 import { iterationGanttHref, iterationHref, iterationsHref, nowIterationDetailSubtitle, nowIterationEmptyKind, nowIterationSubtitle, nowIterationTaskHref, openNowIterationId } from './model';
+import { type NowField, nowFieldShown, nowLayoutHasFoldedFields, type PersonaLayout, type WorkbenchPersona } from './persona';
 
 type Item = Workbench['nowIterations'][number];
 
-export function NowIterationBlock({ org, workbench }: { org: string; workbench: Workbench }) {
+export function NowIterationBlock({ org, workbench, layout, persona }: { org: string; workbench: Workbench; layout: PersonaLayout; persona: WorkbenchPersona }) {
   const headingId = useId();
   const items = workbench.nowIterations;
   const [chosen, setChosen] = useState<string | null | undefined>(undefined);
@@ -28,7 +29,7 @@ export function NowIterationBlock({ org, workbench }: { org: string; workbench: 
       ) : (
         <ul className="divide-y overflow-hidden rounded-lg border bg-card">
           {items.map((item) => (
-            <NowIterationRow key={item.id} org={org} item={item} open={item.id === openId} onToggle={() => setChosen(item.id === openId ? null : item.id)} />
+            <NowIterationRow key={item.id} org={org} item={item} open={item.id === openId} onToggle={() => setChosen(item.id === openId ? null : item.id)} layout={layout} persona={persona} />
           ))}
         </ul>
       )}
@@ -52,7 +53,7 @@ function EmptyNow({ org, kind, hint }: { org: string; kind: 'none' | 'no_now'; h
   );
 }
 
-function NowIterationRow({ org, item, open, onToggle }: { org: string; item: Item; open: boolean; onToggle: () => void }) {
+function NowIterationRow({ org, item, open, onToggle, layout, persona }: { org: string; item: Item; open: boolean; onToggle: () => void; layout: PersonaLayout; persona: WorkbenchPersona }) {
   const panelId = useId();
   const status = ITERATION_STATUS_LABEL[item.status];
   const subtitle = nowIterationSubtitle(item);
@@ -73,24 +74,27 @@ function NowIterationRow({ org, item, open, onToggle }: { org: string; item: Ite
           {open ? '收起' : '展开'}
         </button>
       </div>
-      {open ? <NowIterationDetail id={panelId} org={org} item={item} subtitle={nowIterationDetailSubtitle(item, status)} /> : null}
+      {open ? <NowIterationDetail key={persona} id={panelId} org={org} item={item} subtitle={nowIterationDetailSubtitle(item, status)} layout={layout} /> : null}
     </li>
   );
 }
 
-function NowIterationDetail({ id, org, item, subtitle }: { id: string; org: string; item: Item; subtitle: string }) {
+function NowIterationDetail({ id, org, item, subtitle, layout }: { id: string; org: string; item: Item; subtitle: string; layout: PersonaLayout }) {
+  const [revealed, setRevealed] = useState(false);
+  const show = (field: NowField) => nowFieldShown(layout, field, revealed);
   const overview = item.overview;
+  const folded = nowLayoutHasFoldedFields(layout);
   return (
     <div id={id} className="flex flex-col gap-2 border-t bg-muted/20 px-4 py-2 text-[13px]">
-      <p className="text-muted-foreground">{subtitle}</p>
-      {item.milestoneSummary.total > 0 ? (
+      {show('subtitle') ? <p className="text-muted-foreground">{subtitle}</p> : null}
+      {show('milestones') && item.milestoneSummary.total > 0 ? (
         <p className="text-muted-foreground">
           里程碑 {item.milestoneSummary.past} 已过 · {item.milestoneSummary.upcoming} 未到
           {item.milestoneSummary.next ? ` · 下一里程碑 ${item.milestoneSummary.next.label} ${item.milestoneSummary.next.date}` : ''}
         </p>
       ) : null}
-      <OverviewLine org={org} item={item} />
-      {overview && overview.attention.length > 0 ? (
+      {show('overview') ? <OverviewLine org={org} item={item} /> : null}
+      {show('attention') && overview && overview.attention.length > 0 ? (
         <ul aria-label="关注与周知" className="flex flex-col gap-1">
           {overview.attention.map((a) => (
             <li key={`${a.kind}-${a.title}`} className="flex flex-wrap items-center gap-2">
@@ -103,8 +107,18 @@ function NowIterationDetail({ id, org, item, subtitle }: { id: string; org: stri
           {overview.attentionTruncated ? <li className="text-xs text-muted-foreground">还有更多关注与周知</li> : null}
         </ul>
       ) : null}
-      {item.blockerCount > 0 ? <p>活跃阻塞 {item.blockerCount}</p> : null}
-      <MyTasks org={org} item={item} />
+      {show('blockers') && item.blockerCount > 0 ? <p>活跃阻塞 {item.blockerCount}</p> : null}
+      {show('myTasks') ? <MyTasks org={org} item={item} /> : null}
+      {layout.externalHint ? (
+        <p data-slot="external-pending" className="text-xs text-muted-foreground">
+          {layout.externalHint}
+        </p>
+      ) : null}
+      {folded ? (
+        <button type="button" className="self-start text-primary hover:underline" aria-expanded={revealed} onClick={() => setRevealed((value) => !value)}>
+          {revealed ? '收起次要' : '显示次要'}
+        </button>
+      ) : null}
       <p className="flex flex-wrap gap-3">
         <Link href={iterationHref(org, item.id)} className="text-primary hover:underline">
           打开迭代

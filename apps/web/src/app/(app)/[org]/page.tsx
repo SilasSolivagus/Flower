@@ -9,6 +9,8 @@ import { PageHeader } from '@/components/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { NowIterationBlock } from '@/features/workbench/now-iteration';
 import { confirmationHref, emptySectionHref, showOrgBadge, signatureHref, subjectHref, taskHref, unreadHref, workbenchIsEmpty } from '@/features/workbench/model';
+import { layoutFor, type PersonaLayout, type SectionId, type WorkbenchPersona } from '@/features/workbench/persona';
+import { PersonaSwitch, useWorkbenchPersona } from '@/features/workbench/persona-switch';
 import { useWorkbench } from '@/lib/queries';
 import type { Workbench } from '@/lib/types';
 
@@ -35,6 +37,9 @@ function Section({
   emptyHref,
   moreHref,
   moreLabel,
+  sectionId,
+  emphasis,
+  collapsedDefault,
   children,
 }: {
   title: string;
@@ -45,15 +50,32 @@ function Section({
   emptyHref?: string;
   moreHref?: string;
   moreLabel?: string;
+  sectionId: SectionId;
+  emphasis: 'primary' | 'secondary';
+  collapsedDefault: boolean;
   children: ReactNode;
 }) {
   const id = useId();
+  const [expanded, setExpanded] = useState(!collapsedDefault);
+  const [collapseSeed, setCollapseSeed] = useState(collapsedDefault);
+  if (collapseSeed !== collapsedDefault) {
+    setCollapseSeed(collapsedDefault);
+    setExpanded(!collapsedDefault);
+  }
+  const collapsed = total > 0 && !expanded;
   return (
-    <section aria-labelledby={id} className="flex min-w-0 flex-col justify-start overflow-hidden rounded-lg border bg-card">
+    <section
+      aria-labelledby={id}
+      data-section={sectionId}
+      data-emphasis={emphasis}
+      data-collapsed={collapsed ? 'true' : 'false'}
+      className={`flex min-w-0 flex-col justify-start overflow-hidden rounded-lg border bg-card${emphasis === 'primary' ? ' border-primary/50' : ''}`}
+    >
       <h2 id={id} className="flex items-center justify-between border-b px-4 py-2.5 font-semibold">
         <span className="flex min-w-0 items-baseline gap-2">
           <span className="truncate">{title}</span>
           {hint ? <span className="shrink-0 text-xs font-normal text-muted-foreground">{hint}</span> : null}
+          {emphasis === 'primary' ? <span className="shrink-0 text-xs font-normal text-primary">优先</span> : null}
         </span>
         <span className="flex items-center gap-3">
           {moreHref && moreLabel ? (
@@ -72,10 +94,19 @@ function Section({
         ) : (
           <p className="shrink-0 px-4 py-2 text-left text-[13px] text-muted-foreground">{empty}</p>
         )
+      ) : collapsed ? (
+        <button type="button" className="shrink-0 px-4 py-2 text-left text-[13px] text-primary hover:underline" aria-expanded={false} onClick={() => setExpanded(true)}>
+          展开此块
+        </button>
       ) : (
         <ul className="divide-y">{children}</ul>
       )}
-      {total > shown && <p className="border-t px-4 py-2 text-xs text-muted-foreground">只显示前 {shown} 条</p>}
+      {total > shown && !collapsed ? <p className="border-t px-4 py-2 text-xs text-muted-foreground">只显示前 {shown} 条</p> : null}
+      {collapsedDefault && total > 0 && expanded ? (
+        <button type="button" className="border-t px-4 py-2 text-left text-[13px] text-primary hover:underline" aria-expanded={true} onClick={() => setExpanded(false)}>
+          收起此块
+        </button>
+      ) : null}
     </section>
   );
 }
@@ -134,12 +165,12 @@ function EmptyWorkbench({ org }: { org: string }) {
   );
 }
 
-function Sections({ org, data }: { org: string; data: Workbench }) {
+function Sections({ org, data, layout, persona }: { org: string; data: Workbench; layout: PersonaLayout; persona: WorkbenchPersona }) {
   const badge = showOrgBadge(data.orgs);
   if (workbenchIsEmpty(data)) return <EmptyWorkbench org={org} />;
-  return (
-    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2 3xl:grid-cols-3">
-      <Section title="我负责的需求与工作项" total={data.owned.total} shown={data.owned.items.length} empty="没有进行中的需求与工作项" emptyHref={emptySectionHref(org, 'owned')}>
+  const blocks: Record<SectionId, ReactNode> = {
+    owned: (
+      <Section key={`${persona}-owned`} sectionId="owned" emphasis={layout.sections.find((section) => section.id === 'owned')!.emphasis} collapsedDefault={layout.sections.find((section) => section.id === 'owned')!.collapsedDefault} title="我负责的需求与工作项" total={data.owned.total} shown={data.owned.items.length} empty="没有进行中的需求与工作项" emptyHref={emptySectionHref(org, 'owned')}>
         {data.owned.items.map((r) => (
           <li key={r.id}>
             <Link href={subjectHref(r)} className={ROW}>
@@ -153,7 +184,9 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
           </li>
         ))}
       </Section>
-      <Section title="等我跟进" total={data.following.total} shown={data.following.items.length} empty="没有等你跟进的条目" emptyHref={emptySectionHref(org, 'following')}>
+    ),
+    following: (
+      <Section key={`${persona}-following`} sectionId="following" emphasis={layout.sections.find((section) => section.id === 'following')!.emphasis} collapsedDefault={layout.sections.find((section) => section.id === 'following')!.collapsedDefault} title="等我跟进" total={data.following.total} shown={data.following.items.length} empty="没有等你跟进的条目" emptyHref={emptySectionHref(org, 'following')}>
         {data.following.items.map((f) => (
           <li key={f.id}>
             <Link href={subjectHref(f)} className={ROW}>
@@ -165,7 +198,13 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
           </li>
         ))}
       </Section>
+    ),
+    tasks: (
       <Section
+        key={`${persona}-tasks`}
+        sectionId="tasks"
+        emphasis={layout.sections.find((section) => section.id === 'tasks')!.emphasis}
+        collapsedDefault={layout.sections.find((section) => section.id === 'tasks')!.collapsedDefault}
         title="我的任务"
         total={data.tasks.total}
         shown={data.tasks.items.length}
@@ -192,7 +231,9 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
           </li>
         ))}
       </Section>
-      <Section title="等我确认" hint="检查项" total={data.signatures.total} shown={data.signatures.items.length} empty="没有等你确认的检查项" emptyHref={emptySectionHref(org, 'signatures')}>
+    ),
+    signatures: (
+      <Section key={`${persona}-signatures`} sectionId="signatures" emphasis={layout.sections.find((section) => section.id === 'signatures')!.emphasis} collapsedDefault={layout.sections.find((section) => section.id === 'signatures')!.collapsedDefault} title="等我确认" hint="检查项" total={data.signatures.total} shown={data.signatures.items.length} empty="没有等你确认的检查项" emptyHref={emptySectionHref(org, 'signatures')}>
         {data.signatures.items.map((s) => (
           <li key={`${s.requirementId ?? s.documentId}-${s.itemKey}-${s.ruleIndex}`}>
             <Link href={signatureHref(s)} className={ROW}>
@@ -205,7 +246,9 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
           </li>
         ))}
       </Section>
-      <Section title="等我确认" hint="简报" total={data.confirmations.total} shown={data.confirmations.items.length} empty="暂无需要你确认的简报" emptyHref={emptySectionHref(org, 'confirmations')}>
+    ),
+    confirmations: (
+      <Section key={`${persona}-confirmations`} sectionId="confirmations" emphasis={layout.sections.find((section) => section.id === 'confirmations')!.emphasis} collapsedDefault={layout.sections.find((section) => section.id === 'confirmations')!.collapsedDefault} title="等我确认" hint="简报" total={data.confirmations.total} shown={data.confirmations.items.length} empty="暂无需要你确认的简报" emptyHref={emptySectionHref(org, 'confirmations')}>
         {data.confirmations.items.map((c) => (
           <li key={c.documentId}>
             <Link href={confirmationHref(c)} className={ROW}>
@@ -217,7 +260,9 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
           </li>
         ))}
       </Section>
-      <Section title="未读评论" total={data.unread.total} shown={data.unread.items.length} empty="没有未读评论" emptyHref={emptySectionHref(org, 'unread')}>
+    ),
+    unread: (
+      <Section key={`${persona}-unread`} sectionId="unread" emphasis={layout.sections.find((section) => section.id === 'unread')!.emphasis} collapsedDefault={layout.sections.find((section) => section.id === 'unread')!.collapsedDefault} title="未读评论" total={data.unread.total} shown={data.unread.items.length} empty="没有未读评论" emptyHref={emptySectionHref(org, 'unread')}>
         {data.unread.items.map((u) => (
           <li key={u.requirementId ?? u.documentId}>
             <Link href={unreadHref(u)} className={ROW}>
@@ -229,26 +274,35 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
           </li>
         ))}
       </Section>
+    ),
+  };
+  return (
+    <div data-section-order={layout.sections.map((section) => section.id).join(' ')} className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2 3xl:grid-cols-3">
+      {layout.sections.map((section) => blocks[section.id])}
     </div>
   );
 }
 
 export default function WorkbenchPage() {
   const { org } = useParams<{ org: string }>();
+  const personaState = useWorkbenchPersona(org);
   const q = useWorkbench(org);
+  const persona = personaState.resolved.persona;
+  const layout = layoutFor(persona);
   let body: ReactNode;
-  if (q.data) {
+  if (q.isError) body = <QueryError error={q.error} noAccessMessage="无法读取工作台。" retryMessage="加载工作台失败，请重试。" onRetry={() => q.refetch()} />;
+  else if (!q.data || !personaState.ready) body = <Skeleton className="h-64" />;
+  else {
     body = (
-      <>
-        <NowIterationBlock org={org} workbench={q.data} />
-        <Sections org={org} data={q.data} />
-      </>
+      <div className="contents" data-persona={persona} data-persona-source={personaState.resolved.source}>
+        <NowIterationBlock org={org} workbench={q.data} layout={layout} persona={persona} />
+        <Sections org={org} data={q.data} layout={layout} persona={persona} />
+      </div>
     );
-  } else if (q.isError) body = <QueryError error={q.error} noAccessMessage="无法读取工作台。" retryMessage="加载工作台失败，请重试。" onRetry={() => q.refetch()} />;
-  else body = <Skeleton className="h-64" />;
+  }
   return (
     <>
-      <PageHeader title="工作台" description={<WorkbenchDescription />} />
+      <PageHeader title="工作台" description={<WorkbenchDescription />} actions={<PersonaSwitch ready={personaState.ready} resolved={personaState.resolved} setOverride={personaState.setOverride} />} />
       {body}
     </>
   );
