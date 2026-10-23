@@ -21,7 +21,7 @@
 ## 记录
 
 ### 2026-10-23 · 云端 · e2e 重置前只终止 flower_app 后端
-- 分支 / PR：`cursor/fix-e2e-reset-deadlock-a9e4`（草稿，不要 merge，不要标 ready）
+- 分支 / PR：`cursor/fix-e2e-reset-deadlock-a9e4` → `main`，PR #33（草稿，不要 merge，不要标 ready）
 - 做了什么：`resetDatabase` 在列出表之后、TRUNCATE 之前，最多等 2 秒让本库非 idle 的 flower_app 结束，再 `pg_terminate_backend` 终止其余 flower_app（不含本连接，不含 flower_admin）。40P01 仍最多重试 5 次。没有改业务表锁、db.spec、迁移、compose、CI。不碰 47.x。
 - 怎么验证的：`pnpm typecheck` 通过。`pnpm --filter @flower/web lint` 0 警告。`e2e/db.spec.ts` 1 条通过；Postgres 只记下这一条故意死锁（TRUNCATE 为受害者，对方是 `SELECT 1 FROM "instance_settings"`）。另用 flower_app 持 AccessShare：约 2 秒后连接被关掉（CONNECTION_CLOSED），不是 40P01，flower_admin 连接还在，没有新的死锁日志。`e2e/auth.spec.ts` 3 条通过。全量 e2e 以本 PR 的 CI 为准。
 - 留给对方：不要 merge，不要标 ready。独立草稿，不要叠到 #31 / #32。合仓不等于部署，不碰 47.x。
