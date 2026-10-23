@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · 需求列表次要列默认不显示
+- 分支 / PR：`fix/dux-c-list-columns`（草稿，不要 merge，不要标 ready）
+- 做了什么：只做 DUX-005。需求列表不再渲染「平台」「业务域」「提出人」「更新」。编号、标题、状态仍常显；优先级、负责人、迭代从 md 起显示（迭代从 xl 升到 md）。没有列设置，没有新的 localStorage。筛条、PRE-01 的 `related`、壳宽、详情、甘特、工作台、API 都没改。行高仍是 `h-10`。不碰 47.x。
+- 怎么验证的：`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。Playwright `dux-c-list-columns` 1 条通过：1280 表头没有「平台」「业务域」「提出人」「更新」，有编号、标题、状态、优先级、负责人、迭代，标题列宽于其余列，表宽接近主区；1600 这四列仍不出现；760 这四列不在 DOM，优先级、负责人、迭代为 `hidden`，标题单元格宽大于 160，页面不横向溢出。`requirements` 8 条和 `ux-residual-batch1` 7 条通过（含 G2：760 标题可读并能打开详情）。截图在 PR 描述。本机 Postgres 16 跑的，不是 CI。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰 47.x。回滚：把四列的表头和单元格加回去，迭代改回 `hidden xl:table-cell`。列设置留到二期。
+
 ### 2026-10-23 · 云端 · 需求详情单一右轨、紧凑状态、历史出主列
 - 分支 / PR：`fix/dux-b-detail-narrative`（草稿，不要 merge，不要标 ready）
 - 做了什么：B 余 DUX-002/003/004/011/012。PRE-02 把状态卡单独放在 `lg:row-start-1`，aside 不写行号，宽屏上 aside 落到 row2，跟进整段在主列底边之下。这次收成**一个**右轨父节点，DOM 顺序是跟进 → 状态 → 状态历史 → 简报及其余；主列与右轨都是 `lg:row-start-1`，右轨 `lg:col-start-2`。展开写死 380px，收起仍是 2.5rem 把手。`flower.req.detail.asideCollapsed` 与 `flower.shell.navCollapsed` 没改。右轨 `lg:sticky lg:top-4`、`lg:max-h-[calc(100vh-2rem)]`、`lg:overflow-y-auto`，收展把手在同一层，不再单独 sticky。状态是当前态一行 + `变更状态` 菜单（非法项禁用并带短因）+ 至多一个主按钮；未满足条件只在菜单项副文案里，按钮下不再挂常驻列表。状态历史离开主列，默认最近 3 条，可展开全部。没有改流转 API，没有拖拽改宽，没有改壳 max-width，没有动列表、工作台、甘特。空态折叠（RA-009/010/012）没做。不碰 47.x。
