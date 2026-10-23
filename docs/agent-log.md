@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · 工作台 1280 改两列，任务标题不再被挤没（FIX-3）
+- 分支 / PR：`fix/dux-e-workbench-density`（草稿 #39，不要 merge，不要标 ready）
+- 做了什么：已处理同日 FIX-3。工作台网格从 `xl:grid-cols-3` 改为 `xl:grid-cols-2 2xl:grid-cols-3`。1280 与 1440 是两列，1536 才三列。任务标题加 `min-w-[64px]`，迭代名去掉 `shrink-0`、保留截断，并加上 `title` 以便悬停看全名。端到端在 1280 断言任务标题的可见宽度（算上父级 overflow 裁切）不少于 64px，计划日和进度的右边界不超出行。截图覆盖 `docs/dux-e/workbench-full-1280.png`、`docs/dux-e/workbench-partial-1280.png`，并新增 `docs/dux-e/workbench-full-1536.png`。没有 masonry，没有改共享组件、后端和计数接口。不碰 47.x。
+- 怎么验证的：`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。Playwright：`layout`、`tasks`、`ux-residual-batch1`、`work-items`、`workbench`、`dux-e-workbench-density` 共 20 条通过。1280 任务卡宽 480px，有计划日的长标题可见宽度 96px，未排期的短标题 130px。1536 任务卡宽 400px，六条标题可见宽度都是 64px。进度和计划日右边界都在行内。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰 47.x。回滚：网格改回 `xl:grid-cols-3`，标题去掉 `min-w-[64px]`，迭代名加回 `shrink-0` 并去掉 `title`。截图用 `WB_SHOT=1` 重跑 `dux-e-workbench-density` 会写回 `docs/dux-e/`。
+
 ### 2026-10-23 · 云端 · 工作台卡片按内容定高（FIX-2）
 - 分支 / PR：`fix/dux-e-workbench-density`（草稿 #39，不要 merge，不要标 ready）
 - 做了什么：已处理同日 FIX-2。工作台网格加 `items-start`，卡片按内容定高，不再把同一行拉齐。空文案改为顶对齐、`py-2`，不再在被拉高的卡里垂直居中。任务行迭代名 `min-w-0 max-w-24 shrink-0 truncate`，进度百分比 `shrink-0`，长迭代名截断、不挤掉百分比。1280 的编号、迭代、计划日断言改成逐字段 `toBeVisible()`。「了解更多」展开后再点一次，回到 `aria-expanded=false` 和「了解更多」。满负荷造数在 `apps/web/e2e/dux-e-workbench-density.spec.ts`；截图在 `docs/dux-e/workbench-full-1280.png` 与 `docs/dux-e/workbench-partial-1280.png`。没有 masonry，没有改共享组件、后端和计数接口。不碰 47.x。

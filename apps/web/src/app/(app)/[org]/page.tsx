@@ -123,7 +123,7 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
   const badge = showOrgBadge(data.orgs);
   if (workbenchIsEmpty(data)) return <EmptyWorkbench org={org} />;
   return (
-    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
+    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2 2xl:grid-cols-3">
       <Section title="我负责的需求与工作项" total={data.owned.total} shown={data.owned.items.length} empty="没有进行中的需求与工作项" emptyHref={emptySectionHref(org, 'owned')}>
         {data.owned.items.map((r) => (
           <li key={r.id}>
@@ -164,9 +164,13 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
             <Link href={taskHref(t)} className={ROW}>
               <OrgBadge show={badge} name={t.org.name} />
               <span className="shrink-0 font-mono text-xs text-muted-foreground">{t.displayKey}</span>
-              <span className="min-w-0 flex-1 truncate">{t.title}</span>
+              <span className="min-w-[64px] flex-1 truncate">{t.title}</span>
               {t.requirement && <span className="shrink-0 font-mono text-xs text-muted-foreground">{t.requirement.displayKey}</span>}
-              {t.iteration && <span className="min-w-0 max-w-24 shrink-0 truncate text-xs text-muted-foreground">{t.iteration.name}</span>}
+              {t.iteration && (
+                <span title={t.iteration.name} className="min-w-0 max-w-24 truncate text-xs text-muted-foreground">
+                  {t.iteration.name}
+                </span>
+              )}
               <span className="shrink-0 font-mono text-xs text-muted-foreground">{t.planStart ?? '未排期'}</span>
               <span className="w-10 shrink-0 text-right font-mono text-xs">{t.progress}%</span>
             </Link>
