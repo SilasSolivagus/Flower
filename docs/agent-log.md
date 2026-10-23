@@ -20,6 +20,18 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · e2e 重置不再踢 idle 的 flower_app
+- 分支 / PR：`cursor/fix-e2e-reset-deadlock-a9e4` → `main`，PR #33（草稿，不要 merge，不要标 ready）
+- 做了什么：已处理同日「无条件终止其余 flower_app」过猛的问题。CI 39890767328 上 idle 连接被踢，后续请求 CONNECTION_CLOSED，e2e 挂了 8 条。现在短等仍最多 2 秒；busy 数为 0 就跳过 terminate。只有超时后仍 busy 才 `pg_terminate_backend`，过滤 `usename = 'flower_app' AND state <> 'idle' AND pid <> pg_backend_pid()`。不终止 flower_admin。40P01 仍最多 5 次。没有改 db.spec、业务表锁、迁移、compose、CI。已并入 main@a42867ea。不碰 47.x。
+- 怎么验证的：`pnpm typecheck` 通过。`pnpm --filter @flower/web lint` 0 警告。idle 的 flower_app 在 reset 后仍能查询（205ms，没有被踢）。idle in transaction 的 flower_app 约 2.2 秒后 CONNECTION_CLOSED，不是 40P01；flower_admin 连接还在。`e2e/db.spec.ts` 1 条通过，Postgres 新增的死锁仍是这条故意用例。全量 e2e 以本 PR CI 为准。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰 47.x。
+
+### 2026-10-23 · 云端 · e2e 重置前只终止 flower_app 后端
+- 分支 / PR：`cursor/fix-e2e-reset-deadlock-a9e4` → `main`，PR #33（草稿，不要 merge，不要标 ready）
+- 做了什么：`resetDatabase` 在列出表之后、TRUNCATE 之前，最多等 2 秒让本库非 idle 的 flower_app 结束，再 `pg_terminate_backend` 终止其余 flower_app（不含本连接，不含 flower_admin）。40P01 仍最多重试 5 次。没有改业务表锁、db.spec、迁移、compose、CI。不碰 47.x。
+- 怎么验证的：`pnpm typecheck` 通过。`pnpm --filter @flower/web lint` 0 警告。`e2e/db.spec.ts` 1 条通过；Postgres 只记下这一条故意死锁（TRUNCATE 为受害者，对方是 `SELECT 1 FROM "instance_settings"`）。另用 flower_app 持 AccessShare：约 2 秒后连接被关掉（CONNECTION_CLOSED），不是 40P01，flower_admin 连接还在，没有新的死锁日志。`e2e/auth.spec.ts` 3 条通过。全量 e2e 以本 PR 的 CI 为准。
+- 留给对方：不要 merge，不要标 ready。独立草稿，不要叠到 #31 / #32。合仓不等于部署，不碰 47.x。
+
 ### 2026-10-23 · 云端 · push 状态「设计中」不改检查项
 - 分支 / PR：`fix/import-push-status-designing`（草稿，不要 merge，不要标 ready）
 - 做了什么：`PUSH_STATUS_TO_CHECK` 增加 `设计中: null`，与「已搁置」一样不写背景、可行性、行业。有评审时仍按评审结果。没有新迁移，没有改 API、suggest、apps/web，也没有改其它映射。不碰 47.x。P1–P3 的对照表改动不在本 PR。

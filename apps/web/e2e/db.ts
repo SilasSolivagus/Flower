@@ -6,6 +6,14 @@ const ADMIN = 'postgres://flower_admin:flower_admin@localhost:54329';
 export const E2E_DB = 'flower_e2e';
 export const E2E_APP_PASSWORD = 'flower_app_test';
 /**
+ * 用例之间先等 flower_app 的非 idle 查询结束。
+ * 数到 0 就跳过终止；只有超时后仍 busy 才终止那些非 idle 后端。
+ * 上限 2 秒，空闲时立刻返回，避免拖慢整轮 e2e。
+ */
+const APP_BACKEND_DRAIN_MS = 2_000;
+const APP_BACKEND_POLL_MS = 50;
+type AdminSql = ReturnType<typeof postgres>;
+/**
  * 应用连接用 IP 而不是 localhost：next dev 启动后会解析 telemetry.nextjs.org 等外部域名，
  * DNS 不通时每次 getaddrinfo 占住 libuv 线程池的一个线程约 30 秒。连接池新建连接时解析
  * localhost 要排在它们后面，第一个需要第二条连接的请求就会挂起到超时。
@@ -37,16 +45,61 @@ export async function createDatabase(): Promise<void> {
 }
 
 /**
- * 清空 flower_e2e 的业务数据，但保留数据库本身和 Playwright webServer 已建立的连接池。
+ * 同一库上 flower_app 的非 idle 后端数（active、idle in transaction 等）。
+ * idle 连接不持有表锁。flower_admin（本连接，以及 db.spec 故意持有的 AccessShare）不计入。
+ */
+async function countBusyAppBackends(sql: AdminSql): Promise<number> {
+  const rows = await sql<{ n: number }[]>`
+    SELECT count(*)::int AS n
+    FROM pg_stat_activity
+    WHERE datname = current_database()
+      AND pid <> pg_backend_pid()
+      AND usename = 'flower_app'
+      AND state <> 'idle'
+  `;
+  return Number(rows[0]?.n ?? 0);
+}
+
+/** 短等 flower_app 没有非 idle 活动。超时仍返回；调用方再数一次，只有仍 busy 才终止。 */
+async function waitForAppBackendsIdle(sql: AdminSql): Promise<void> {
+  const deadline = Date.now() + APP_BACKEND_DRAIN_MS;
+  while (Date.now() < deadline) {
+    if ((await countBusyAppBackends(sql)) === 0) return;
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(APP_BACKEND_POLL_MS, remaining)));
+  }
+}
+
+/**
+ * 只终止同一库上仍非 idle 的 flower_app（active、idle in transaction 等）。
+ * 不终止 idle 连接池，也不终止 flower_admin（admin 短连接和 db.spec 的故意死锁事务都要留下）。
+ */
+async function terminateBusyAppBackends(sql: AdminSql): Promise<void> {
+  await sql`
+    SELECT pg_terminate_backend(pid)
+    FROM pg_stat_activity
+    WHERE datname = current_database()
+      AND pid <> pg_backend_pid()
+      AND usename = 'flower_app'
+      AND state <> 'idle'
+  `;
+}
+
+/**
+ * 清空 flower_e2e 的业务数据，但保留数据库本身。Playwright webServer 进程不重启。
  * 以 admin 角色连接后，从 pg_tables 现查 public schema 下的表名，排除 drizzle 的迁移记录表
  * （drizzle 默认存在独立的 drizzle schema 下，不在 public 里，无需按名排除），一条语句
  * TRUNCATE ... RESTART IDENTITY CASCADE 全部清空。domain_events 虽然对 flower_app 是
  * append-only（0003 撤销了 UPDATE/DELETE 权限），但 admin 角色不受限，可以 TRUNCATE。
  * 迁移本身不插入任何种子/默认行，所以清空后的状态等价于刚迁移完的数据库。
  *
- * 上一个用例的页面关闭后，服务端可能仍在处理它发出的请求。TRUNCATE 按表的顺序逐个加锁，
- * 请求事务按查询顺序逐个加锁，顺序相反时 Postgres 会报死锁（40P01）并中止其中一方；
- * 中止的是 TRUNCATE 时重试即可，请求事务结束后锁会释放。
+ * TRUNCATE 需要 AccessExclusiveLock。上一个用例关掉页面后，next dev 的连接池里可能还有
+ * flower_app 的 SELECT 持着 AccessShareLock；两边锁序相反时 Postgres 报 40P01。业务查询
+ * 被选为受害者时，重试 TRUNCATE 也救不回已经失败的请求，页面会空。因此先短等非 idle 的
+ * flower_app 结束。等到 0 就不再终止连接：无条件踢掉 idle 池会让后续请求 CONNECTION_CLOSED。
+ * 只有超时后仍 busy 才终止那些 state <> 'idle' 的 flower_app。故意死锁用例用 flower_admin
+ * 持 AccessShare，不会被终止，仍靠下面的 40P01 重试（最多 5 次）。
  */
 export async function resetDatabase(): Promise<void> {
   const sql = postgres(`${ADMIN}/${E2E_DB}`, { max: 1, onnotice: () => {} });
@@ -56,6 +109,10 @@ export async function resetDatabase(): Promise<void> {
     `;
     if (tables.length > 0) {
       const names = tables.map((t) => `"${t.tablename}"`).join(', ');
+      await waitForAppBackendsIdle(sql);
+      if ((await countBusyAppBackends(sql)) > 0) {
+        await terminateBusyAppBackends(sql);
+      }
       for (let attempt = 1; ; attempt++) {
         try {
           await sql.unsafe(`TRUNCATE TABLE ${names} RESTART IDENTITY CASCADE`);
