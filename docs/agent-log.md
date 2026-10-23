@@ -26,6 +26,18 @@
 - 怎么验证的：`pnpm typecheck` 通过。`pnpm --filter @flower/web lint` 0 警告。`e2e/db.spec.ts` 1 条通过；Postgres 只记下这一条故意死锁（TRUNCATE 为受害者，对方是 `SELECT 1 FROM "instance_settings"`）。另用 flower_app 持 AccessShare：约 2 秒后连接被关掉（CONNECTION_CLOSED），不是 40P01，flower_admin 连接还在，没有新的死锁日志。`e2e/auth.spec.ts` 3 条通过。全量 e2e 以本 PR 的 CI 为准。
 - 留给对方：不要 merge，不要标 ready。独立草稿，不要叠到 #31 / #32。合仓不等于部署，不碰 47.x。
 
+### 2026-10-23 · 云端 · push 状态「设计中」不改检查项
+- 分支 / PR：`fix/import-push-status-designing`（草稿，不要 merge，不要标 ready）
+- 做了什么：`PUSH_STATUS_TO_CHECK` 增加 `设计中: null`，与「已搁置」一样不写背景、可行性、行业。有评审时仍按评审结果。没有新迁移，没有改 API、suggest、apps/web，也没有改其它映射。不碰 47.x。P1–P3 的对照表改动不在本 PR。
+- 怎么验证的：`pnpm typecheck` 通过。migrate 不连库的单测 12 个文件、119 通过，其中「设计中」3 条单独再跑通过。本环境没有 Docker，54329 上的库测（migrate 的 write / rejoin / perf，以及 core、web）没跑，交给 GitHub Actions。相对 `d913dc51` 没有新迁移。
+- 留给对方：不要 merge，不要标 ready。不要在 47.x 上跑。H-G3「没有新迁移」的起算点是 `d913dc51`。端到端若红，对照 main@d913dc51 的已知失败再记，不要写成三绿。
+
+### 2026-10-23 · 云端 · ux-seed:batch2 改用合法 slug，并支持只清不种
+- 分支 / PR：`cursor/ux-seed-batch2-slug-clean-8447` → `main`，PR #31（草稿，不要 merge，不要标 ready）。与 P4 分开。
+- 做了什么：验收组织 slug 从 `flower_uxseed` 改为 `flower-uxseed`。脚本启动时用 `packages/core/src/tenancy/orgs.ts` 的 `SLUG_RE` 做硬校验。无参时组织已存在就报错并提示 `--clean`；`--clean` 仍是清完再种；新增 `--clean-only` 只删不种，组织本就不存在时退出 0。两个开关同时出现则报错。删除仍按 slug，先卸需求标签再 `deleteOrgData`。`package.json` 的 `ux-seed:batch2` 命令没改。没有新迁移，没改 `apps/web`、compose、CI。不碰 47.x。Docker compose 项目名可以仍是 `flower_uxseed`，那不是组织 slug。
+- 怎么验证的：`pnpm typecheck` 通过。另用临时 tsconfig 检查了种子脚本、flags 和单测。`scripts/ux-seed-batch2.test.ts` 7 项通过（无参 / `--clean` / `--clean-only` / 两者同传抛错，以及 slug 通过 `SLUG_RE`、旧下划线 slug 不通过）。esbuild 能打出包。打包后用假的本机连接串跑 `--clean --clean-only`，在连库前退出 1，提示不能同时使用这两个开关；连接串含 47.115.229.192 时仍拒绝；缺少 `DATABASE_ADMIN_URL` 仍报错。没有对任何库执行种子。相对 `d913dc51` 迁移目录没有差异。
+- 留给对方：不要 merge，不要标 ready。不要在 47.x 上跑。U2-07b / U2-12 不在本 PR。口径里的 `/flower_uxseed/` 要改成 `/flower-uxseed/`；E-5「清后不存在」用 `--clean-only`。若验收库里已经有探针种的 `flower-uxseed`，先 `--clean-only` 再种。回滚 revert 本 PR 即可。
+
 ### 2026-10-23 · 云端 · 备份哈希只记文件名，版本闸失败提示补下一步
 - 分支 / PR：`fix/h5-debt-sha256-copy`（草稿，不要 merge，不要标 ready）
 - 做了什么：`backup-flower.sh` 的 `.sha256` 在输出目录里按文件名计算，发布手册的校验改成先 `cd` 再 `sha256sum -c`。版本闸和 schema 服务的失败提示改成单行「原因。下一步：…」；`--check` 失败行加 `[Flower 启动检查]`，成功行不加。鉴权失败先核对 `.env` 密码。`failLine` 仍只取第一行，退出码仍是 1。没有新迁移。`apps/web` 未改。不碰 47.x。回滚节标题在 ce3679fc 上是 `## 回滚`。
