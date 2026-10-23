@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useId, useState } from 'react';
 import { ITERATION_STATUS_LABEL } from '@/lib/labels';
 import type { Workbench } from '@/lib/types';
-import { iterationGanttHref, iterationHref, iterationsHref, nowIterationEmptyKind, nowIterationSubtitle, nowIterationTaskHref, openNowIterationId } from './model';
+import { iterationGanttHref, iterationHref, iterationsHref, nowIterationDetailSubtitle, nowIterationEmptyKind, nowIterationSubtitle, nowIterationTaskHref, openNowIterationId } from './model';
 
 type Item = Workbench['nowIterations'][number];
 
@@ -55,7 +55,7 @@ function EmptyNow({ org, kind, hint }: { org: string; kind: 'none' | 'no_now'; h
 function NowIterationRow({ org, item, open, onToggle }: { org: string; item: Item; open: boolean; onToggle: () => void }) {
   const panelId = useId();
   const status = ITERATION_STATUS_LABEL[item.status];
-  const subtitle = nowIterationSubtitle(item, status);
+  const subtitle = nowIterationSubtitle(item);
   return (
     <li>
       <div className="flex h-10 min-w-0 items-center gap-3 overflow-hidden px-4 text-[13px]">
@@ -73,7 +73,7 @@ function NowIterationRow({ org, item, open, onToggle }: { org: string; item: Ite
           {open ? '收起' : '展开'}
         </button>
       </div>
-      {open ? <NowIterationDetail id={panelId} org={org} item={item} subtitle={subtitle} /> : null}
+      {open ? <NowIterationDetail id={panelId} org={org} item={item} subtitle={nowIterationDetailSubtitle(item, status)} /> : null}
     </li>
   );
 }

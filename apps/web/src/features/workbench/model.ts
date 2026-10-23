@@ -100,6 +100,14 @@ export function formatIterationRange(start: string, end: string): string {
   return start === end ? start : `${start} 至 ${end}`;
 }
 
-export function nowIterationSubtitle(item: { product: { name: string } | null; startDate: string; endDate: string }, statusLabel: string): string {
-  return `${item.product?.name ?? '专项'} · ${formatIterationRange(item.startDate, item.endDate)} · ${statusLabel}`;
+type NowIterationSubtitleItem = { product: { name: string } | null; startDate: string; endDate: string };
+
+/** 行内副文案只含产品与日期。状态在行尾单独显示：副文案在窄屏是 hidden，去掉行尾会丢状态。 */
+export function nowIterationSubtitle(item: NowIterationSubtitleItem): string {
+  return `${item.product?.name ?? '专项'} · ${formatIterationRange(item.startDate, item.endDate)}`;
+}
+
+/** 展开区副文案可以带状态。展开区不算行内重复。 */
+export function nowIterationDetailSubtitle(item: NowIterationSubtitleItem, statusLabel: string): string {
+  return `${nowIterationSubtitle(item)} · ${statusLabel}`;
 }
