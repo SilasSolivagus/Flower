@@ -61,7 +61,7 @@ test('发布版本：操作列固定在右侧，不用横向滚动就能点到�
   }
 });
 
-test('工作台：800px 下四个区块单列排列、标题不被挤没；1440 与 1536 两列，1920 起三列', async ({ page, request }) => {
+test('工作台：800px 下四个区块单列排列、标题不被挤没；1440、1536 与 1919 两列，1920 起三列', async ({ page, request }) => {
   const productId = await createProduct(request);
   const me = (await json<{ me: { memberId: string } }>(request.get('/api/v1/orgs/acme'))).me.memberId;
   const boss = await createMember(request, '老板乙');
@@ -95,6 +95,8 @@ test('工作台：800px 下四个区块单列排列、标题不被挤没；1440 
   await page.setViewportSize({ width: 1440, height: 900 });
   await assertTwoColumns();
   await page.setViewportSize({ width: 1536, height: 900 });
+  await assertTwoColumns();
+  await page.setViewportSize({ width: 1919, height: 900 });
   await assertTwoColumns();
   await page.setViewportSize({ width: 1920, height: 900 });
   await expect.poll(async () => Math.abs((await owned.boundingBox())!.y - (await following.boundingBox())!.y)).toBeLessThan(1);

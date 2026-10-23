@@ -31,7 +31,8 @@ type Bot = { post: (url: string, opts: { data: unknown }) => Promise<APIResponse
 
 /**
  * 可见宽是元素边框盒与卡片可视区、裁切父级的交集。
- * 标题字数不含空格；省略号盖住的字形、以及大半落在裁切区外的字形都不算。
+ * 标题字数不含空格。行或标题溢出时，右边界先减去省略号宽度，
+ * 字形必须完全落在这条边界左边，被省略号盖住的不算。
  * 可见宽不能靠标题自己的 min-w 单独过关。
  */
 async function taskRowMetrics(region: Locator): Promise<TaskRowMetric[]> {
@@ -70,8 +71,11 @@ async function taskRowMetrics(region: Locator): Promise<TaskRowMetric[]> {
     const lettersOf = (value: string) => Array.from(value).filter(isLetter).join('');
     const visibleLetters = (el: Element, left: number, right: number) => {
       const style = getComputedStyle(el);
+      const row = el.closest('a');
+      const rowOverflow = !!row && row.scrollWidth > row.clientWidth + 0.5;
+      const selfOverflow = el.scrollWidth > el.clientWidth + 0.5;
       let limit = right;
-      if (style.textOverflow.includes('ellipsis') && el.scrollWidth > el.clientWidth + 0.5) {
+      if ((rowOverflow || selfOverflow) && style.textOverflow.includes('ellipsis')) {
         const canvas = document.createElement('canvas').getContext('2d');
         if (canvas) {
           canvas.font = style.font;
@@ -88,17 +92,14 @@ async function taskRowMetrics(region: Locator): Promise<TaskRowMetric[]> {
         const value = text.textContent ?? '';
         for (let i = 0; i < value.length; i++) {
           const ch = value[i] ?? '';
-          if (!isLetter(ch)) continue;
           range.setStart(text, i);
           range.setEnd(text, i + 1);
+          let visible = false;
           for (const glyph of range.getClientRects()) {
             if (glyph.width <= 0 || glyph.height <= 0) continue;
-            const overlap = Math.min(glyph.right, limit) - Math.max(glyph.left, left);
-            if (overlap >= glyph.width / 2) {
-              shown += ch;
-              break;
-            }
+            if (glyph.right <= limit + 0.5 && glyph.left >= left - 0.5) visible = true;
           }
+          if (visible) shown += ch;
         }
       }
       return shown;
@@ -116,9 +117,10 @@ async function taskRowMetrics(region: Locator): Promise<TaskRowMetric[]> {
       const progressBox = visibleSpan(progress);
       const titleText = title.textContent ?? '';
       const titleShown = visibleLetters(title, titleBox.left, titleBox.right);
+      const titleLettersShown = lettersOf(titleShown);
       return {
         title: titleText,
-        titleChars: Array.from(titleShown).length,
+        titleChars: Array.from(titleLettersShown).length,
         titleLetters: lettersOf(titleText).length,
         titleShown,
         titleWidth: titleBox.width,
