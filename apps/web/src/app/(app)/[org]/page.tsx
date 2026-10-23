@@ -46,7 +46,7 @@ function Section({
 }) {
   const id = useId();
   return (
-    <section aria-labelledby={id} className="@container flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card">
+    <section aria-labelledby={id} className="flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card">
       <h2 id={id} className="flex items-center justify-between border-b px-4 py-2.5 font-semibold">
         <span className="flex min-w-0 items-baseline gap-2">
           <span className="truncate">{title}</span>
@@ -83,13 +83,16 @@ function OrgBadge({ show, name }: { show: boolean; name: string }) {
 
 function WorkbenchDescription() {
   const [open, setOpen] = useState(false);
+  const aboutId = useId();
   return (
     <>
       你负责、跟进、任务和待确认的条目。
-      <button type="button" className="ml-1.5 text-primary hover:underline" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        了解更多
+      <button type="button" className="ml-1.5 text-primary hover:underline" aria-expanded={open} aria-controls={aboutId} onClick={() => setOpen((v) => !v)}>
+        {open ? '收起' : '了解更多'}
       </button>
-      {open ? <span className="mt-1 block">{WORKBENCH_ABOUT}</span> : null}
+      <span id={aboutId} className={open ? 'mt-1 block' : 'hidden'}>
+        {WORKBENCH_ABOUT}
+      </span>
     </>
   );
 }
@@ -162,9 +165,9 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
               <OrgBadge show={badge} name={t.org.name} />
               <span className="shrink-0 font-mono text-xs text-muted-foreground">{t.displayKey}</span>
               <span className="min-w-0 flex-1 truncate">{t.title}</span>
-              {t.requirement && <span className="hidden shrink-0 font-mono text-xs text-muted-foreground @md:inline">{t.requirement.displayKey}</span>}
-              {t.iteration && <span className="hidden max-w-24 truncate text-xs text-muted-foreground @md:inline-block">{t.iteration.name}</span>}
-              <span className="hidden shrink-0 font-mono text-xs text-muted-foreground @md:inline">{t.planStart ?? '未排期'}</span>
+              {t.requirement && <span className="font-mono text-xs text-muted-foreground">{t.requirement.displayKey}</span>}
+              {t.iteration && <span className="text-xs text-muted-foreground">{t.iteration.name}</span>}
+              <span className="font-mono text-xs text-muted-foreground">{t.planStart ?? '未排期'}</span>
               <span className="w-10 text-right font-mono text-xs">{t.progress}%</span>
             </Link>
           </li>

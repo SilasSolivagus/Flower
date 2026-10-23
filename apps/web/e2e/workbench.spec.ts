@@ -37,6 +37,11 @@ test('登录后进入工作台：跨组织汇总负责的需求、我的任务�
   await login(page, OWNER.email, OWNER.password);
   await page.waitForURL('**/acme');
   await expect(page.getByRole('heading', { name: '工作台', level: 1 })).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const taskRow = page.getByRole('region', { name: /我的任务/ }).getByRole('link', { name: /接口联调/ });
+  await expect(taskRow).toContainText('PAN-1');
+  await expect(taskRow).toContainText('迭代0105');
+  await expect(taskRow).toContainText('未排期');
   const owned = page.getByRole('region', { name: /我负责的需求/ });
   await expect(owned.getByRole('link', { name: /PAN-1/ })).toBeVisible();
   await expect(owned.getByRole('link', { name: /DOC-1/ })).toContainText('第二组织');
@@ -58,7 +63,7 @@ test('工作台加载失败（5xx）显示重试', async ({ page }) => {
   await expect(page.getByText('加载工作台失败，请重试。')).toBeVisible({ timeout: 15_000 });
   await page.unroute('**/api/v1/me/workbench');
   await page.getByRole('button', { name: '重试' }).click();
-  await expect(page.getByRole('status')).toHaveText('没有需要你处理的条目。');
+  await expect(page.getByRole('group', { name: '工作台空态' }).getByRole('status')).toHaveText('没有需要你处理的条目。');
 });
 
 test('工作台的 PRD 未读评论：我负责的 PRD 上别人的评论；打开 PRD 后变为已读', async ({ page, request, playwright }) => {
@@ -84,8 +89,9 @@ test('工作台的 PRD 未读评论：我负责的 PRD 上别人的评论；打�
   expect((await read).ok()).toBeTruthy();
   await expect(page.getByRole('region', { name: /^评论/ })).toContainText('背景还缺数据');
   await page.goto('/acme');
-  await expect(page.getByRole('status')).toHaveText('没有需要你处理的条目。');
-  await expect(page.getByRole('navigation', { name: '去列表' }).getByRole('link', { name: '未读评论', exact: true })).toBeVisible();
+  const empty = page.getByRole('group', { name: '工作台空态' });
+  await expect(empty.getByRole('status')).toHaveText('没有需要你处理的条目。');
+  await expect(empty.getByRole('navigation', { name: '去列表' }).getByRole('link', { name: '未读评论', exact: true })).toBeVisible();
 });
 
 test('工作台「等我确认」列出待确认简报，已废弃的不出现，点进去打开简报', async ({ page, request }) => {
