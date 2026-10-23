@@ -14,6 +14,8 @@ import {
   List,
   ListChecks,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   RefreshCw,
   SlidersHorizontal,
   Tag,
@@ -24,7 +26,9 @@ import {
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
+import { NAV_COLLAPSED_KEY, orgNavClassName, railItemClassName, railLabelClassName } from '@/features/shell/collapse';
 import { activeNavKey, buildNav, type NavIcon, type NavItem } from '@/features/shell/nav';
+import { useCollapsedPref } from '@/features/shell/use-collapsed-pref';
 import { useOrg } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { LoadingBlock, QueryError } from './load-error';
@@ -53,26 +57,28 @@ const ICONS: Record<NavIcon, typeof Home> = {
   checklist: ListChecks,
 };
 
-function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate?: () => void }) {
+function NavLink({ item, active, onNavigate, rail }: { item: NavItem; active: boolean; onNavigate?: () => void; rail: boolean }) {
   const Icon = ICONS[item.icon] ?? Blocks;
-  const cls = 'flex h-8 items-center gap-2.5 whitespace-nowrap rounded-md px-2.5 text-sm';
+  const cls = cn('flex h-8 items-center gap-2.5 whitespace-nowrap rounded-md px-2.5 text-sm', railItemClassName(rail));
+  const label = <span className={railLabelClassName(rail)}>{item.label}</span>;
   if (!item.href) {
     return (
-      <span aria-disabled="true" className={cn(cls, 'cursor-not-allowed text-muted-foreground opacity-60')}>
-        <Icon className="size-4" aria-hidden="true" />
-        <span className="flex-1">{item.label}</span>
+      <span aria-disabled="true" title={item.label} className={cn(cls, 'cursor-not-allowed text-muted-foreground opacity-60')}>
+        <Icon className="size-4 shrink-0" aria-hidden="true" />
+        {label}
       </span>
     );
   }
   return (
     <Link
       href={item.href}
+      title={item.label}
       aria-current={active ? 'page' : undefined}
       onClick={onNavigate}
       className={cn(cls, active ? 'bg-accent font-semibold text-accent-foreground' : 'text-foreground hover:bg-muted')}
     >
-      <Icon className="size-4" aria-hidden="true" />
-      {item.label}
+      <Icon className="size-4 shrink-0" aria-hidden="true" />
+      {label}
     </Link>
   );
 }
@@ -82,35 +88,51 @@ function NavBody({
   nav,
   active,
   settingsOpen,
+  rail,
   onSettingsOpen,
   onNavigate,
   onClose,
+  onToggleRail,
 }: {
   org: string;
   nav: ReturnType<typeof buildNav>;
   active: string;
   settingsOpen: boolean;
+  rail: boolean;
   onSettingsOpen: () => void;
   onNavigate?: () => void;
   onClose?: () => void;
+  onToggleRail: () => void;
 }) {
   return (
     <>
-      <div className="flex items-center gap-2">
-        <Link href={`/${org}`} onClick={onNavigate} className="flex min-w-0 flex-1 items-center gap-2 px-2 font-bold">
+      <div className={cn('flex items-center gap-1', rail && 'xl:flex-col xl:gap-2')}>
+        <Link href={`/${org}`} onClick={onNavigate} className={cn('flex min-w-0 flex-1 items-center gap-2 px-2 font-bold', rail && 'xl:flex-none', railItemClassName(rail))}>
           <Logo />
-          Flower
+          <span className={railLabelClassName(rail)}>Flower</span>
         </Link>
         {onClose && (
           <button type="button" aria-label="收起导航" className="flex size-8 items-center justify-center rounded-md hover:bg-muted xl:hidden" onClick={onClose}>
             <X className="size-4" aria-hidden="true" />
           </button>
         )}
+        <button
+          type="button"
+          data-testid="nav-collapse"
+          aria-label={rail ? '展开侧栏' : '收起侧栏'}
+          aria-expanded={!rail}
+          aria-controls="org-nav"
+          title={rail ? '展开侧栏' : '收起侧栏'}
+          className={cn('hidden size-8 shrink-0 items-center justify-center rounded-md hover:bg-muted xl:flex', railItemClassName(rail))}
+          onClick={onToggleRail}
+        >
+          {rail ? <PanelLeftOpen className="size-4" aria-hidden="true" /> : <PanelLeftClose className="size-4" aria-hidden="true" />}
+        </button>
       </div>
-      <OrgSwitcher current={org} />
+      <OrgSwitcher current={org} rail={rail} />
       <div className="flex flex-col gap-0.5">
         {nav.main.map((i) => (
-          <NavLink key={i.key} item={i} active={i.key === active} onNavigate={onNavigate} />
+          <NavLink key={i.key} item={i} active={i.key === active} onNavigate={onNavigate} rail={rail} />
         ))}
       </div>
       {nav.settings.length > 0 && (
@@ -124,12 +146,12 @@ function NavBody({
             >
               组织设置
             </button>
-            {settingsOpen && nav.settings.map((i) => <NavLink key={i.key} item={i} active={i.key === active} onNavigate={onNavigate} />)}
+            {settingsOpen && nav.settings.map((i) => <NavLink key={i.key} item={i} active={i.key === active} onNavigate={onNavigate} rail={rail} />)}
           </div>
-          <div className="hidden flex-col gap-0.5 md:flex">
-            <div className="px-2.5 pb-1 text-[11px] tracking-widest text-muted-foreground">组织设置</div>
+          <div className={cn('hidden flex-col gap-0.5 md:flex', rail && 'xl:mt-2 xl:border-t xl:pt-2')}>
+            <div className={cn('px-2.5 pb-1 text-[11px] tracking-widest text-muted-foreground', railLabelClassName(rail))}>组织设置</div>
             {nav.settings.map((i) => (
-              <NavLink key={i.key} item={i} active={i.key === active} onNavigate={onNavigate} />
+              <NavLink key={i.key} item={i} active={i.key === active} onNavigate={onNavigate} rail={rail} />
             ))}
           </div>
         </>
@@ -144,6 +166,7 @@ export function OrgShell({ children }: { children: ReactNode }) {
   const q = useOrg(org);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [navPath, setNavPath] = useState<string | null>(null);
+  const [navCollapsed, setNavCollapsed] = useCollapsedPref(NAV_COLLAPSED_KEY);
   const navOpen = navPath === pathname;
   const closeNav = () => setNavPath(null);
 
@@ -176,21 +199,20 @@ export function OrgShell({ children }: { children: ReactNode }) {
       <nav
         id="org-nav"
         aria-label="主导航"
-        className={cn(
-          'z-50 flex h-screen w-60 shrink-0 flex-col gap-4 overflow-y-auto border-r bg-sidebar px-3 py-4',
-          'max-xl:fixed max-xl:inset-y-0 max-xl:left-0 max-xl:shadow-lg',
-          navOpen ? 'max-xl:flex' : 'max-xl:hidden',
-          'xl:sticky xl:top-0 xl:flex',
-        )}
+        data-testid="org-nav"
+        data-collapsed={navCollapsed ? 'true' : 'false'}
+        className={orgNavClassName(navCollapsed, navOpen)}
       >
         <NavBody
           org={org}
           nav={nav}
           active={active}
           settingsOpen={settingsOpen}
+          rail={navCollapsed}
           onSettingsOpen={() => setSettingsOpen((open) => !open)}
           onNavigate={closeNav}
           onClose={closeNav}
+          onToggleRail={() => setNavCollapsed(!navCollapsed)}
         />
       </nav>
       <div className="flex min-w-0 flex-1 flex-col">
