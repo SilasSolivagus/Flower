@@ -295,17 +295,14 @@ function RequirementsPage() {
       <div className="overflow-x-auto rounded-md border bg-card">
         <Table>
           <TableHeader>
+            {/* 平台、业务域、提出人、更新默认不渲染。迭代从 md 起显示，与优先级、负责人同档。 */}
             <TableRow>
               <TableHead className="w-28">编号</TableHead>
               <TableHead className="min-w-[14rem]">标题</TableHead>
               <TableHead className="w-24">状态</TableHead>
               <TableHead className="hidden w-20 md:table-cell">优先级</TableHead>
-              <TableHead className="hidden w-40 xl:table-cell">平台</TableHead>
-              <TableHead className="hidden w-28 xl:table-cell">业务域</TableHead>
               <TableHead className="hidden w-20 md:table-cell">负责人</TableHead>
-              <TableHead className="hidden w-20 xl:table-cell">提出人</TableHead>
-              <TableHead className="hidden w-28 xl:table-cell">迭代</TableHead>
-              <TableHead className="hidden w-24 xl:table-cell">更新</TableHead>
+              <TableHead className="hidden w-28 md:table-cell">迭代</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -330,12 +327,8 @@ function RequirementsPage() {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="hidden truncate text-[13px] text-muted-foreground xl:table-cell">{r.platforms.map((p) => p.label).join('、')}</TableCell>
-                  <TableCell className="hidden truncate text-[13px] xl:table-cell">{r.node?.name}</TableCell>
                   <TableCell className="hidden truncate text-[13px] md:table-cell">{r.owner?.displayName}</TableCell>
-                  <TableCell className="hidden truncate text-[13px] text-muted-foreground xl:table-cell">{r.requester?.displayName}</TableCell>
-                  <TableCell className="hidden truncate text-[13px] xl:table-cell">{r.iteration?.name}</TableCell>
-                  <TableCell className="hidden font-mono text-xs text-muted-foreground xl:table-cell">{new Date(r.updatedAt).toLocaleDateString('zh-CN')}</TableCell>
+                  <TableCell className="hidden truncate text-[13px] md:table-cell">{r.iteration?.name}</TableCell>
                 </TableRow>
               );
             })}
