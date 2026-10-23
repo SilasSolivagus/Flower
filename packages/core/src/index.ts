@@ -48,6 +48,7 @@ export * from './requirements/transitions';
 export * from './requirements/comments';
 export * from './iterations/iterations';
 export * from './iterations/membership';
+export * from './iterations/now-iterations';
 export * from './releases/releases';
 export * from './requirements/blockers';
 export * from './requirements/relations';

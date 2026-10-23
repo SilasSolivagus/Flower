@@ -25,7 +25,8 @@ test('工作项与任务列表是真页面，760 能看到标题和状态', asyn
   const iterationId = await createIteration(request, productId, '迭代一', '2026-10-01', '2026-10-14');
   await createTask(request, { title: '排期任务', productId, iterationId, assigneeMemberId: (await json<{ me: { memberId: string } }>(request.get('/api/v1/orgs/acme'))).me.memberId });
   await page.goto('/acme');
-  await page.getByRole('link', { name: '查看全部' }).click();
+  // 「此刻迭代」空态是「查看全部迭代」，和「我的任务」的「查看全部」不是同一个链接。
+  await page.getByRole('region', { name: /我的任务/ }).getByRole('link', { name: '查看全部', exact: true }).click();
   await expect(page).toHaveURL(/\/acme\/tasks$/);
   await expect(page.getByRole('heading', { name: '我的任务' })).toBeVisible();
   const table = page.getByRole('table', { name: '我的任务' });

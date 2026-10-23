@@ -58,12 +58,13 @@ test('登录后进入工作台：跨组织汇总负责的需求、我的任务�
 
 test('工作台加载失败（5xx）显示重试', async ({ page }) => {
   await login(page, OWNER.email, OWNER.password);
-  await page.route('**/api/v1/me/workbench', (route) => route.fulfill(FAIL_500));
+  await page.route('**/api/v1/me/workbench*', (route) => route.fulfill(FAIL_500));
   await page.goto('/acme');
   await expect(page.getByText('加载工作台失败，请重试。')).toBeVisible({ timeout: 15_000 });
-  await page.unroute('**/api/v1/me/workbench');
+  await page.unroute('**/api/v1/me/workbench*');
   await page.getByRole('button', { name: '重试' }).click();
   await expect(page.getByRole('group', { name: '工作台空态' }).getByRole('status')).toHaveText('没有需要你处理的条目。');
+  await expect(page.getByRole('region', { name: '此刻迭代' })).toContainText('还没有迭代。');
 });
 
 test('工作台的 PRD 未读评论：我负责的 PRD 上别人的评论；打开 PRD 后变为已读', async ({ page, request, playwright }) => {

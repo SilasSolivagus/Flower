@@ -6,6 +6,7 @@ import { type Tx, withOrg } from '../db/tx';
 import { briefDisplayKey, documentDisplayKey, documentKeyOf } from '../documents/markdown';
 import type { Actor } from '../domain-types';
 import { type StateInfo, stateInfoByProduct, stateOf } from '../iterations/iterations';
+import { type NowIterationCard, type NowIterationPlanningHint, type NowIterationPresence, loadNowIterations } from '../iterations/now-iterations';
 import { workItemDisplayKey } from '../links/syntax';
 import { memberNames, productWorkflowBody } from '../requirements/context';
 import { displayKey } from '../requirements/requirements';
@@ -79,6 +80,15 @@ export type Workbench = {
   unread: WorkbenchSection<WorkbenchUnread>;
   following: WorkbenchSection<WorkbenchFollowUp>;
   confirmations: WorkbenchSection<WorkbenchConfirmation>;
+  /**
+   * 当前 URL 组织里、进行中且日期含上海今天的可见迭代。
+   * 无 org、空 org、组织不存在或不是成员时为空数组，不报错。六块仍跨组织汇总。
+   */
+  nowIterations: NowIterationCard[];
+  /** unscoped = 没带 org；none = 没有可见迭代；no_now = 有迭代但没有此刻；present = 有此刻迭代。 */
+  nowIterationPresence: NowIterationPresence;
+  /** 没有此刻迭代时，最近的一条规划中迭代。有此刻迭代、或没有规划中迭代时为 null。 */
+  planningHint: NowIterationPlanningHint | null;
 };
 type OrgPart = {
   owned: WorkbenchRequirement[];
@@ -365,11 +375,28 @@ async function orgPart(db: Db, actor: Actor, org: WorkbenchOrg, today: string | 
   });
 }
 
+/** 只填充此刻迭代。没带 org 时不查；org 不影响上面六块的跨组织汇总。 */
+async function nowForOrg(
+  db: Db,
+  accountId: string,
+  memberships: Awaited<ReturnType<typeof listMyOrganizations>>,
+  orgSlug: string | undefined,
+  now: Date | undefined,
+): Promise<{ nowIterations: NowIterationCard[]; nowIterationPresence: NowIterationPresence; planningHint: NowIterationPlanningHint | null }> {
+  const slug = orgSlug?.trim() ?? '';
+  if (!slug) return { nowIterations: [], nowIterationPresence: 'unscoped', planningHint: null };
+  const membership = memberships.find((m) => m.slug === slug);
+  if (!membership) return { nowIterations: [], nowIterationPresence: 'none', planningHint: null };
+  const actor: Actor = { accountId, memberId: membership.memberId, orgId: membership.id, orgRole: membership.role, tokenId: null, tokenScope: null };
+  return loadNowIterations(db, actor, { now });
+}
+
 /**
  * 跨组织工作台。成员关系查找走 withSystem（listMyOrganizations，CLAUDE.md 允许的场景）；
  * 每个组织的数据各自在一个 withOrg 事务里、以该组织的成员身份读取，不在同一个 RLS 上下文里混读多个组织。
+ * opts.today 只影响六块里的任务进度；此刻迭代的「今天」另按 Asia/Shanghai 从 opts.now（缺省为当前时间）计算。
  */
-export async function getWorkbench(db: Db, accountId: string, opts: { today?: string } = {}): Promise<Workbench> {
+export async function getWorkbench(db: Db, accountId: string, opts: { today?: string; now?: Date; orgSlug?: string } = {}): Promise<Workbench> {
   const memberships = await listMyOrganizations(db, accountId);
   const orgs = memberships.map((m) => ({ id: m.id, slug: m.slug, name: m.name }));
   const parts: OrgPart[] = [];
@@ -377,6 +404,7 @@ export async function getWorkbench(db: Db, accountId: string, opts: { today?: st
     const actor: Actor = { accountId, memberId: m.memberId, orgId: m.id, orgRole: m.role, tokenId: null, tokenScope: null };
     parts.push(await orgPart(db, actor, orgs[i]!, opts.today));
   }
+  const nowBlock = await nowForOrg(db, accountId, memberships, opts.orgSlug, opts.now);
   return {
     orgs,
     owned: section(parts.flatMap((p) => p.owned), (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()),
@@ -388,5 +416,8 @@ export async function getWorkbench(db: Db, accountId: string, opts: { today?: st
       parts.flatMap((p) => p.confirmations),
       (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime() || a.displayKey.localeCompare(b.displayKey, 'zh-CN', { numeric: true }),
     ),
+    nowIterations: nowBlock.nowIterations,
+    nowIterationPresence: nowBlock.nowIterationPresence,
+    planningHint: nowBlock.planningHint,
   };
 }

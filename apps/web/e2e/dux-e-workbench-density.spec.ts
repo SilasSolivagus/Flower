@@ -303,7 +303,7 @@ test('1280 与 1536 两列，任务标题可见字不少于全文与 8 的较小
   await shot(page, 'workbench-full-1920.png');
 
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.route('**/api/v1/me/workbench', async (route) => {
+  await page.route('**/api/v1/me/workbench*', async (route) => {
     const res = await route.fetch();
     const body = await res.json();
     body.workbench.following = { total: 0, items: [] };

@@ -65,3 +65,41 @@ export function emptySectionHref(orgSlug: string, section: 'owned' | 'following'
 export function unreadHref(u: Workbench['unread']['items'][number]): string {
   return u.documentId ? `/${u.org.slug}/documents/${u.displayKey}` : requirementHref(u.org, u.displayKey);
 }
+
+export const iterationHref = (orgSlug: string, id: string): string => `/${orgSlug}/iterations/${id}`;
+
+export const iterationGanttHref = (orgSlug: string, id: string): string => `/${orgSlug}/iterations/${id}?tab=gantt`;
+
+export const iterationsHref = (orgSlug: string): string => `/${orgSlug}/iterations`;
+
+/** 此刻迭代里的任务行：有需求进需求，否则进该迭代甘特。与 taskHref 同一规则。 */
+export function nowIterationTaskHref(orgSlug: string, iterationId: string, task: { requirement: { displayKey: string } | null }): string {
+  if (task.requirement) return requirementHref({ slug: orgSlug }, task.requirement.displayKey);
+  return iterationGanttHref(orgSlug, iterationId);
+}
+
+/**
+ * 多条此刻迭代默认展开第一条。chosen 为 undefined 表示还没点过；
+ * null 表示用户收起了；指向已不在列表里的 id 时回到第一条。
+ */
+export function openNowIterationId(chosen: string | null | undefined, ids: readonly string[]): string | null {
+  const first = ids[0] ?? null;
+  if (chosen === undefined) return first;
+  if (chosen === null) return null;
+  return ids.includes(chosen) ? chosen : first;
+}
+
+/** 有此刻迭代时不走空态。没带 org 与「有迭代但不是此刻」用同一句说明。 */
+export function nowIterationEmptyKind(presence: Workbench['nowIterationPresence']): 'none' | 'no_now' | null {
+  if (presence === 'present') return null;
+  if (presence === 'none') return 'none';
+  return 'no_now';
+}
+
+export function formatIterationRange(start: string, end: string): string {
+  return start === end ? start : `${start} 至 ${end}`;
+}
+
+export function nowIterationSubtitle(item: { product: { name: string } | null; startDate: string; endDate: string }, statusLabel: string): string {
+  return `${item.product?.name ?? '专项'} · ${formatIterationRange(item.startDate, item.endDate)} · ${statusLabel}`;
+}
