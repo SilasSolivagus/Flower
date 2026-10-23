@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · 收紧工作台「查看全部」端到端定位
+- 分支 / PR：`fix/rw-phase1-now-iteration`（草稿 #42，不要 merge，不要标 ready）
+- 做了什么：已处理同日 CI 端到端失败（run 39982478274）。`ux-residual-batch2` 点「查看全部」时，Playwright 默认子串匹配把「此刻迭代」空态的「查看全部迭代」和「我的任务」标题上的「查看全部」算成两个链接。产品上这两处是不同入口，Phase 1 文案没改。定位改成「我的任务」区域内、名称精确等于「查看全部」。不碰 47.x。合仓不等于部署。
+- 怎么验证的：本机 Postgres 16（端口 54329）。Playwright：`ux-residual-batch2` 6 条、`workbench-now-iteration` 6 条通过。失败的那条「工作项与任务列表是真页面，760 能看到标题和状态」点进 `/acme/tasks` 并通过。不是 CI。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰生产。
+
 ### 2026-10-23 · 云端 · 工作台「此刻迭代」（RW Phase 1）
 - 分支 / PR：`fix/rw-phase1-now-iteration`（草稿，不要 merge，不要标 ready）
 - 做了什么：Silas 已拍 Q1～Q7。`GET /me/workbench?org=` 在当前组织里选出 `status=active` 且上海自然日闭区间含今天的可见迭代（专项一并参与），服务端一次算好概览、我的未完成任务和 active 阻塞。工作台 PageHeader 下、六块 grid 之上多一行「此刻迭代」；六块列规则没改。没有 schema 迁移。不碰 47.x，不做 Phase 2～4。合仓不等于部署。
