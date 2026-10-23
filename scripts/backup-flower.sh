@@ -62,7 +62,6 @@ fi
 
 "${compose[@]}" exec -T postgres pg_restore --list <"$dump" >/dev/null
 tar -tzf "$tgz" >/dev/null
-sha256sum "$dump" >"${dump}.sha256"
-sha256sum "$tgz" >"${tgz}.sha256"
+( cd "$out_real" && sha256sum "$(basename "$dump")" >"$(basename "$dump").sha256" && sha256sum "$(basename "$tgz")" >"$(basename "$tgz").sha256" )
 echo "备份完成：$dump"
 echo "备份完成：$tgz"

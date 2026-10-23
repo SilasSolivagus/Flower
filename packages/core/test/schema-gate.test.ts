@@ -1,6 +1,15 @@
+import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 import postgres from 'postgres';
 import { afterAll, describe, expect, it, vi } from 'vitest';
+
+const execFileAsync = promisify(execFile);
 import { MIGRATIONS_DIR, runMigrations } from '../src/db/migrate';
 import {
   CHECK_BUDGET_MS,
@@ -32,7 +41,7 @@ describe('compareSchema', () => {
 
   it('空表为 missing', () => {
     expect(compareSchema([], journal).status).toBe('missing');
-    expect(formatCompare(compareSchema([], journal))).toContain('还没迁移');
+    expect(formatCompare(compareSchema([], journal))).toBe('数据库还没迁移。下一步：运行 docker compose --profile schema run --rm schema');
   });
 
   it('登记表不存在（applied 为 null）为 missing', () => {
@@ -42,20 +51,19 @@ describe('compareSchema', () => {
   it('库的最新时间早于镜像为 behind，并带上两边标签', () => {
     const result = compareSchema(applied([10]), journal);
     expect(result).toEqual({ status: 'behind', dbLabel: 'm_old', imageLabel: 'm_new' });
-    expect(formatCompare(result)).toContain('m_old');
-    expect(formatCompare(result)).toContain('m_new');
+    expect(formatCompare(result)).toBe('数据库结构落后于镜像（库 m_old，镜像 m_new）。下一步：运行 docker compose --profile schema run --rm schema');
   });
 
   it('库的最新时间晚于镜像为 ahead', () => {
     const result = compareSchema(applied([10, 20, 30]), journal);
     expect(result.status).toBe('ahead');
-    expect(formatCompare(result)).toContain('先恢复备份再用旧镜像');
+    expect(formatCompare(result)).toBe('数据库比镜像新，不能用这个旧镜像启动。下一步：先恢复备份再用旧镜像（见发布手册 docs/release-runbook.md「回滚」）');
   });
 
   it('最新时间相同但条数不同', () => {
     const result = compareSchema(applied([20]), journal);
     expect(result).toEqual({ status: 'count-mismatch', appliedCount: 1, expectedCount: 2 });
-    expect(formatCompare(result)).toContain('不一致');
+    expect(formatCompare(result)).toBe('数据库迁移条数与镜像不一致（库 1 条，镜像 2 条）。下一步：运行 docker compose --profile schema run --rm schema');
   });
 });
 
@@ -66,50 +74,51 @@ describe('版本闸文案', () => {
     const denied = formatGateDbError({ code: '42501', message: 'permission denied for table __drizzle_migrations' }, target, Date.now(), 10);
     const absent = formatGateDbError({ code: '42P01', message: 'relation does not exist' }, target, Date.now(), 10);
     const schemaMissing = formatGateDbError({ code: '3F000', message: 'schema does not exist' }, target, Date.now(), 10);
-    expect(denied).toContain('没有权限');
+    expect(denied).toBe('没有权限读取迁移登记表。下一步：重跑 schema 补授权（docker compose --profile schema run --rm schema）');
     expect(denied).not.toContain('还没迁移');
-    expect(denied).toContain('schema');
-    expect(absent).toContain('还没迁移');
+    expect(absent).toBe('数据库还没迁移。下一步：运行 docker compose --profile schema run --rm schema');
     expect(absent).not.toContain('没有权限');
-    expect(schemaMissing).toContain('还没迁移');
+    expect(schemaMissing).toBe('数据库还没迁移。下一步：运行 docker compose --profile schema run --rm schema');
+    for (const line of [denied, absent, schemaMissing]) expect(line).not.toMatch(/\n\s+at /);
   });
 
   it('连不上库与认证失败分开，带主机和端口，并提示先跑 schema', () => {
-    const refused = formatGateDbError({ code: 'ECONNREFUSED', message: 'connect ECONNREFUSED' }, target, Date.now(), 10);
-    const timeout = formatGateDbError({ code: 'CONNECT_TIMEOUT', message: 'write CONNECT_TIMEOUT postgres:5432' }, target, Date.now() - 10_000, 10);
+    const future = Date.now() + 60_000;
+    const refused = formatGateDbError({ code: 'ECONNREFUSED', message: 'connect ECONNREFUSED' }, target, future, 10);
+    const timeout = formatGateDbError({ code: 'CONNECT_TIMEOUT', message: 'write CONNECT_TIMEOUT postgres:5432' }, target, Date.now(), 10);
     const auth = formatGateDbError({ code: '28P01', message: 'password authentication failed for user "flower_app"' }, target, Date.now(), 10);
+    expect(refused).toBe('连不上数据库主机 postgres:5432（等了不到 1 秒）。下一步：确认 postgres 容器已启动、DATABASE_URL 主机端口正确；全新部署则可能还没迁移，先跑 docker compose --profile schema run --rm schema');
+    expect(timeout).toBe('连不上数据库主机 postgres:5432（等了 10 秒）。下一步：确认 postgres 容器已启动、DATABASE_URL 主机端口正确；全新部署则可能还没迁移，先跑 docker compose --profile schema run --rm schema');
+    expect(auth).toBe('数据库认证失败（账号 flower_app，主机 postgres:5432）。下一步：核对 .env 里该账号的密码（特殊字符要 URL 编码）；全新空库则可能还没迁移，先跑 docker compose --profile schema run --rm schema');
     for (const line of [refused, timeout, auth]) {
-      expect(line).toContain('postgres:5432');
-      expect(line).toContain('schema');
       expect(line).not.toMatch(/postgres:\/\//);
       expect(line).not.toMatch(/\n\s+at /);
     }
-    expect(refused).toContain('连不上');
-    expect(timeout).toMatch(/等了 \d+ 秒/);
-    expect(auth).toContain('认证失败');
-    expect(auth).toContain('flower_app');
-    expect(auth).toContain('可能还没迁移');
   });
 
   it('schema 服务缺连接串、连不上、认证失败各自一行', () => {
-    expect(missingAdminUrlMessage()).toBe('[Flower schema] 缺少 DATABASE_ADMIN_URL');
-    const down = formatSchemaServiceFailure({ code: 'ECONNREFUSED' }, 'postgres://flower_admin:secret@postgres:5432/flower', Date.now());
+    const future = Date.now() + 60_000;
+    expect(missingAdminUrlMessage()).toBe('[Flower schema] 缺少 DATABASE_ADMIN_URL。下一步：确认它已传进 schema 容器且不为空，再重跑 docker compose --profile schema run --rm schema');
+    const down = formatSchemaServiceFailure({ code: 'ECONNREFUSED' }, 'postgres://flower_admin:secret@postgres:5432/flower', future);
     const auth = formatSchemaServiceFailure({ code: '28P01', message: 'password authentication failed' }, 'postgres://flower_admin:secret@postgres:5432/flower');
-    expect(down).toContain('[Flower schema]');
-    expect(down).toContain('连不上');
-    expect(down).toContain('postgres:5432');
-    expect(down).not.toContain('secret');
-    expect(auth).toContain('认证失败');
-    expect(auth).toContain('flower_admin');
-    expect(auth).not.toContain('secret');
+    const unparsed = formatSchemaServiceFailure(new Error('bad'), 'not a url');
+    const failed = formatSchemaServiceFailure(new Error('syntax error'), 'postgres://flower_admin:secret@postgres:5432/flower');
+    expect(down).toBe('[Flower schema] 连不上数据库主机 postgres:5432（等了不到 1 秒）。下一步：确认 postgres 容器已启动后重跑 docker compose --profile schema run --rm schema');
+    expect(auth).toBe('[Flower schema] 数据库认证失败（账号 flower_admin，主机 postgres:5432）。下一步：核对 .env 里 DATABASE_ADMIN_URL 的账号密码（特殊字符要 URL 编码），再重跑 docker compose --profile schema run --rm schema');
+    expect(unparsed).toBe('[Flower schema] 连不上数据库（连接串无法解析，没有主机名）。下一步：检查 DATABASE_ADMIN_URL 格式（postgres://账号:密码@主机:端口/库名）');
+    expect(failed).toBe('[Flower schema] 迁移失败（主机 postgres:5432）。下一步：看上面 postgres 报错，修好后重跑 docker compose --profile schema run --rm schema；不要直接起 web');
     const wrapped = formatSchemaServiceFailure(
       { message: 'Failed query: CREATE SCHEMA IF NOT EXISTS "drizzle"', cause: { code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 127.0.0.1:5432' } },
       'postgres://flower_admin:secret@127.0.0.1:5432/flower',
+      future,
     );
-    expect(wrapped).toContain('连不上');
-    expect(wrapped).toContain('127.0.0.1:5432');
-    expect(wrapped).not.toContain('secret');
+    expect(wrapped).toBe('[Flower schema] 连不上数据库主机 127.0.0.1:5432（等了不到 1 秒）。下一步：确认 postgres 容器已启动后重跑 docker compose --profile schema run --rm schema');
+    for (const line of [down, auth, unparsed, failed, wrapped]) {
+      expect(line).not.toContain('secret');
+      expect(line).not.toMatch(/\n\s+at /);
+    }
     expect(wrapped).not.toContain('Failed query');
+    expect(unparsed).not.toContain('flower_admin');
   });
 
   it('不写死迁移编号或条数，连接超时不超过 10 秒，--check 不超过 30 秒', () => {
@@ -117,8 +126,8 @@ describe('版本闸文案', () => {
     const cli = readFileSync(new URL('../src/db/migrate-cli.ts', import.meta.url), 'utf8');
     expect(src).not.toMatch(/00\d{2}_/);
     expect(cli).not.toMatch(/00\d{2}_/);
-    expect(src).not.toMatch(/postgres:\/\//);
-    expect(cli).not.toMatch(/postgres:\/\//);
+    expect(src).not.toMatch(/postgres:\/\/[A-Za-z0-9]/);
+    expect(cli).not.toMatch(/postgres:\/\/[A-Za-z0-9]/);
     expect(CONNECT_TIMEOUT_SEC).toBeLessThanOrEqual(10);
     expect(CHECK_BUDGET_MS).toBeLessThanOrEqual(30_000);
     expect(CONNECT_TIMEOUT_SEC).toBeGreaterThan(0);
@@ -200,11 +209,20 @@ describe('checkSchema 集成', () => {
     const admin = postgres(urlFor(ADMIN_URL, name), { max: 1, onnotice: () => {} });
     try {
       await admin`delete from drizzle.__drizzle_migrations where created_at = ${latest.when}`;
-      await expect(checkSchema(appUrl, MIGRATIONS_DIR)).rejects.toThrow(new RegExp(latest.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
       const previous = image.filter((entry) => entry.when !== latest.when).reduce((best, entry) => (entry.when > best.when ? entry : best));
-      await expect(checkSchema(appUrl, MIGRATIONS_DIR)).rejects.toThrow(previous.tag);
+      const behind = await checkSchema(appUrl, MIGRATIONS_DIR).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(behind).toBeInstanceOf(Error);
+      expect((behind as Error).message).toBe(`数据库结构落后于镜像（库 ${previous.tag}，镜像 ${latest.tag}）。下一步：运行 docker compose --profile schema run --rm schema`);
       await admin`insert into drizzle.__drizzle_migrations (hash, created_at) values ('ahead', ${latest.when}), ('further', ${latest.when + 1})`;
-      await expect(checkSchema(appUrl, MIGRATIONS_DIR)).rejects.toThrow('先恢复备份再用旧镜像');
+      const ahead = await checkSchema(appUrl, MIGRATIONS_DIR).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(ahead).toBeInstanceOf(Error);
+      expect((ahead as Error).message).toBe('数据库比镜像新，不能用这个旧镜像启动。下一步：先恢复备份再用旧镜像（见发布手册 docs/release-runbook.md「回滚」）');
     } finally {
       await admin.end();
     }
@@ -213,19 +231,34 @@ describe('checkSchema 集成', () => {
   it('空库缺表、错密码、收回授权，三条提示互不相同', async () => {
     const name = await freshDb();
     const appUrl = urlFor(ADMIN_URL, name, { name: 'flower_app', password: APP_PASSWORD });
-    await expect(checkSchema(appUrl, MIGRATIONS_DIR)).rejects.toThrow('还没迁移');
+    const missing = await checkSchema(appUrl, MIGRATIONS_DIR).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(missing).toBeInstanceOf(Error);
+    expect((missing as Error).message).toBe('数据库还没迁移。下一步：运行 docker compose --profile schema run --rm schema');
 
     const wrong = urlFor(ADMIN_URL, name, { name: 'flower_app', password: 'not-the-password' });
-    await expect(checkSchema(wrong, MIGRATIONS_DIR)).rejects.toThrow(/认证失败[\s\S]*schema/);
-    await expect(checkSchema(wrong, MIGRATIONS_DIR)).rejects.not.toThrow(/\n\s+at /);
+    const auth = await checkSchema(wrong, MIGRATIONS_DIR).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(auth).toBeInstanceOf(Error);
+    expect((auth as Error).message).toBe('数据库认证失败（账号 flower_app，主机 localhost:54329）。下一步：核对 .env 里该账号的密码（特殊字符要 URL 编码）；全新空库则可能还没迁移，先跑 docker compose --profile schema run --rm schema');
+    expect((auth as Error).message).not.toMatch(/\n\s+at /);
+    expect((auth as Error).message).not.toContain('not-the-password');
 
     await runMigrations(urlFor(ADMIN_URL, name), APP_PASSWORD);
     const admin = postgres(urlFor(ADMIN_URL, name), { max: 1, onnotice: () => {} });
     try {
       await admin.unsafe('REVOKE SELECT ON drizzle.__drizzle_migrations FROM flower_app');
-      const denied = checkSchema(appUrl, MIGRATIONS_DIR);
-      await expect(denied).rejects.toThrow('没有权限');
-      await expect(checkSchema(appUrl, MIGRATIONS_DIR)).rejects.not.toThrow('还没迁移');
+      const denied = await checkSchema(appUrl, MIGRATIONS_DIR).then(
+        () => null,
+        (error: unknown) => error,
+      );
+      expect(denied).toBeInstanceOf(Error);
+      expect((denied as Error).message).toBe('没有权限读取迁移登记表。下一步：重跑 schema 补授权（docker compose --profile schema run --rm schema）');
+      expect((denied as Error).message).not.toContain('还没迁移');
     } finally {
       await admin.end();
     }
@@ -266,4 +299,42 @@ describe('checkSchema 集成', () => {
 
     await expect(checkSchema('not a url', MIGRATIONS_DIR, { budgetMs: 500 })).rejects.toThrow('没有主机名');
   }, 20_000);
+
+  it('--check 失败行带启动检查前缀', async () => {
+    const name = await freshDb();
+    const appUrl = urlFor(ADMIN_URL, name, { name: 'flower_app', password: APP_PASSWORD });
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'flower-cli-'));
+    const outfile = path.join(dir, 'migrate.mjs');
+    await build({
+      entryPoints: [fileURLToPath(new URL('../src/db/migrate-cli.ts', import.meta.url))],
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      target: 'node22',
+      outfile,
+      banner: { js: "import{createRequire}from'module';const require=createRequire(import.meta.url);" },
+    });
+    try {
+      let code = 0;
+      let stderr = '';
+      try {
+        const result = await execFileAsync(process.execPath, [outfile, '--check'], {
+          env: {
+            ...process.env,
+            DATABASE_URL: appUrl,
+            FLOWER_SECRET_KEY: '0123456789abcdef0123456789abcdef',
+          },
+        });
+        stderr = result.stderr;
+      } catch (error) {
+        const failed = error as { code?: number | string; stderr?: string };
+        code = typeof failed.code === 'number' ? failed.code : 1;
+        stderr = failed.stderr ?? '';
+      }
+      expect(code).toBe(1);
+      expect(stderr.trim()).toBe('[Flower 启动检查] 数据库还没迁移。下一步：运行 docker compose --profile schema run --rm schema');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

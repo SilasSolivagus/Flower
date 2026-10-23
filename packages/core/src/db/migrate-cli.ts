@@ -22,7 +22,7 @@ try {
     }
     const config = loadConfig();
     if (!dbTarget(config.databaseAdminUrl)) {
-      console.error('[Flower schema] 连不上数据库（连接串无法解析，没有主机名）');
+      console.error('[Flower schema] 连不上数据库（连接串无法解析，没有主机名）。下一步：检查 DATABASE_ADMIN_URL 格式（postgres://账号:密码@主机:端口/库名）');
       process.exit(1);
     }
     const started = Date.now();
@@ -36,6 +36,6 @@ try {
     console.log('数据库迁移完成');
   }
 } catch (error) {
-  console.error(failLine(error));
+  console.error(check ? `[Flower 启动检查] ${failLine(error)}` : failLine(error));
   process.exit(1);
 }
