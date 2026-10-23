@@ -6,7 +6,9 @@ export type ErrorCode =
   | 'conflict'
   | 'precondition_failed'
   | 'already_initialized'
-  | 'rate_limited';
+  | 'rate_limited'
+  | 'INVALID_RELATED'
+  | 'RELATED_CONFLICT';
 
 export class AppError extends Error {
   constructor(

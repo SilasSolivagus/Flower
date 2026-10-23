@@ -3,7 +3,7 @@
 import { ListTodo, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { EmptyState } from '@/components/empty-state';
 import { LoadingBlock, QueryError } from '@/components/load-error';
 import { MemberPicker } from '@/components/member-picker';
@@ -15,7 +15,19 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { activePeople, canListMembers, pickerOptions } from '@/features/members/model';
-import { filterToApiQuery, filterToSearch, type ListFilter, parseFilter, patchFilter, requirementFilterActive } from '@/features/requirements/filter';
+import {
+  effectiveRelatedScope,
+  filterToApiQuery,
+  filterToSearch,
+  type ListFilter,
+  parseFilter,
+  patchFilter,
+  readRelatedScope,
+  type RelatedScope,
+  requirementFilterActive,
+  subscribeRelatedScope,
+  writeRelatedScope,
+} from '@/features/requirements/filter';
 import { SORT_LABEL } from '@/lib/labels';
 import { useFields, useMembers, useNodes, useOrg, useProductIterations, useProducts, useProductWorkflow, useRequirements } from '@/lib/queries';
 import type { RequirementListItem } from '@/lib/types';
@@ -23,6 +35,38 @@ import { cn } from '@/lib/utils';
 import { CreateRequirementDialog } from './create-dialog';
 
 const ALL = '__all';
+const noStoredScope = (): null => null;
+const storedScopeFromBrowser = (): RelatedScope => readRelatedScope(window.localStorage);
+
+function RelatedScopeToggle({
+  scope,
+  disabled,
+  onMine,
+  onAll,
+}: {
+  scope: RelatedScope;
+  disabled: boolean;
+  onMine: () => void;
+  onAll: () => void;
+}) {
+  const item = (key: RelatedScope, label: string, onClick: () => void) => (
+    <button
+      type="button"
+      aria-pressed={scope === key}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn('h-7 rounded-[5px] px-2.5 text-[13px]', scope === key ? 'bg-primary font-medium text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+    >
+      {label}
+    </button>
+  );
+  return (
+    <div role="group" aria-label="需求范围" className="inline-flex h-8 items-center rounded-md border bg-card p-0.5">
+      {item('me', '我的', onMine)}
+      {item('all', '看全部', onAll)}
+    </div>
+  );
+}
 
 function StateBadge({ label, color }: { label: string; color: string }) {
   return (
@@ -38,6 +82,8 @@ function RequirementsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const filter = useMemo(() => parseFilter(new URLSearchParams(searchParams.toString())), [searchParams]);
+  const storedScope = useSyncExternalStore(subscribeRelatedScope, storedScopeFromBrowser, noStoredScope);
+  const scope = effectiveRelatedScope(storedScope ?? 'me', filter.owner);
   const orgQ = useOrg(org);
   const products = useProducts(org);
   const product = products.data?.find((p) => p.key === filter.product) ?? products.data?.[0];
@@ -47,11 +93,14 @@ function RequirementsPage() {
   const members = useMembers(org, canListMembersFlag);
   const nodes = useNodes(org, product?.id);
   const iterations = useProductIterations(org, product?.id);
-  const data = useRequirements(org, product?.id, filterToApiQuery(filter));
+  const data = useRequirements(org, storedScope && product?.id ? product.id : undefined, filterToApiQuery(filter, 50, scope));
   const [q, setQ] = useState(filter.q);
   const [creating, setCreating] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const rememberScope = (next: RelatedScope) => {
+    writeRelatedScope(window.localStorage, next);
+  };
   const setFilter = (patch: Partial<ListFilter>) => {
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
@@ -118,9 +167,18 @@ function RequirementsPage() {
     <>
       <PageHeader
         title="需求"
-        description={product ? `${product.name} · 共 ${allCount} 条` : undefined}
+        description={product ? `${product.name} · ${scope === 'me' ? '我相关' : '全部'} · 共 ${allCount} 条` : undefined}
         actions={
           <>
+            <RelatedScopeToggle
+              scope={scope}
+              disabled={storedScope === null}
+              onMine={() => {
+                rememberScope('me');
+                if (filter.owner) setFilter({ owner: null });
+              }}
+              onAll={() => rememberScope('all')}
+            />
             {products.data && products.data.length > 1 && (
               <Select value={product?.key} onValueChange={(key) => router.replace(`?${filterToSearch({ ...filter, product: key, page: 1 })}`)}>
                 <SelectTrigger className="h-8 w-40" aria-label="产品">

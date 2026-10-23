@@ -57,6 +57,32 @@ describe('需求接口', () => {
     expect(read.body).toEqual({ marked: 0 });
   });
 
+  it('related=me 与 owner、requester 互斥，非法取值返回 400', async () => {
+    const bad = await call(app, 'GET', `/orgs/acme/products/${productId}/requirements?related=foo`, { session });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error).toMatchObject({ code: 'INVALID_RELATED', message: 'related 只能是 me' });
+
+    const empty = await call(app, 'GET', `/orgs/acme/products/${productId}/requirements?related=`, { session });
+    expect(empty.status).toBe(400);
+    expect(empty.body.error.code).toBe('INVALID_RELATED');
+
+    const withOwner = await call(app, 'GET', `/orgs/acme/products/${productId}/requirements?related=me&owner=not-a-member`, { session });
+    expect(withOwner.status).toBe(400);
+    expect(withOwner.body.error).toMatchObject({ code: 'RELATED_CONFLICT', message: 'related=me 与 owner/requester 不能同时传' });
+
+    const withRequester = await call(app, 'GET', `/orgs/acme/products/${productId}/requirements?related=me&requester=not-a-member`, { session });
+    expect(withRequester.status).toBe(400);
+    expect(withRequester.body.error.code).toBe('RELATED_CONFLICT');
+
+    const mine = await call(app, 'GET', `/orgs/acme/products/${productId}/requirements?related=me`, { session });
+    expect(mine.status).toBe(200);
+    expect(mine.body.total).toBe(0);
+
+    const all = await call(app, 'GET', `/orgs/acme/products/${productId}/requirements`, { session });
+    expect(all.status).toBe(200);
+    expect(all.body.total).toBeGreaterThan(0);
+  });
+
   it('节点与迭代列表、不存在的需求返回 404', async () => {
     expect((await call(app, 'GET', `/orgs/acme/products/${productId}/nodes`, { session })).body).toEqual({ nodes: [] });
     expect((await call(app, 'GET', `/orgs/acme/products/${productId}/iterations`, { session })).body).toEqual({ iterations: [] });

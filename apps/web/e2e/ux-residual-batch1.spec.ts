@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { acceptInvite, createProduct, createRequirement, expectNoPageOverflow, json, login, ok, OWNER, setupInstance } from './helpers';
+import { acceptInvite, createProduct, createRequirement, expectNoPageOverflow, json, login, ok, OWNER, preferAllRequirements, setupInstance } from './helpers';
 
 test.beforeEach(async () => {
   await resetDatabase();
@@ -63,6 +63,7 @@ test('G2：760 需求列表标题可读并能打开详情', async ({ page, reque
   const productId = await createProduct(request);
   const title = '这是一个很长的需求标题用来确认窄屏下列表不会把标题挤成几个字';
   const req = await createRequirement(request, productId, title);
+  await preferAllRequirements(page);
   await login(page, OWNER.email, OWNER.password);
   await page.setViewportSize({ width: 760, height: 900 });
   await page.goto('/acme/requirements');

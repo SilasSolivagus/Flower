@@ -41,6 +41,7 @@ function filterFrom(c: Context<ApiEnv>): RequirementFilter {
     platformOptionIds: csv(q('platform')),
     ownerIds: csv(q('owner')),
     requesterIds: csv(q('requester')),
+    related: q('related'),
     iterationIds: csv(q('iteration')),
     noIteration: q('noIteration') === '1',
     q: q('q') || undefined,

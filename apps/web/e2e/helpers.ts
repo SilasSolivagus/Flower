@@ -29,6 +29,13 @@ export async function setupInstance(request: APIRequestContext, org = { name: '�
   expect(res.status()).toBe(201);
 }
 
+/** 既有列表用例要看产品内全量。须在进入需求列表之前调用。 */
+export async function preferAllRequirements(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    localStorage.setItem('flower.req.relatedScope', 'all');
+  });
+}
+
 export async function login(page: Page, email: string, password: string): Promise<void> {
   await page.goto('/login');
   await page.getByLabel('邮箱').fill(email);

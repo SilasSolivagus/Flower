@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · 需求列表默认筛我的（PRE-01）
+- 分支 / PR：`fix/pre01-related-me`（草稿，不要 merge，不要标 ready）
+- 做了什么：现有 `GET /orgs/:org/products/:id/requirements` 增加 `related=me`。命中负责人、提出人，或 `requirement_assignments.memberId` 为当前成员（exists，同一人多行不重复）。省略 `related` 仍是产品内可读全量。`related` 不是 `me` 返回 400 `INVALID_RELATED`；与 `owner` 或 `requester` 同时传返回 400 `RELATED_CONFLICT`。总数在服务端 OR 之后 count。列表默认「我的」，顶栏可切「看全部」，偏好只写 localStorage `flower.req.relatedScope`（`me`|`all`）。选了负责人时请求改走全部并带 `owner`，不与 `related=me` 同发。没有新接口，没有迁移，不碰 47.x。不做 PRE-02，不做切片 B。
+- 怎么验证的：core `requirement-related` 与原需求列表单测 16 通过。web 筛选单测 7 通过，需求 API 单测（含 400）通过。`pnpm typecheck` 通过。`pnpm --filter @flower/web lint` 0 警告。Playwright：`requirement-related` 2 条（默认我相关、看全部、刷新记住、查看者看全部没有「新建需求」），以及需求列表、成员选择器、ux-residual-batch1 共 19 条通过。全量端到端以本 PR 的 CI 为准。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰 47.x。回滚：去掉 `related` 解析与过滤，列表恢复不带默认范围。未做 PRE-02、DUX-002～010、切片 B～F。
+
 ### 2026-10-23 · 云端 · 组织壳按路由放宽宽表页
 - 分支 / PR：`fix/dux-a-shell-maxw`（草稿，不要 merge，不要标 ready）
 - 做了什么：只做切片 A（DUX-001、PRE-03 随壳、DUX-010 基线）。`OrgShell` 的 `main` 按 pathname 第二段选宽度：`documents` 仍是 `max-w-[1280px] mx-auto`；工作台、需求、迭代（含甘特详情）以及其余组织内路由不加 max-w，只留 `w-full`。内边距仍是 `px-4 py-6 md:px-8`，侧栏 `w-60` 和 760 汉堡未改。没有新 API、没有迁移。不碰 47.x。
