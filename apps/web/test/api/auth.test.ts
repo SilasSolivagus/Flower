@@ -58,6 +58,29 @@ describe('初始化与登录', () => {
     expect(pw.status).toBe(204);
   });
 
+  it('PATCH /me 接受工作台视角，拒绝未知值，不传时不抹掉', async () => {
+    const set = await call(app, 'PATCH', '/me', { session, body: { preferences: { theme: 'dark', workbenchPersona: 'pm' } } });
+    expect(set.status).toBe(200);
+    expect(set.body.account.preferences).toMatchObject({ theme: 'dark', workbenchPersona: 'pm' });
+    const kept = await call(app, 'PATCH', '/me', { session, body: { preferences: { locale: 'zh-CN' } } });
+    expect(kept.status).toBe(200);
+    expect(kept.body.account.preferences).toMatchObject({ theme: 'dark', locale: 'zh-CN', workbenchPersona: 'pm' });
+    for (const id of ['dev', 'design', 'qa', 'boss', 'neutral']) {
+      const next = await call(app, 'PATCH', '/me', { session, body: { preferences: { workbenchPersona: id } } });
+      expect(next.status).toBe(200);
+      expect(next.body.account.preferences.workbenchPersona).toBe(id);
+    }
+    const cleared = await call(app, 'PATCH', '/me', { session, body: { preferences: { workbenchPersona: null } } });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.account.preferences.workbenchPersona).toBeNull();
+    expect(cleared.body.account.preferences.theme).toBe('dark');
+    const bad = await call(app, 'PATCH', '/me', { session, body: { preferences: { workbenchPersona: 'owner' } } });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error.code).toBe('invalid');
+    const still = await call(app, 'GET', '/me', { session });
+    expect(still.body.account.preferences.workbenchPersona).toBeNull();
+  });
+
   it('默认邀请制；实例管理员开放注册后可注册', async () => {
     const denied = await call(app, 'POST', '/auth/register', { body: { email: 'a@example.com', name: 'A', password: 'password123' } });
     expect(denied.status).toBe(403);

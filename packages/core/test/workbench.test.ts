@@ -73,6 +73,7 @@ afterAll(() => t.cleanup());
 describe('工作台', () => {
   it('汇总本人在所有组织里负责的未完成需求，其他组织的行带组织信息', async () => {
     const wb = await getWorkbench(t.db, account.id, { today: TODAY });
+    expect(wb).not.toHaveProperty('resolvedPersona');
     expect(wb.orgs.map((o) => o.slug)).toEqual(['acme', 'other']);
     expect(wb.owned.total).toBe(2);
     expect(wb.owned.items.map((r) => `${r.org.slug}:${r.displayKey}`).sort()).toEqual(['acme:PAN-1', 'other:DOC-1']);

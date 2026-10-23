@@ -7,6 +7,7 @@ import {
   SESSION_COOKIE,
   signUp,
   updateProfile,
+  WORKBENCH_PERSONAS,
 } from '@flower/core';
 import { getCookie } from 'hono/cookie';
 import { z } from 'zod';
@@ -49,7 +50,12 @@ export function registerAuthRoutes(app: App, deps: ApiDeps): void {
       z.object({
         name: z.string().optional(),
         preferences: z
-          .object({ theme: z.enum(['light', 'dark', 'system']).optional(), locale: z.string().optional(), timezone: z.string().optional() })
+          .object({
+            theme: z.enum(['light', 'dark', 'system']).optional(),
+            locale: z.string().optional(),
+            timezone: z.string().optional(),
+            workbenchPersona: z.enum(WORKBENCH_PERSONAS).nullable().optional(),
+          })
           .optional(),
       }),
     );

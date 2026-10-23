@@ -53,7 +53,16 @@ const ts = (name: string) => timestamp(name, { withTimezone: true });
 const createdAt = () => ts('created_at').notNull().defaultNow();
 const orgRef = () => uuid('org_id').notNull().references(() => organizations.id);
 
-export type AccountPreferences = { theme?: 'light' | 'dark' | 'system'; locale?: string; timezone?: string };
+/** 工作台视角短 id。neutral 固定 Phase 1 布局；null 表示清除，回落职能标签。 */
+export const WORKBENCH_PERSONAS = ['pm', 'dev', 'design', 'qa', 'boss', 'neutral'] as const;
+export type WorkbenchPersona = (typeof WORKBENCH_PERSONAS)[number];
+export type AccountPreferences = {
+  theme?: 'light' | 'dark' | 'system';
+  locale?: string;
+  timezone?: string;
+  /** RW-P2：最近一次显式选择的工作台视角。缺省键表示从未设置。 */
+  workbenchPersona?: WorkbenchPersona | null;
+};
 /** tracking：跟进的老化阈值（P3-C1），缺省或无效时取默认值，见 tracking/aging.ts 的 trackingSettingsOf。 */
 export type OrgSettings = {
   timezone?: string;

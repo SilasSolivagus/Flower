@@ -49,6 +49,18 @@ describe('账号', () => {
     await expect(login(t.db, { email: 'd@example.com', password: 'newpassword1' })).resolves.toBeTruthy();
     expect((await getAccount(t.db, a.id))?.name).toBe('Dora');
   });
+
+  it('偏好合并工作台视角，保留旧键；null 清除视角', async () => {
+    const a = await createAccount(t.db, { email: 'pref@example.com', name: 'P', password: 'password123' });
+    const withTheme = await updateProfile(t.db, a.id, { preferences: { theme: 'dark' } });
+    expect(withTheme.preferences).toEqual({ theme: 'dark' });
+    const withPersona = await updateProfile(t.db, a.id, { preferences: { workbenchPersona: 'pm' } });
+    expect(withPersona.preferences).toEqual({ theme: 'dark', workbenchPersona: 'pm' });
+    const kept = await updateProfile(t.db, a.id, { preferences: { locale: 'zh-CN' } });
+    expect(kept.preferences).toEqual({ theme: 'dark', locale: 'zh-CN', workbenchPersona: 'pm' });
+    const cleared = await updateProfile(t.db, a.id, { preferences: { workbenchPersona: null } });
+    expect(cleared.preferences).toEqual({ theme: 'dark', locale: 'zh-CN', workbenchPersona: null });
+  });
 });
 
 describe('会话', () => {
