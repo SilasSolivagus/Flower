@@ -21,7 +21,7 @@
 ## 记录
 
 ### 2026-10-23 · 云端 · 甘特空态与迭代列表底高（DUX-008/009/010）
-- 分支 / PR：`fix/dux-f-gantt-polish`（草稿，不要 merge，不要标 ready）
+- 分支 / PR：`fix/dux-f-gantt-polish`（草稿 #41，不要 merge，不要标 ready）
 - 做了什么：任务表 `min-w` 从 1472 收到 960，列按这个宽度重排，表卡上的 `overflow-x-auto` 留着。没有开始日期时，时间轴改成一行矮空态。无任务，或整体、理论、落后、遗留四项都是 0，概览不再铺四张卡，改成一行摘要。迭代列表分组卡片加 `h-fit`、`shrink-0`，按内容定高。没有改甘特引擎、排期算法、需求详情和列表列，也没有动后端。不碰生产。
 - 怎么验证的：`overviewIsHollow` 单测通过。`pnpm --filter @flower/web lint` 0 警告。`pnpm typecheck` 通过。Playwright：`dux-f-gantt-polish` 2 条、`gantt` 6 条通过。1280 展开侧栏：页面 `scrollWidth` 等于 `clientWidth`（1280），表卡 `scrollWidth` 等于 `clientWidth`（974），没有外空内滚。空时间轴高 38（原先 102）。无任务和四项全 0 的概览高 38、没有四张卡（原先 98）。有进度时四张卡仍在。两条迭代的列表卡片高 169，底边在视口 373，下面留白在卡片外面。有排期的条形截了图。008-C 不升硬闸。
 - 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰生产。回滚：表改回 `min-w-[1472px]` 和原来的列宽，空轴和概览恢复四卡与居中空文案，列表卡片去掉 `h-fit` / `shrink-0`。
