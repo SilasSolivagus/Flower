@@ -51,6 +51,12 @@
   --zebra: #1a1f1b;
 }
 
+/* 工作台三列门槛，120rem = 1920px（与 xl 的 80rem 同一根字号）。
+   写成 min-[1920px] 或 1920px 时，这条会排在 xl 前面，被后面的 xl:grid-cols-2 盖住。 */
+@theme {
+  --breakpoint-3xl: 120rem;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

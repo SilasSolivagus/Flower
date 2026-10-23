@@ -123,7 +123,7 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
   const badge = showOrgBadge(data.orgs);
   if (workbenchIsEmpty(data)) return <EmptyWorkbench org={org} />;
   return (
-    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2 3xl:grid-cols-3">
       <Section title="我负责的需求与工作项" total={data.owned.total} shown={data.owned.items.length} empty="没有进行中的需求与工作项" emptyHref={emptySectionHref(org, 'owned')}>
         {data.owned.items.map((r) => (
           <li key={r.id}>

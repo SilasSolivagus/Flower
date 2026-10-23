@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · 工作台三列改到 ≥1920，1536 任务标题能对上号（FIX-4）
+- 分支 / PR：`fix/dux-e-workbench-3col-readable`（草稿，不要 merge，不要标 ready）
+- 做了什么：已处理同日 FIX-4。工作台网格从 `xl:grid-cols-2 2xl:grid-cols-3` 改为 `xl:grid-cols-2 3xl:grid-cols-3`。`3xl` 是 `120rem`，根字号 16px 时等于 1920px，排在 `xl`（80rem）和 `2xl`（96rem）之后。直接写 `min-[1920px]:` 或把断点写成 `1920px` 都会排在 `xl:grid-cols-2` 前面，同一条规则被盖住，1920 仍是两列。xl 起两列，≥1920 才三列。没有任务卡跨列，没有标题折行，没有改卡内列、共享组件、后端和计数接口。删掉密度端到端里 4 处 `console.log`。断言改成可见字符不少于 8，或可见宽不少于 104px；可见宽与卡片可视区、裁切父级取交集，标题自己的 `min-w-[64px]` 撑不满 104。迭代名 `toBeVisible` 且可见宽不少于 32px。计划日和进度复用同一套裁切宽度，须完整落在可视区里。宽度阈值留 0.5px。补了多组织徽标（1536 / 1920 进度不被裁）和侧栏收起。`layout.spec` 按 1440 / 1536 两列、1920 三列断言。满负荷截图：`docs/dux-e/workbench-full-1280.png`、`workbench-full-1440.png`、`workbench-full-1536.png`、`workbench-full-1920.png`。不碰生产。
+- 怎么验证的：`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。Playwright：`layout`、`tasks`、`ux-residual-batch1`、`work-items`、`workbench`、`dux-e-workbench-density` 共 22 条通过。单组织满负荷：1280 卡宽 480，长标题可见 9 字 / 96px，短标题 6 字 / 130px；1440 卡宽 560，长标题 13 字 / 176px，短标题 6 字 / 210px；1536 卡宽 608，长标题 13 字 / 224px，短标题 6 字 / 258px；1920 三列卡宽 528，长标题 13 字 / 144px，短标题 6 字 / 178px。多组织徽标下 1536 进度宽 40/40，1920 进度宽 40/40；1920 长标题可见 7 字 / 72px，序号还在。侧栏收起后 1536 仍两列，页头「收起」仍能收回说明。006-A、007-A、三字段没有回归。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰生产。回滚：去掉 `3xl` 断点，网格改回 `xl:grid-cols-2 2xl:grid-cols-3`。截图用 `WB_SHOT=1` 重跑 `dux-e-workbench-density` 会写回 `docs/dux-e/`。仓外的 ACCEPT-CRITERIA / FIX-BRIEF / GATE 不在本仓库，没有改。
+
 ### 2026-10-23 · 云端 · 工作台 1280 改两列，任务标题不再被挤没（FIX-3）
 - 分支 / PR：`fix/dux-e-workbench-density`（草稿 #39，不要 merge，不要标 ready）
 - 做了什么：已处理同日 FIX-3。工作台网格从 `xl:grid-cols-3` 改为 `xl:grid-cols-2 2xl:grid-cols-3`。1280 与 1440 是两列，1536 才三列。任务标题加 `min-w-[64px]`，迭代名去掉 `shrink-0`、保留截断，并加上 `title` 以便悬停看全名。端到端在 1280 断言任务标题的可见宽度（算上父级 overflow 裁切）不少于 64px，计划日和进度的右边界不超出行。截图覆盖 `docs/dux-e/workbench-full-1280.png`、`docs/dux-e/workbench-partial-1280.png`，并新增 `docs/dux-e/workbench-full-1536.png`。没有 masonry，没有改共享组件、后端和计数接口。不碰 47.x。
