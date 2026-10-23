@@ -13,6 +13,8 @@ const STATUS = {
   precondition_failed: 412,
   already_initialized: 409,
   rate_limited: 429,
+  INVALID_RELATED: 400,
+  RELATED_CONFLICT: 400,
 } as const;
 
 export function errorHandler(err: Error, c: Context) {

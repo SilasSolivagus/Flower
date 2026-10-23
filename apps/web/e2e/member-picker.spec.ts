@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { createMember, createProduct, createRequirement, login, ok, OWNER, setupInstance } from './helpers';
+import { createMember, createProduct, createRequirement, login, ok, OWNER, preferAllRequirements, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -86,6 +86,7 @@ test('需求列表：负责人筛选可以搜索', async ({ page, request }) => 
   await ok(request.post(`/api/v1/orgs/acme/products/${productId}/requirements`, { data: { title: '设计师负责的需求', ownerMemberId: designer } }));
   await createRequirement(request, productId, '没人负责的需求');
 
+  await preferAllRequirements(page);
   await login(page, OWNER.email, OWNER.password);
   await page.goto('/acme/requirements');
   await expect(page.getByText('没人负责的需求')).toBeVisible();

@@ -7,6 +7,7 @@ import {
   fieldValues,
   iterations,
   products,
+  requirementAssignments,
   requirements,
   stateTransitions,
   structureNodes,
@@ -45,6 +46,8 @@ export type RequirementFilter = {
   platformOptionIds?: string[];
   ownerIds?: string[];
   requesterIds?: string[];
+  /** `me`：负责人、提出人或被分配人是当前成员。其它值由 listRequirements 拒绝。 */
+  related?: string;
   iterationIds?: string[];
   noIteration?: boolean;
   q?: string;
@@ -95,8 +98,26 @@ function descendantIds(nodes: Array<{ id: string; parentId: string | null }>, ro
   return [...out];
 }
 
-async function filterConditions(tx: Tx, productId: string, f: RequirementFilter): Promise<SQL[]> {
+function assertRelatedFilter(f: RequirementFilter): void {
+  if (f.related === undefined) return;
+  if (f.related !== 'me') throw new AppError('INVALID_RELATED', 'related 只能是 me');
+  if ((f.ownerIds?.length ?? 0) > 0 || (f.requesterIds?.length ?? 0) > 0) {
+    throw new AppError('RELATED_CONFLICT', 'related=me 与 owner/requester 不能同时传');
+  }
+}
+
+/** 当前成员是负责人、提出人，或在分配表里有一行。exists 避免同一人多条分配把需求算重。 */
+function relatedToMember(memberId: string): SQL {
+  return or(
+    eq(requirements.ownerMemberId, memberId),
+    eq(requirements.requesterMemberId, memberId),
+    sql`exists (select 1 from ${requirementAssignments} where ${requirementAssignments.requirementId} = ${requirements.id} and ${requirementAssignments.memberId} = ${memberId})`,
+  )!;
+}
+
+async function filterConditions(tx: Tx, productId: string, f: RequirementFilter, memberId: string): Promise<SQL[]> {
   const conds: SQL[] = [eq(requirements.productId, productId), isNull(requirements.deletedAt)];
+  if (f.related === 'me') conds.push(relatedToMember(memberId));
   if (f.nodeIds?.length) {
     const nodes = await tx.select({ id: structureNodes.id, parentId: structureNodes.parentId }).from(structureNodes).where(eq(structureNodes.productId, productId));
     conds.push(inArray(requirements.nodeId, descendantIds(nodes, f.nodeIds)));
@@ -170,10 +191,11 @@ export async function hydrateList(tx: Tx, productKey: string, rows: ReqRow[]): P
 }
 
 export async function listRequirements(db: Db, actor: Actor, productId: string, filter: RequirementFilter = {}): Promise<RequirementList> {
+  assertRelatedFilter(filter);
   return withOrg(db, actor.orgId, async (tx) => {
     await requireProductRole(tx, actor, productId, 'viewer');
     const key = await productKeyOf(tx, productId);
-    const base = await filterConditions(tx, productId, filter);
+    const base = await filterConditions(tx, productId, filter, actor.memberId);
     const where = filter.states?.length ? and(...base, inArray(requirements.stateKey, filter.states)) : and(...base);
     const [{ total }] = (await tx.select({ total: sql<number>`count(*)::int` }).from(requirements).where(where)) as [{ total: number }];
     const counts = await tx

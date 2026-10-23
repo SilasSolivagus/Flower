@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase } from './db';
-import { createMember, createProduct, FAIL_500, login, ok, OWNER, setupInstance } from './helpers';
+import { createMember, createProduct, FAIL_500, login, ok, OWNER, preferAllRequirements, setupInstance } from './helpers';
 
 test.beforeEach(async ({ request }) => {
   await resetDatabase();
@@ -13,6 +13,7 @@ test('需求列表：新建、按状态和优先级筛选、搜索编号', async
   const p0 = fields.find((f: { key: string }) => f.key === 'priority').options.find((o: { key: string }) => o.key === 'p0').id;
   await ok(request.post(`/api/v1/orgs/acme/products/${productId}/requirements`, { data: { title: '回收站保留 30 天', fields: { priority: [p0] } } }));
 
+  await preferAllRequirements(page);
   await login(page, OWNER.email, OWNER.password);
   await page.goto('/acme/requirements');
   await expect(page.getByRole('heading', { name: '需求' })).toBeVisible();
@@ -53,6 +54,7 @@ test('搜索框防抖期间切换其他筛选不丢失已输入的文字', async
   const p0 = fields.find((f: { key: string }) => f.key === 'priority').options.find((o: { key: string }) => o.key === 'p0').id;
   await ok(request.post(`/api/v1/orgs/acme/products/${productId}/requirements`, { data: { title: '回收站保留 30 天', fields: { priority: [p0] } } }));
 
+  await preferAllRequirements(page);
   await login(page, OWNER.email, OWNER.password);
   await page.goto('/acme/requirements');
   await page.getByLabel('搜索需求').fill('回收站');
@@ -196,6 +198,7 @@ test('需求列表：加载失败显示提示，重试后恢复', async ({ page,
   const productId = await createProduct(request);
   await ok(request.post(`/api/v1/orgs/acme/products/${productId}/requirements`, { data: { title: '列表重试用例' } }));
 
+  await preferAllRequirements(page);
   await login(page, OWNER.email, OWNER.password);
   const listUrl = `**/api/v1/orgs/acme/products/${productId}/requirements?*`;
   await page.route(listUrl, (route) => route.fulfill(FAIL_500));

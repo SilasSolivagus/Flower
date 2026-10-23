@@ -13,6 +13,41 @@ export type ListFilter = {
 
 export const EMPTY_FILTER: ListFilter = { product: null, states: [], node: null, priority: [], platform: [], owner: null, iteration: null, q: '', sort: 'updated', page: 1 };
 
+/** 需求列表「我的 / 全部」。只存在本机，不跟账号走。 */
+export const RELATED_SCOPE_KEY = 'flower.req.relatedScope';
+
+export type RelatedScope = 'me' | 'all';
+
+const relatedScopeListeners = new Set<() => void>();
+
+export function subscribeRelatedScope(listener: () => void): () => void {
+  relatedScopeListeners.add(listener);
+  return () => relatedScopeListeners.delete(listener);
+}
+
+export function readRelatedScope(storage: Pick<Storage, 'getItem'> | null | undefined): RelatedScope {
+  try {
+    const v = storage?.getItem(RELATED_SCOPE_KEY);
+    return v === 'me' || v === 'all' ? v : 'me';
+  } catch {
+    return 'me';
+  }
+}
+
+export function writeRelatedScope(storage: Pick<Storage, 'setItem'>, scope: RelatedScope): void {
+  try {
+    storage.setItem(RELATED_SCOPE_KEY, scope);
+  } catch {
+    // 隐私模式等写不进去时，保持上次成功写入的值。
+  }
+  for (const listener of relatedScopeListeners) listener();
+}
+
+/** 负责人筛选和 related=me 互斥。选了负责人就按全部查，避免同一请求带上 owner。 */
+export function effectiveRelatedScope(stored: RelatedScope, owner: string | null): RelatedScope {
+  return owner ? 'all' : stored;
+}
+
 const list = (v: string | null) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : []);
 
 export function parseFilter(sp: URLSearchParams): ListFilter {
@@ -47,13 +82,14 @@ export function filterToSearch(f: ListFilter): string {
   return sp.toString();
 }
 
-export function filterToApiQuery(f: ListFilter, pageSize = 50): string {
+export function filterToApiQuery(f: ListFilter, pageSize = 50, scope: RelatedScope = 'all'): string {
   const sp = new URLSearchParams();
   if (f.states.length) sp.set('state', f.states.join(','));
   if (f.node) sp.set('node', f.node);
   if (f.priority.length) sp.set('priority', f.priority.join(','));
   if (f.platform.length) sp.set('platform', f.platform.join(','));
-  if (f.owner) sp.set('owner', f.owner);
+  if (scope === 'me') sp.set('related', 'me');
+  else if (f.owner) sp.set('owner', f.owner);
   if (f.iteration === 'none') sp.set('noIteration', '1');
   else if (f.iteration) sp.set('iteration', f.iteration);
   if (f.q.trim()) sp.set('q', f.q.trim());
