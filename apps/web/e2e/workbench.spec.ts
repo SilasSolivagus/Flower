@@ -58,7 +58,7 @@ test('工作台加载失败（5xx）显示重试', async ({ page }) => {
   await expect(page.getByText('加载工作台失败，请重试。')).toBeVisible({ timeout: 15_000 });
   await page.unroute('**/api/v1/me/workbench');
   await page.getByRole('button', { name: '重试' }).click();
-  await expect(page.getByRole('region', { name: /我负责的需求/ })).toBeVisible();
+  await expect(page.getByRole('status')).toHaveText('没有需要你处理的条目。');
 });
 
 test('工作台的 PRD 未读评论：我负责的 PRD 上别人的评论；打开 PRD 后变为已读', async ({ page, request, playwright }) => {
@@ -84,7 +84,8 @@ test('工作台的 PRD 未读评论：我负责的 PRD 上别人的评论；打�
   expect((await read).ok()).toBeTruthy();
   await expect(page.getByRole('region', { name: /^评论/ })).toContainText('背景还缺数据');
   await page.goto('/acme');
-  await expect(page.getByRole('region', { name: /未读评论/ })).toContainText('没有未读评论');
+  await expect(page.getByRole('status')).toHaveText('没有需要你处理的条目。');
+  await expect(page.getByRole('navigation', { name: '去列表' }).getByRole('link', { name: '未读评论', exact: true })).toBeVisible();
 });
 
 test('工作台「等我确认」列出待确认简报，已废弃的不出现，点进去打开简报', async ({ page, request }) => {

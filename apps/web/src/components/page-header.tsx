@@ -38,7 +38,7 @@ export function PageHeader({
       <div className="flex flex-col items-stretch gap-3 md:flex-row md:items-end md:gap-4">
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <h1 className="min-w-0 text-xl font-semibold break-words">{title}</h1>
-          {description && <p className="max-w-prose text-[13px] leading-6 break-words text-muted-foreground">{description}</p>}
+          {description && <div className="max-w-prose text-[13px] leading-6 break-words text-muted-foreground">{description}</div>}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>

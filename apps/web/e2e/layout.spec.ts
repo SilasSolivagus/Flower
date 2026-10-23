@@ -61,7 +61,7 @@ test('发布版本：操作列固定在右侧，不用横向滚动就能点到�
   }
 });
 
-test('工作台：800px 下四个区块单列排列、标题不被挤没；1440px 下两列', async ({ page, request }) => {
+test('工作台：800px 下四个区块单列排列、标题不被挤没；1440px 下三列', async ({ page, request }) => {
   const productId = await createProduct(request);
   const me = (await json<{ me: { memberId: string } }>(request.get('/api/v1/orgs/acme'))).me.memberId;
   const boss = await createMember(request, '老板乙');
@@ -87,6 +87,7 @@ test('工作台：800px 下四个区块单列排列、标题不被挤没；1440p
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect.poll(async () => Math.abs((await owned.boundingBox())!.y - (await following.boundingBox())!.y)).toBeLessThan(1);
-  await expect.poll(async () => Math.abs((await tasks.boundingBox())!.y - (await sign.boundingBox())!.y)).toBeLessThan(1);
+  await expect.poll(async () => Math.abs((await owned.boundingBox())!.y - (await tasks.boundingBox())!.y)).toBeLessThan(1);
+  await expect.poll(async () => (await sign.boundingBox())!.y).toBeGreaterThan((await tasks.boundingBox())!.y + (await tasks.boundingBox())!.height - 1);
   await expectNoPageOverflow(page);
 });
