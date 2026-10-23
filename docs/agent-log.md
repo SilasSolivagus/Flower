@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · 组织壳按路由放宽宽表页
+- 分支 / PR：`fix/dux-a-shell-maxw`（草稿，不要 merge，不要标 ready）
+- 做了什么：只做切片 A（DUX-001、PRE-03 随壳、DUX-010 基线）。`OrgShell` 的 `main` 按 pathname 第二段选宽度：`documents` 仍是 `max-w-[1280px] mx-auto`；工作台、需求、迭代（含甘特详情）以及其余组织内路由不加 max-w，只留 `w-full`。内边距仍是 `px-4 py-6 md:px-8`，侧栏 `w-60` 和 760 汉堡未改。没有新 API、没有迁移。不碰 47.x。
+- 怎么验证的：`shell-width` 单测 3 项通过。`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。本机起开发服务后量过主区：1920 下需求列表 / 工作台 / 迭代列表 / 甘特主区宽 1680（视口减侧栏），`max-width: none`，表宽约 1614；文档列表与正文主区 1280、左右各留 200。1280 视口下内容列本就只有 1040，主区贴齐、无额外居中沟。760 需求列表页不横向溢出，标题可见，汉堡打开后 Esc 关闭。全量端到端以本 PR 的 CI 为准。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰 47.x。回滚：把 `main` 恢复成统一 `max-w-[1280px] mx-auto`。未做 PRE-01/02、DUX-002～009、DUX-010 底高 polish、Q1～Q4。
+
 ### 2026-10-23 · 云端 · e2e 重置不再踢 idle 的 flower_app
 - 分支 / PR：`cursor/fix-e2e-reset-deadlock-a9e4` → `main`，PR #33（草稿，不要 merge，不要标 ready）
 - 做了什么：已处理同日「无条件终止其余 flower_app」过猛的问题。CI 39890767328 上 idle 连接被踢，后续请求 CONNECTION_CLOSED，e2e 挂了 8 条。现在短等仍最多 2 秒；busy 数为 0 就跳过 terminate。只有超时后仍 busy 才 `pg_terminate_backend`，过滤 `usename = 'flower_app' AND state <> 'idle' AND pid <> pg_backend_pid()`。不终止 flower_admin。40P01 仍最多 5 次。没有改 db.spec、业务表锁、迁移、compose、CI。已并入 main@a42867ea。不碰 47.x。
