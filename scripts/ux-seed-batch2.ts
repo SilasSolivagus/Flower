@@ -1,7 +1,8 @@
 /**
- * 批次 2 验收种子。只写组织 flower_uxseed。
+ * 批次 2 验收种子。只写组织 flower-uxseed（连字符；不是 compose 项目名）。
  * 种：pnpm ux-seed:batch2
- * 清：pnpm ux-seed:batch2 -- --clean
+ * 清完再种：pnpm ux-seed:batch2 -- --clean
+ * 只清不种：pnpm ux-seed:batch2 -- --clean-only
  * 不要对 47.115.229.192、flower:local、flower_h5gate 执行。本机验收库若专为本批新建，清完后可以
  * docker compose -f docker-compose.dev.yml down -v
  */
@@ -33,8 +34,11 @@ import {
   setWorkItemStatus,
   transitionRequirement,
 } from '@flower/core';
+import { SLUG_RE } from '../packages/core/src/tenancy/orgs.ts';
+import { SLUG, parseSeedArgs } from './ux-seed-batch2-flags.ts';
 
-const SLUG = 'flower_uxseed';
+if (!SLUG_RE.test(SLUG)) throw new Error(`组织标识不合法：${SLUG}`);
+
 const FORBIDDEN = '47.115.229.192';
 const OWNER_EMAIL = 'uxseed@example.com';
 const OWNER_PASSWORD = 'uxseed-pass-2026';
@@ -52,7 +56,7 @@ if (!adminUrl) throw new Error('缺少 DATABASE_ADMIN_URL');
 assertHost(adminUrl);
 if (process.env.DATABASE_URL) assertHost(process.env.DATABASE_URL);
 
-const clean = process.argv.includes('--clean');
+const { mode } = parseSeedArgs(process.argv);
 const { db, close } = createDb(adminUrl, { max: 1 });
 
 const workflow = {
@@ -71,16 +75,20 @@ const workflow = {
   checkItems: [{ key: 'feasibility', label: '可行性', scope: 'requirement', type: 'single', defaultState: 'not_started' }],
 };
 
-try {
+async function main(): Promise<void> {
   const [existing] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.slug, SLUG));
-  if (existing && !clean) throw new Error(`组织 ${SLUG} 已存在。确认要删掉它再重种时加 --clean`);
-  if (existing && clean) {
+  if (mode === 'seed' && existing) throw new Error(`组织 ${SLUG} 已存在。确认要删掉它再重种时加 --clean`);
+  if (existing && mode !== 'seed') {
     await db.transaction(async (tx) => {
       await tx.execute(sql`delete from ${requirementTagLinks} where org_id = ${existing.id}`);
       await tx.execute(sql`delete from ${requirementTags} where org_id = ${existing.id}`);
       await deleteOrgData(tx, existing.id);
     });
-    console.log(`已清除组织 ${SLUG}，接着重种`);
+    console.log(mode === 'reseed' ? `已清除组织 ${SLUG}，接着重种` : `已清除组织 ${SLUG}`);
+  }
+  if (mode === 'clean-only') {
+    if (!existing) console.log(`组织 ${SLUG} 本就不存在`);
+    return;
   }
 
   const [admin] = await db.select().from(accounts).where(eq(accounts.isInstanceAdmin, true)).limit(1);
@@ -155,10 +163,16 @@ try {
 - /${SLUG}/work-items 默认只有进行中；?canceled=1 能看到已取消
 - /${SLUG}/documents/${brief.displayKey} 失败检查有「去改」
 - 通知里打开 /${SLUG}/documents/${doomed.displayKey} 应说明文档已删除，而不是无权访问
-清：pnpm ux-seed:batch2 -- --clean
+种：pnpm ux-seed:batch2
+清完再种：pnpm ux-seed:batch2 -- --clean
+只清不种：pnpm ux-seed:batch2 -- --clean-only
 不要对 47.115.229.192、flower:local、flower_h5gate 做 down -v。
 若这台库只为本次验收新建：docker compose -f docker-compose.dev.yml down -v
 `);
+}
+
+try {
+  await main();
 } finally {
   await close();
 }
