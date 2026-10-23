@@ -21,7 +21,7 @@
 ## 记录
 
 ### 2026-10-23 · 云端 · ux-seed:batch2 改用合法 slug，并支持只清不种
-- 分支 / PR：`cursor/ux-seed-batch2-slug-clean-8447`（草稿，不要 merge，不要标 ready）。与 P4 分开。
+- 分支 / PR：`cursor/ux-seed-batch2-slug-clean-8447` → `main`，PR #31（草稿，不要 merge，不要标 ready）。与 P4 分开。
 - 做了什么：验收组织 slug 从 `flower_uxseed` 改为 `flower-uxseed`。脚本启动时用 `packages/core/src/tenancy/orgs.ts` 的 `SLUG_RE` 做硬校验。无参时组织已存在就报错并提示 `--clean`；`--clean` 仍是清完再种；新增 `--clean-only` 只删不种，组织本就不存在时退出 0。两个开关同时出现则报错。删除仍按 slug，先卸需求标签再 `deleteOrgData`。`package.json` 的 `ux-seed:batch2` 命令没改。没有新迁移，没改 `apps/web`、compose、CI。不碰 47.x。Docker compose 项目名可以仍是 `flower_uxseed`，那不是组织 slug。
 - 怎么验证的：`pnpm typecheck` 通过。另用临时 tsconfig 检查了种子脚本、flags 和单测。`scripts/ux-seed-batch2.test.ts` 7 项通过（无参 / `--clean` / `--clean-only` / 两者同传抛错，以及 slug 通过 `SLUG_RE`、旧下划线 slug 不通过）。esbuild 能打出包。打包后用假的本机连接串跑 `--clean --clean-only`，在连库前退出 1，提示不能同时使用这两个开关；连接串含 47.115.229.192 时仍拒绝；缺少 `DATABASE_ADMIN_URL` 仍报错。没有对任何库执行种子。相对 `d913dc51` 迁移目录没有差异。
 - 留给对方：不要 merge，不要标 ready。不要在 47.x 上跑。U2-07b / U2-12 不在本 PR。口径里的 `/flower_uxseed/` 要改成 `/flower-uxseed/`；E-5「清后不存在」用 `--clean-only`。若验收库里已经有探针种的 `flower-uxseed`，先 `--clean-only` 再种。回滚 revert 本 PR 即可。
