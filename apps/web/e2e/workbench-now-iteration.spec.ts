@@ -94,6 +94,12 @@ test('有数据时此刻迭代在六块之上，概览来自工作台，不另�
   const region = nowRegion(page);
   await expect(region.getByRole('link', { name: '甲此刻名称很长用来数可见字' })).toBeVisible();
   await expect(region.getByText('进行中', { exact: true })).toBeVisible();
+  const row = region.locator('li').first().locator('div.h-10');
+  await expect(row.getByText('进行中', { exact: true })).toHaveCount(1);
+  await expect(row.locator('span', { hasText: '甲产品' })).not.toContainText('进行中');
+  expect(await row.evaluate((el) => (el instanceof HTMLElement ? el.innerText : '').split('进行中').length - 1)).toBe(1);
+  await page.screenshot({ path: '/opt/cursor/artifacts/sd01/now-iteration-1280.png' });
+  await expect(region.locator('li').first().locator('p').first()).toContainText(/甲产品 · .+ · 进行中/);
   await expect(region.getByText('需求 0/1')).toBeVisible();
   await expect(region.getByText(/整体 \d+% · 理论 \d+% · 落后 \d+%/)).toBeVisible();
   await expect(region.getByText('活跃阻塞 1')).toBeVisible();
@@ -111,6 +117,11 @@ test('有数据时此刻迭代在六块之上，概览来自工作台，不另�
   const nowBox = (await region.boundingBox())!;
   const gridBox = (await grid.boundingBox())!;
   expect(nowBox.y).toBeLessThan(gridBox.y);
+
+  await page.setViewportSize({ width: 390, height: 800 });
+  await expect(row.locator('span', { hasText: '甲产品' })).toBeHidden();
+  await expect(row.getByText('进行中', { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
 
   await region.getByRole('link', { name: '甲此刻名称很长用来数可见字' }).click();
   await expect(page).toHaveURL(new RegExp(`/acme/iterations/${iterationId}$`));

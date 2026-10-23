@@ -20,11 +20,23 @@
 
 ## 记录
 
+### 2026-10-24 · 云端 · SD-01 rebase 到 main@5cf865bf
+- 分支 / PR：`fix/sd01-now-status-dedupe`（#44，本代理没有合，没有标 ready）
+- 做了什么：已处理同日与 #43 的协作日志冲突。#43 已 squash 进 main@`5cf865bf`。rebase 后只动 `docs/agent-log.md`：两条 2026-10-24 记录都留，按时间把 SD-03 放在 SD-01 原记录上面。行内「进行中」去重的产品改动原样保留。不碰 47.x，没有扩大范围。合仓不等于部署。
+- 怎么验证的：`git diff origin/main` 里产品文件仍是副文案去掉状态、行尾徽章保留、展开区带状态。冲突标记已清。
+- 留给对方：Silas 已拍合。tip 已推。本代理没有合 #44。合仓不等于部署，不碰生产。
+
 ### 2026-10-24 · 云端 · 核证有排期甘特条形可读（SD-03 路径 A）
 - 分支 / PR：`docs/sd03-gantt-008c-verify`（草稿，不要 merge，不要标 ready）
 - 做了什么：只核证 DUX-008-C。在 main@`336ee169` 上，迭代甘特 Tab 用有 `planStart` 和工期的夹具，1280 下计划条和延期段能看出区间，不是空沟。没有改产品代码，没有改甘特引擎、排期算法、008-A/B、009-A、010-A、工作台或 schema。不碰 47.x。合仓不等于部署。
 - 怎么验证的：本机 Postgres 16（端口 54329）。Playwright `dux-f-gantt-polish`「1280 甘特」1 条通过。视口 1280，侧栏按服务端快照展开。时间轴区域宽 976、高 112。计划格 3 个，每个 76×16，底色 primary 70%；延期格 1 个，76×16，destructive 60%。夹具：开始 2026-02-02、工期 3 天、延期 1 天。整页截图 `docs/sd03/iteration-gantt-1280-scheduled.png`，时间轴裁图 `docs/sd03/iteration-gantt-1280-timeline.png`。不是 CI，不得称三绿。
 - 留给对方：不要 merge，不要标 ready。路径 A，无产品行为变更。合仓不等于部署，不碰生产。测席写 GATE-test 时可引用这两张图；flower-accept 不在本仓，本提交没有改它。
+
+### 2026-10-24 · 云端 · 此刻迭代行内状态只显示一次（SD-01）
+- 分支 / PR：`fix/sd01-now-status-dedupe`（草稿，不要 merge，不要标 ready）
+- 做了什么：工作台「此刻迭代」行内副文案不再拼状态，只留「产品 · 日期」。行尾状态徽章留着，窄屏副文案仍是 `hidden md:inline`，状态不会丢。展开区副文案继续带状态，不算行内重复。选择规则、CTA、展开折叠、完成比、空态没改。不碰 47.x，没有 schema，不捎 SD-02 / SD-03 / Phase 2 / H4 / H5。合仓不等于部署。
+- 怎么验证的：`model.test.ts` 13 条通过（含项目 vitest 的数据库 global setup）。`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。Playwright `workbench-now-iteration` 6 条通过。1280 行内可见「进行中」只有行尾一处；展开区仍有「· 进行中」。390 副文案隐藏，行尾「进行中」仍可见。1280 截图在 PR 描述里。不是 CI，不得称三绿。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰生产。回滚：行内副文案重新拼上状态，展开区改回共用同一句。
 
 ### 2026-10-23 · 云端 · 收紧工作台「查看全部」端到端定位
 - 分支 / PR：`fix/rw-phase1-now-iteration`（草稿 #42，不要 merge，不要标 ready）

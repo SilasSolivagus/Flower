@@ -6,6 +6,7 @@ import {
   iterationGanttHref,
   iterationHref,
   iterationsHref,
+  nowIterationDetailSubtitle,
   nowIterationEmptyKind,
   nowIterationSubtitle,
   nowIterationTaskHref,
@@ -96,7 +97,18 @@ describe('工作台链接', () => {
     expect(nowIterationEmptyKind('unscoped')).toBe('no_now');
     expect(formatIterationRange('2026-10-23', '2026-10-23')).toBe('2026-10-23');
     expect(formatIterationRange('2026-10-20', '2026-10-30')).toBe('2026-10-20 至 2026-10-30');
-    expect(nowIterationSubtitle({ product: { name: '网盘' }, startDate: '2026-10-20', endDate: '2026-10-30' }, '进行中')).toBe('网盘 · 2026-10-20 至 2026-10-30 · 进行中');
-    expect(nowIterationSubtitle({ product: null, startDate: '2026-10-23', endDate: '2026-10-23' }, '进行中')).toBe('专项 · 2026-10-23 · 进行中');
+  });
+
+  it('此刻迭代行内副文案不含状态，避免和行尾徽章重复', () => {
+    const ranged = { product: { name: '网盘' }, startDate: '2026-10-20', endDate: '2026-10-30' };
+    const sameDay = { product: null, startDate: '2026-10-23', endDate: '2026-10-23' };
+    expect(nowIterationSubtitle(ranged)).toBe('网盘 · 2026-10-20 至 2026-10-30');
+    expect(nowIterationSubtitle(sameDay)).toBe('专项 · 2026-10-23');
+    expect(nowIterationSubtitle(ranged)).not.toContain('进行中');
+  });
+
+  it('此刻迭代展开区副文案保留状态，不算行内重复', () => {
+    expect(nowIterationDetailSubtitle({ product: { name: '网盘' }, startDate: '2026-10-20', endDate: '2026-10-30' }, '进行中')).toBe('网盘 · 2026-10-20 至 2026-10-30 · 进行中');
+    expect(nowIterationDetailSubtitle({ product: null, startDate: '2026-10-23', endDate: '2026-10-23' }, '已完成')).toBe('专项 · 2026-10-23 · 已完成');
   });
 });
