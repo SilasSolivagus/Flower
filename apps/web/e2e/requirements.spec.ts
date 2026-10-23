@@ -103,19 +103,23 @@ test('需求详情：看到卡在哪、设置检查项后流转、强制流转�
   await login(page, OWNER.email, OWNER.password);
   await page.goto('/acme/requirements/PAN-1');
   await expect(page.getByTestId('current-state')).toHaveText('收集');
-  await expect(page.getByRole('button', { name: '待开发' })).toBeDisabled();
-  await expect(page.getByText('「可行性」需为通过（当前：未开始）')).toBeVisible();
-  await page.getByRole('button', { name: '待开发' }).locator('xpath=..').hover();
-  await expect(page.getByRole('tooltip')).toContainText('「可行性」需为通过（当前：未开始）');
+  await expect(page.getByRole('list', { name: '可流转到' })).toHaveCount(0);
+  const status = page.getByRole('region', { name: '状态', exact: true });
+  await status.getByRole('button', { name: '变更状态' }).click();
+  const blocked = page.getByRole('menuitem', { name: /^待开发/ });
+  await expect(blocked).toHaveAttribute('aria-disabled', 'true');
+  await expect(blocked).toContainText('「可行性」需为通过（当前：未开始）');
+  await page.keyboard.press('Escape');
 
   await page.getByRole('combobox', { name: '可行性状态' }).click();
   await page.getByRole('option', { name: '通过' }).click();
-  await expect(page.getByRole('button', { name: '待开发' })).toBeEnabled();
-  await page.getByRole('button', { name: '待开发' }).click();
+  await expect(status.getByRole('button', { name: '待开发' })).toBeEnabled();
+  await status.getByRole('button', { name: '待开发' }).click();
   await expect(page.getByTestId('current-state')).toHaveText('待开发');
 
-  await expect(page.getByText('需要先加入迭代')).toBeVisible();
-  await page.getByRole('button', { name: '强制流转' }).click();
+  await status.getByRole('button', { name: '变更状态' }).click();
+  await expect(page.getByRole('menuitem', { name: /^开发中/ })).toContainText('需要先加入迭代');
+  await page.getByRole('menuitem', { name: '强制流转到「开发中」' }).click();
   await page.getByLabel('原因').fill('线上问题紧急修复');
   await page.getByRole('button', { name: '确认流转' }).click();
   await expect(page.getByTestId('current-state')).toHaveText('开发中');

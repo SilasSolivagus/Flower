@@ -20,9 +20,9 @@ import { useMarkNotificationsRead } from '@/features/member-notifications/use-ma
 import {
   REQ_ASIDE_COLLAPSED_KEY,
   requirementAsideClassName,
+  requirementAsideColumnClassName,
   requirementGridClassName,
-  requirementStatusBodyClassName,
-  requirementStatusColumnClassName,
+  requirementMainClassName,
 } from '@/features/shell/collapse';
 import { useCollapsedPref } from '@/features/shell/use-collapsed-pref';
 import { ProgressList } from '@/features/tracking/components/progress-list';
@@ -79,29 +79,9 @@ export default function RequirementPage() {
           你是查看者，不能修改这条需求。状态、描述、属性和跟进已锁定；需要修改时请联系产品编辑。评论仍可以发表。
         </p>
       )}
-      {/* 右栏整列收起只在 lg 及以上生效。状态历史留在主列，不在这次改动里搬家。 */}
+      {/* 右栏整列收起只在 lg 及以上生效。展开 380px；跟进、状态、历史都在这一列。 */}
       <div className={requirementGridClassName(asideCollapsed)} data-testid="req-detail-grid" data-aside-collapsed={asideCollapsed ? 'true' : 'false'}>
-        <div className={requirementStatusColumnClassName(asideCollapsed)}>
-          <Button
-            type="button"
-            variant="outline"
-            size={asideCollapsed ? 'icon-sm' : 'sm'}
-            data-testid="req-aside-collapse"
-            className={asideCollapsed ? 'sticky top-4 hidden lg:inline-flex' : 'hidden lg:inline-flex lg:self-end'}
-            aria-expanded={!asideCollapsed}
-            aria-controls="req-detail-aside"
-            aria-label={asideCollapsed ? '展开属性栏' : '收起属性栏'}
-            title={asideCollapsed ? '展开属性栏' : '收起属性栏'}
-            onClick={() => setAsideCollapsed(!asideCollapsed)}
-          >
-            {asideCollapsed ? <PanelRightOpen aria-hidden="true" /> : <PanelRightClose aria-hidden="true" />}
-            <span className={asideCollapsed ? 'sr-only' : undefined}>{asideCollapsed ? '展开属性栏' : '收起属性栏'}</span>
-          </Button>
-          <div id="req-detail-status" className={requirementStatusBodyClassName(asideCollapsed)}>
-            <StatusPanel org={org} requirement={r} />
-          </div>
-        </div>
-        <div className="order-2 flex min-w-0 flex-col gap-4 lg:col-start-1 lg:row-start-1" data-testid="req-detail-main">
+        <div className={requirementMainClassName()} data-testid="req-detail-main">
           <section className="rounded-md border bg-card p-4" aria-labelledby="desc-title">
             <div className="mb-2 flex items-center justify-between">
               <h2 id="desc-title" className="text-sm font-semibold">
@@ -173,16 +153,36 @@ export default function RequirementPage() {
               />
             </TabsContent>
           </Tabs>
-          <History requirement={r} />
         </div>
-        <div id="req-detail-aside" data-testid="req-detail-aside" className={requirementAsideClassName(asideCollapsed)}>
-          <TrackingPanel org={org} requirement={r} />
-          <BriefCard org={org} requirement={r} />
-          <PrdCard org={org} requirement={r} />
-          <FieldsPanel org={org} requirement={r} />
-          <Assignments org={org} requirement={r} />
-          <SideLists org={org} requirement={r} />
-          <Releases org={org} requirement={r} />
+        <div className={requirementAsideColumnClassName(asideCollapsed)} data-testid="req-detail-aside-column">
+          <Button
+            type="button"
+            variant="outline"
+            size={asideCollapsed ? 'icon-sm' : 'sm'}
+            data-testid="req-aside-collapse"
+            className={asideCollapsed ? 'sticky top-4 hidden lg:inline-flex' : 'sticky top-0 z-10 hidden shrink-0 self-end bg-background lg:inline-flex'}
+            aria-expanded={!asideCollapsed}
+            aria-controls="req-detail-aside"
+            aria-label={asideCollapsed ? '展开属性栏' : '收起属性栏'}
+            title={asideCollapsed ? '展开属性栏' : '收起属性栏'}
+            onClick={() => setAsideCollapsed(!asideCollapsed)}
+          >
+            {asideCollapsed ? <PanelRightOpen aria-hidden="true" /> : <PanelRightClose aria-hidden="true" />}
+            <span className={asideCollapsed ? 'sr-only' : undefined}>{asideCollapsed ? '展开属性栏' : '收起属性栏'}</span>
+          </Button>
+          <div id="req-detail-aside" data-testid="req-detail-aside" className={requirementAsideClassName(asideCollapsed)}>
+            <TrackingPanel org={org} requirement={r} />
+            <div id="req-detail-status">
+              <StatusPanel org={org} requirement={r} />
+            </div>
+            <History requirement={r} />
+            <BriefCard org={org} requirement={r} />
+            <PrdCard org={org} requirement={r} />
+            <FieldsPanel org={org} requirement={r} />
+            <Assignments org={org} requirement={r} />
+            <SideLists org={org} requirement={r} />
+            <Releases org={org} requirement={r} />
+          </div>
         </div>
       </div>
     </>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { primaryTransitionTo } from './transitions';
+import { primaryTransitionTo, statusMenuEntries } from './transitions';
 
 const states = [
   { key: 'backlog', order: 1, category: 'backlog' },
@@ -38,5 +38,31 @@ describe('需求状态主按钮', () => {
     ).toBeNull();
     expect(primaryTransitionTo('backlog', states, [{ to: 'todo', allowed: false }])).toBeNull();
     expect(primaryTransitionTo('missing', states, [{ to: 'todo', allowed: true }])).toBeNull();
+  });
+});
+
+describe('状态菜单', () => {
+  it('合法下一态可点，非法的留在菜单里并带短因', () => {
+    const entries = statusMenuEntries(
+      [
+        { to: 'todo', label: '待开发', allowed: false, unmet: [{ message: '「可行性」需为通过（当前：未开始）' }] },
+        { to: 'doing', label: '开发中', allowed: true, unmet: [] },
+      ],
+      true,
+    );
+    expect(entries).toEqual([
+      { to: 'todo', label: '待开发', enabled: false, reason: '「可行性」需为通过（当前：未开始）' },
+      { to: 'doing', label: '开发中', enabled: true },
+    ]);
+  });
+
+  it('查看者看到的合法流转也停用，并说明只有编辑可以改', () => {
+    expect(statusMenuEntries([{ to: 'todo', label: '待开始', allowed: true, unmet: [] }], false)).toEqual([
+      { to: 'todo', label: '待开始', enabled: false, reason: '只有编辑可以改状态' },
+    ]);
+  });
+
+  it('没有条件说明时用一句兜底', () => {
+    expect(statusMenuEntries([{ to: 'done', label: '已完成', allowed: false, unmet: [] }], true)[0]?.reason).toBe('现在不能改到这个状态');
   });
 });

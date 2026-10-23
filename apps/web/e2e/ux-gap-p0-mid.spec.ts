@@ -19,7 +19,7 @@ test('M0-015：改为已废弃先确认，取消后仍是草稿', async ({ page,
   const doc = await createDocument(request, productId, { title: '不要真废弃' });
   await login(page, OWNER.email, OWNER.password);
   await page.goto(`/acme/documents/${doc.displayKey}`);
-  const status = page.getByRole('region', { name: '状态' });
+  const status = page.getByRole('region', { name: '状态', exact: true });
   await status.getByRole('button', { name: '改为已废弃' }).click();
   const dialog = page.getByRole('dialog', { name: '改为已废弃' });
   await expect(dialog.getByText('改为已废弃后不能恢复。确认后才会改状态。')).toBeVisible();
@@ -63,19 +63,29 @@ test('M0-005/006：产品列表慢网显示加载中，500 显示重试而不是
   await expect(page.getByText('还没有产品')).toHaveCount(0);
 });
 
-test('C3：需求状态主按钮实心，其余描边', async ({ page, request }) => {
+test('C3：需求状态一行主操作，其余下一态在变更状态下拉里', async ({ page, request }) => {
   const productId = await createProduct(request);
   await ok(request.post(`/api/v1/orgs/acme/products/${productId}/requirements`, { data: { title: '状态按钮主次' } }));
   await login(page, OWNER.email, OWNER.password);
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/acme/requirements/PAN-1');
-  const status = page.getByRole('region', { name: '状态' });
+  const status = page.getByRole('region', { name: '状态', exact: true });
+  await expect(status.getByRole('button')).toHaveCount(2);
   await expect(status.getByRole('button', { name: '待开始' })).toHaveAttribute('data-emphasis', 'primary');
   await expect(status.getByRole('button', { name: '待开始' })).toBeEnabled();
   for (const label of ['进行中', '已完成', '已取消']) {
-    await expect(status.getByRole('button', { name: label })).toHaveAttribute('data-emphasis', 'secondary');
+    await expect(status.getByRole('button', { name: label })).toHaveCount(0);
   }
+  await expect(page.getByRole('list', { name: '可流转到' })).toHaveCount(0);
+  const statusBox = await status.boundingBox();
+  expect(statusBox!.height).toBeLessThan(96);
   await page.screenshot({ path: `${shots}/ux-gap-requirement-status-1280.png` });
+  await status.getByRole('button', { name: '变更状态' }).click();
+  for (const label of ['进行中', '已完成', '已取消']) {
+    await expect(page.getByRole('menuitem', { name: label })).toBeVisible();
+  }
+  await page.screenshot({ path: `${shots}/dux-011-status-menu-1280.png` });
+  await page.keyboard.press('Escape');
   await page.setViewportSize({ width: 760, height: 900 });
   await page.screenshot({ path: `${shots}/ux-gap-requirement-status-760.png` });
 });
@@ -86,7 +96,7 @@ test('M0-007：查看者的状态按钮禁用并说明原因', async ({ page, re
   const viewerId = await acceptInvite(page, request, { email: 'viewer@example.com', orgRole: 'member', name: '只读成员' });
   await ok(request.put(`/api/v1/orgs/acme/products/${productId}/roles/${viewerId}`, { data: { role: 'viewer' } }));
   await page.goto('/acme/requirements/PAN-1');
-  const status = page.getByRole('region', { name: '状态' });
+  const status = page.getByRole('region', { name: '状态', exact: true });
   await expect(status.getByText('只有编辑可以改状态')).toBeVisible();
   await expect(status.getByRole('button', { name: '待开始' })).toBeDisabled();
   await expect(status.getByRole('button', { name: '待开始' }).locator('xpath=..')).toHaveAttribute('title', '只有编辑可以改状态');

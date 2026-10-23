@@ -8,10 +8,11 @@ import {
   railItemClassName,
   railLabelClassName,
   REQ_ASIDE_COLLAPSED_KEY,
+  REQ_ASIDE_EXPANDED_WIDTH,
   requirementAsideClassName,
+  requirementAsideColumnClassName,
   requirementGridClassName,
-  requirementStatusBodyClassName,
-  requirementStatusColumnClassName,
+  requirementMainClassName,
 } from './collapse';
 
 describe('收展偏好', () => {
@@ -64,22 +65,38 @@ describe('图标轨文字', () => {
 });
 
 describe('需求详情右栏', () => {
-  it('展开栅格保持 320px，右栏和状态卡都在', () => {
-    expect(requirementGridClassName(false)).toBe('grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]');
-    expect(requirementAsideClassName(false)).toBe('order-3 flex flex-col gap-4 lg:col-start-2');
+  it('展开宽 380px，落在 360–400，右列贴顶并可内滚', () => {
+    expect(REQ_ASIDE_EXPANDED_WIDTH).toBe('380px');
+    const px = Number.parseInt(REQ_ASIDE_EXPANDED_WIDTH, 10);
+    expect(px).toBeGreaterThanOrEqual(360);
+    expect(px).toBeLessThanOrEqual(400);
+    expect(requirementGridClassName(false)).toBe('grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px]');
+    expect(requirementMainClassName()).toContain('order-1');
+    expect(requirementMainClassName()).toContain('lg:col-start-1');
+    const column = requirementAsideColumnClassName(false);
+    expect(column).toContain('order-2');
+    expect(column).toContain('lg:col-start-2');
+    expect(column).toContain('lg:sticky');
+    expect(column).toContain('lg:top-4');
+    expect(column).toContain('lg:overflow-y-auto');
+    expect(column).toContain('lg:max-h-[calc(100dvh-2rem)]');
+    expect(column).not.toContain('lg:hidden');
+    expect(column).not.toMatch(/resize|cursor-col-resize/);
+    expect(requirementAsideClassName(false)).toBe('flex flex-col gap-4');
     expect(requirementAsideClassName(false)).not.toContain('lg:hidden');
-    expect(requirementStatusBodyClassName(false)).toBe('');
-    expect(requirementStatusColumnClassName(false)).not.toContain('lg:hidden');
   });
 
   it('收起后右栏不占格，只留 2.5rem 把手，小于 lg 的单列不受影响', () => {
     const grid = requirementGridClassName(true);
     expect(grid).toContain('grid-cols-1');
     expect(grid).toContain('lg:grid-cols-[minmax(0,1fr)_2.5rem]');
+    expect(grid).not.toContain('380px');
     expect(grid).not.toContain('320px');
     expect(requirementAsideClassName(true).split(/\s+/)).toContain('lg:hidden');
-    expect(requirementStatusBodyClassName(true)).toBe('lg:hidden');
-    expect(requirementStatusColumnClassName(true)).toContain('lg:col-start-2');
-    expect(requirementStatusColumnClassName(true)).not.toContain('lg:hidden');
+    const column = requirementAsideColumnClassName(true);
+    expect(column).toContain('lg:col-start-2');
+    expect(column).toContain('lg:sticky');
+    expect(column).not.toContain('lg:hidden');
+    expect(column).not.toContain('lg:overflow-y-auto');
   });
 });

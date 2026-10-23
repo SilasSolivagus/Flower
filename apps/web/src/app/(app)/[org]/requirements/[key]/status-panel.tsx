@@ -1,17 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { Fragment, useState } from 'react';
 import { DisabledReason } from '@/components/disabled-reason';
 import { FormError } from '@/components/form-error';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { primaryTransitionTo } from '@/features/requirements/transitions';
+import { primaryTransitionTo, statusMenuEntries } from '@/features/requirements/transitions';
 import { api } from '@/lib/api';
 import { qk, requirementKeys, useApiMutation } from '@/lib/queries';
 import type { RequirementDetail } from '@/lib/types';
 
+/** 一行状态：色点 + 当前文案，至多一个主操作，其余下一态在「变更状态」里。非法流转停在菜单里并写短因。 */
 export function StatusPanel({ org, requirement: r }: { org: string; requirement: RequirementDetail }) {
   const [forcing, setForcing] = useState<{ to: string; label: string } | null>(null);
   const [reason, setReason] = useState('');
@@ -30,77 +32,78 @@ export function StatusPanel({ org, requirement: r }: { org: string; requirement:
     },
   });
   const canEdit = r.myRole !== 'viewer';
+  const entries = statusMenuEntries(r.transitions, canEdit);
   const primaryTo = primaryTransitionTo(r.stateKey, r.workflow.states, r.transitions);
+  const primary = entries.find((entry) => entry.to === primaryTo);
   const closeForcing = () => {
     setForcing(null);
     setReason('');
     force.reset();
   };
+  const primaryButton = primary ? (
+    <Button size="sm" data-emphasis="primary" disabled={!primary.enabled || move.isPending} onClick={() => move.mutate({ to: primary.to })}>
+      {primary.label}
+    </Button>
+  ) : null;
 
   return (
-    <section className="rounded-md border bg-card p-4" aria-labelledby="status-title">
-      <h2 id="status-title" className="mb-3 text-sm font-semibold">
+    <section className="rounded-md border bg-card px-3 py-2" aria-labelledby="status-title">
+      <h2 id="status-title" className="sr-only">
         状态
       </h2>
-      <p className="mb-3 flex items-center gap-2 text-base font-medium" data-testid="current-state">
-        <span className="size-2.5 rounded-full" style={{ background: state?.color }} aria-hidden="true" />
-        {state?.label ?? r.stateKey}
-      </p>
-      {!canEdit && r.transitions.length > 0 && <p className="mb-2 text-[12px] text-muted-foreground">只有编辑可以改状态</p>}
-      <ul className="flex flex-col gap-2" aria-label="可流转到">
-        {r.transitions.map((t) => {
-          const unmetText = t.unmet.map((u) => u.message).join('；');
-          let reason: string | undefined;
-          if (!t.allowed) reason = unmetText || '现在不能改到这个状态';
-          else if (!canEdit) reason = '只有编辑可以改状态';
-          const emphasis = t.to === primaryTo ? 'primary' : 'secondary';
-          const button = (
-            <Button
-              size="sm"
-              variant={emphasis === 'primary' ? 'default' : 'outline'}
-              data-emphasis={emphasis}
-              disabled={!t.allowed || !canEdit || move.isPending}
-              onClick={() => move.mutate({ to: t.to })}
-            >
-              {t.label}
-            </Button>
-          );
-          return (
-          <li key={t.to} className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              {!t.allowed ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex" tabIndex={0} title={reason}>
-                      {button}
-                    </span>
-                  </TooltipTrigger>
-                  {unmetText && <TooltipContent>{unmetText}</TooltipContent>}
-                </Tooltip>
-              ) : !canEdit ? (
-                <span className="inline-flex" title={reason}>
-                  {button}
-                </span>
-              ) : (
-                button
-              )}
-              {!t.allowed && r.canForce && (
-                <button type="button" className="text-[12px] text-muted-foreground underline" onClick={() => setForcing({ to: t.to, label: t.label })}>
-                  强制流转
-                </button>
-              )}
-            </div>
-            {t.unmet.length > 0 && (
-              <ul className="pl-1 text-[12px] text-muted-foreground">
-                {t.unmet.map((u, i) => (
-                  <li key={i}>· {u.message}</li>
-                ))}
-              </ul>
-            )}
-          </li>
-          );
-        })}
-      </ul>
+      <div className="flex items-center gap-2">
+        <p className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium" data-testid="current-state">
+          <span className="size-2.5 shrink-0 rounded-full" style={{ background: state?.color }} aria-hidden="true" />
+          <span className="truncate">{state?.label ?? r.stateKey}</span>
+        </p>
+        {primaryButton &&
+          (primary?.enabled ? (
+            primaryButton
+          ) : (
+            <DisabledReason disabled reason={primary?.reason}>
+              {primaryButton}
+            </DisabledReason>
+          ))}
+        {entries.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" size="sm" variant="outline" disabled={move.isPending}>
+                变更状态
+                <ChevronDown aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" aria-label="可流转到" className="w-72">
+              {entries.map((entry) => {
+                const source = r.transitions.find((t) => t.to === entry.to);
+                const forceable = !!source && !source.allowed && r.canForce && canEdit;
+                return (
+                  <Fragment key={entry.to}>
+                    <DropdownMenuItem
+                      aria-disabled={entry.enabled ? undefined : true}
+                      className={entry.reason ? 'flex-col items-start gap-0.5 whitespace-normal' : undefined}
+                      onSelect={(event) => {
+                        if (!entry.enabled || move.isPending) {
+                          event.preventDefault();
+                          return;
+                        }
+                        move.mutate({ to: entry.to });
+                      }}
+                    >
+                      <span>{entry.label}</span>
+                      {entry.reason && <span className="text-xs leading-4 font-normal text-muted-foreground">{entry.reason}</span>}
+                    </DropdownMenuItem>
+                    {forceable && (
+                      <DropdownMenuItem className="text-xs text-muted-foreground" onSelect={() => setForcing({ to: entry.to, label: entry.label })}>
+                        强制流转到「{entry.label}」
+                      </DropdownMenuItem>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </div>
       <Dialog open={!!forcing} onOpenChange={(o) => !o && closeForcing()}>
         <DialogContent>
           <DialogHeader>
