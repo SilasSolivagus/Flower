@@ -46,7 +46,11 @@ test('需求挂 PRD：从需求新建 PRD；PRD 状态带动「PRD」检查项�
   await expect(checks.getByRole('listitem', { name: 'PRD', exact: true })).toContainText('进行中');
   await expect(checks.getByRole('listitem', { name: 'PRD', exact: true })).toContainText('跟随 PRD');
   await expect(checks.getByRole('combobox', { name: 'PRD状态' })).toHaveCount(0);
-  await expect(page.getByRole('list', { name: '可流转到' }).getByRole('button', { name: '开发中' })).toBeDisabled();
+  await expect(page.getByRole('list', { name: '可流转到' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '开发中' })).toHaveCount(0);
+  await page.getByRole('button', { name: '变更状态' }).click();
+  await expect(page.getByRole('menuitem', { name: /^开发中/ })).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Escape');
 
   await page.goto('/acme/documents/PAN-PRD-1');
   await page.getByRole('complementary').getByRole('listitem', { name: 'PRD 评审' }).getByRole('button', { name: '通过' }).click();
@@ -58,7 +62,7 @@ test('需求挂 PRD：从需求新建 PRD；PRD 状态带动「PRD」检查项�
   await page.goto('/acme/requirements/PAN-1');
   await expect(page.getByRole('region', { name: '检查项', exact: true }).getByRole('listitem', { name: 'PRD', exact: true })).toContainText('通过');
   await expect(page.getByRole('region', { name: 'PRD 检查项' }).getByRole('listitem', { name: 'PRD 评审' })).toContainText('通过');
-  await page.getByRole('list', { name: '可流转到' }).getByRole('button', { name: '开发中' }).click();
+  await page.getByRole('button', { name: '开发中' }).click();
   await expect(page.getByTestId('current-state')).toHaveText('开发中');
 });
 

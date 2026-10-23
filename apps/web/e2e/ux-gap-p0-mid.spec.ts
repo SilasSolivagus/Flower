@@ -63,7 +63,7 @@ test('M0-005/006：产品列表慢网显示加载中，500 显示重试而不是
   await expect(page.getByText('还没有产品')).toHaveCount(0);
 });
 
-test('C3：需求状态主按钮实心，其余描边', async ({ page, request }) => {
+test('C3：需求状态主按钮实心，其余放进变更状态菜单', async ({ page, request }) => {
   const productId = await createProduct(request);
   await ok(request.post(`/api/v1/orgs/acme/products/${productId}/requirements`, { data: { title: '状态按钮主次' } }));
   await login(page, OWNER.email, OWNER.password);
@@ -73,7 +73,13 @@ test('C3：需求状态主按钮实心，其余描边', async ({ page, request }
   await expect(status.getByRole('button', { name: '待开始' })).toHaveAttribute('data-emphasis', 'primary');
   await expect(status.getByRole('button', { name: '待开始' })).toBeEnabled();
   for (const label of ['进行中', '已完成', '已取消']) {
-    await expect(status.getByRole('button', { name: label })).toHaveAttribute('data-emphasis', 'secondary');
+    await expect(status.getByRole('button', { name: label })).toHaveCount(0);
+  }
+  await status.getByRole('button', { name: '变更状态' }).click();
+  for (const label of ['进行中', '已完成', '已取消']) {
+    const item = page.getByRole('menuitem', { name: new RegExp(`^${label}`) });
+    await expect(item).toBeEnabled();
+    await expect(item).not.toContainText('现在不能改到这个状态');
   }
   await page.screenshot({ path: `${shots}/ux-gap-requirement-status-1280.png` });
   await page.setViewportSize({ width: 760, height: 900 });
@@ -87,9 +93,12 @@ test('M0-007：查看者的状态按钮禁用并说明原因', async ({ page, re
   await ok(request.put(`/api/v1/orgs/acme/products/${productId}/roles/${viewerId}`, { data: { role: 'viewer' } }));
   await page.goto('/acme/requirements/PAN-1');
   const status = page.getByRole('region', { name: '状态' });
-  await expect(status.getByText('只有编辑可以改状态')).toBeVisible();
-  await expect(status.getByRole('button', { name: '待开始' })).toBeDisabled();
-  await expect(status.getByRole('button', { name: '待开始' }).locator('xpath=..')).toHaveAttribute('title', '只有编辑可以改状态');
+  await expect(status.getByRole('button', { name: '待开始' })).toHaveCount(0);
+  await expect(page.getByText('只有编辑可以改状态')).toBeHidden();
+  await status.getByRole('button', { name: '变更状态' }).click();
+  const blocked = page.getByRole('menuitem', { name: /^待开始/ });
+  await expect(blocked).toHaveAttribute('aria-disabled', 'true');
+  await expect(blocked).toContainText('只有编辑可以改状态');
 });
 
 test('M6-013：工作项详情和窄列表显示预计日，空为未设置，过期弱提示', async ({ page, request }) => {
