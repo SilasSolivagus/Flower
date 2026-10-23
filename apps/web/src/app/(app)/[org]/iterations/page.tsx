@@ -80,9 +80,9 @@ export default function IterationsPage() {
         <EmptyState icon={CalendarRange} title="还没有迭代" description={canCreate ? '点击「新建迭代」创建第一个迭代。' : '产品管理员或编辑创建迭代后会显示在这里。'} />
       ) : (
         groups.map((g) => (
-          <section key={g.key} aria-label={g.title} className="flex flex-col gap-2">
+          <section key={g.key} aria-label={g.title} className="flex w-full shrink-0 flex-col gap-2 self-start">
             <h2 className="font-semibold">{g.title}</h2>
-            <div className="overflow-hidden rounded-md border bg-card">
+            <div className="h-fit w-full overflow-hidden rounded-md border bg-card">
               <Table>
                 <TableHeader>
                   <TableRow>

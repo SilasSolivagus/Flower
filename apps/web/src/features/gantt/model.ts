@@ -21,6 +21,17 @@ export function parseProgress(text: string): ParsedNumber {
   return { ok: true, value: n };
 }
 
+/**
+ * 概览是否收成一行矮态。
+ * 没有任务时，理论进度仍可能按迭代日历算出非 0，四张卡是空心；四项都是 0 时同样不铺卡。
+ */
+export function overviewIsHollow(
+  overview: { overall: number; expected: number; behind: number; deferred: number },
+  taskCount: number,
+): boolean {
+  return taskCount === 0 || (overview.overall === 0 && overview.expected === 0 && overview.behind === 0 && overview.deferred === 0);
+}
+
 export type HeatRow = { id: string; name: string; counts: number[] };
 
 /** 热力图的行：每个负责人一行（按姓名排序），列为工作日，值为当天被占用的任务数；未指派的任务不计。 */
