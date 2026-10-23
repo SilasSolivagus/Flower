@@ -72,10 +72,10 @@ export const FEASIBILITY_TO_CHECK: Record<string, CheckState> = {
   'not-assessed': 'not_started', approved: 'passed', 'in-progress': 'in_progress', rejected: 'rejected',
 };
 export const PUSH_REVIEW_TO_CHECK: Record<string, CheckState> = { 待办: 'in_progress', 通过: 'passed', 打回: 'rejected' };
-/** push 主状态对背景 / 可行性 / 行业三个检查项的含义；"已搁置"不影响检查项。 */
+/** push 主状态对背景 / 可行性 / 行业三个检查项的含义；"已搁置"和"设计中"不影响检查项。 */
 export const PUSH_STATUS_TO_CHECK: Record<string, CheckState | null> = {
   待排期: 'not_started', 评审中: 'in_progress', 待修订: 'rejected', 已通过: 'passed', 已进版本: 'passed',
-  开发中: 'passed', 待验收: 'passed', 合格: 'passed', 已上线: 'passed', 已搁置: null,
+  开发中: 'passed', 待验收: 'passed', 合格: 'passed', 已上线: 'passed', 已搁置: null, 设计中: null,
 };
 export const SIGNOFF_DECISION: Record<string, 'passed' | 'rejected' | null> = { 通过: 'passed', 驳回: 'rejected', 打回: 'rejected', 未审: null };
 export const PRIORITY_KEYS: Record<string, string> = { P0: 'p0', P1: 'p1', P2: 'p2', P3: 'p3', 绿色通道: 'green' };

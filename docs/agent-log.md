@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · push 状态「设计中」不改检查项
+- 分支 / PR：`fix/import-push-status-designing`（草稿，不要 merge，不要标 ready）
+- 做了什么：`PUSH_STATUS_TO_CHECK` 增加 `设计中: null`，与「已搁置」一样不写背景、可行性、行业。有评审时仍按评审结果。没有新迁移，没有改 API、suggest、apps/web，也没有改其它映射。不碰 47.x。P1–P3 的对照表改动不在本 PR。
+- 怎么验证的：`pnpm typecheck` 通过。migrate 不连库的单测 12 个文件、119 通过，其中「设计中」3 条单独再跑通过。本环境没有 Docker，54329 上的库测（migrate 的 write / rejoin / perf，以及 core、web）没跑，交给 GitHub Actions。相对 `d913dc51` 没有新迁移。
+- 留给对方：不要 merge，不要标 ready。不要在 47.x 上跑。H-G3「没有新迁移」的起算点是 `d913dc51`。端到端若红，对照 main@d913dc51 的已知失败再记，不要写成三绿。
+
 ### 2026-10-23 · 云端 · 备份哈希只记文件名，版本闸失败提示补下一步
 - 分支 / PR：`fix/h5-debt-sha256-copy`（草稿，不要 merge，不要标 ready）
 - 做了什么：`backup-flower.sh` 的 `.sha256` 在输出目录里按文件名计算，发布手册的校验改成先 `cd` 再 `sha256sum -c`。版本闸和 schema 服务的失败提示改成单行「原因。下一步：…」；`--check` 失败行加 `[Flower 启动检查]`，成功行不加。鉴权失败先核对 `.env` 密码。`failLine` 仍只取第一行，退出码仍是 1。没有新迁移。`apps/web` 未改。不碰 47.x。回滚节标题在 ce3679fc 上是 `## 回滚`。

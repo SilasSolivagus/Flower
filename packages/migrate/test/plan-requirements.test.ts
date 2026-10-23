@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { legacyUuid } from '../src/ids';
 import { buildImportPlan } from '../src/plan';
 import type { ImportOptions } from '../src/plan-types';
+import type { LegacyData } from '../src/legacy-types';
+import { PUSH_STATUS_TO_CHECK } from '../src/workflow-v1';
 import { makeLegacyData, messyLegacyData, planeReq, reviewedMapping, withPushConfig } from './fixtures';
 
 const OPTS: ImportOptions = { orgSlug: 'pan123', orgName: '123云盘', productKey: 'PAN', productName: '123云盘', asOf: '2026-09-29', owner: null };
@@ -386,5 +388,51 @@ describe('导入计划：一个字段写了多人、代签写法、工具账号'
     const lisi = report.personMerges.find((x) => x.displayName === '李四')!;
     expect(lisi.variants).toEqual(expect.arrayContaining(['产品经理-李四(小李)', '小李', 'lisi']));
     expect(lisi.variants.some((v) => v.includes('@'))).toBe(false);
+  });
+});
+
+describe('导入计划：push 状态「设计中」', () => {
+  const withDesigning = (review: boolean): LegacyData => {
+    const data = makeLegacyData();
+    data.push.requirements.push({
+      id: 6, title: '设计中需求', alias: null, requester: null, owner: '赵六', line: '功能', priority: 'P2', platforms: '[]', developers: '[]', brief: null,
+      status: '设计中', source: '原创', version_id: '', created_at: '2026-03-02 00:00:00', last_edited_by: null, last_edited_at: null, plane_id: '', prd_url: null, merged_into: null,
+    });
+    if (review) {
+      data.push.prdReviews.push({
+        requirement_id: 6, e1_state: '通过', e1_by: '张三', e1_at: '2026-03-03 00:00:00', e1_note: '背景清楚', e2_state: '打回', e2_by: '张三', e2_at: '2026-03-03 00:00:00', e2_note: null, e3_state: '待办', e3_by: null, e3_at: null, e3_note: null, created_at: null, submitted_by: '李四',
+      });
+    }
+    return data;
+  };
+  const planOf = (review: boolean) => buildImportPlan(withDesigning(review), reviewedMapping(), OPTS);
+  const stateOf = (plan: ReturnType<typeof planOf>, item: 'background' | 'feasibility' | 'industry') => {
+    const req = plan.rows.requirements.find((r) => r.legacyKey === 'push-6')!;
+    return plan.rows.checkItemResults.find((c) => c.targetId === req.id && c.itemKey === item)?.state;
+  };
+
+  it('「设计中」且没有评审时不报问题，背景、可行性、行业都为空', () => {
+    const plan = planOf(false);
+    expect(plan.report.problems.length).toBe(0);
+    expect(plan.report.problems.includes('push 状态「设计中」没有对应规则')).toBe(false);
+    expect(stateOf(plan, 'background')).toBe(undefined);
+    expect(stateOf(plan, 'feasibility')).toBe(undefined);
+    expect(stateOf(plan, 'industry')).toBe(undefined);
+  });
+
+  it('「设计中」且有评审时，三个检查项按评审结果', () => {
+    const plan = planOf(true);
+    expect(plan.report.problems.length).toBe(0);
+    expect(stateOf(plan, 'background')).toBe('passed');
+    expect(stateOf(plan, 'feasibility')).toBe('rejected');
+    expect(stateOf(plan, 'industry')).toBe('in_progress');
+  });
+
+  it('push 全量 7 个状态都在映射表内', () => {
+    // 设计文档点名的 push 主状态，加上本次的「设计中」。开发中、待验收、合格、已上线仍留在表里，不改映射值。
+    const statuses = ['待排期', '评审中', '待修订', '已通过', '已进版本', '已搁置', '设计中'] as const;
+    expect(statuses.length).toBe(7);
+    for (const status of statuses) expect(Object.hasOwn(PUSH_STATUS_TO_CHECK, status)).toBe(true);
+    expect(PUSH_STATUS_TO_CHECK['设计中']).toBe(null);
   });
 });
