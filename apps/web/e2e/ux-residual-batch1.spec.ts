@@ -167,4 +167,8 @@ test('工作台全空是一条矮提示，并能点进现有列表', async ({ pa
   await expect(collapse).toHaveAttribute('aria-controls', aboutId!);
   await expect(aboutBody).toBeVisible();
   await expect(aboutBody).toContainText('汇总你在所有组织里负责的需求与工作项');
+  await collapse.click();
+  await expect(about).toHaveAttribute('aria-expanded', 'false');
+  await expect(about).toHaveText('了解更多');
+  await expect(aboutBody).toBeHidden();
 });

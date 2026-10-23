@@ -39,9 +39,9 @@ test('登录后进入工作台：跨组织汇总负责的需求、我的任务�
   await expect(page.getByRole('heading', { name: '工作台', level: 1 })).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 900 });
   const taskRow = page.getByRole('region', { name: /我的任务/ }).getByRole('link', { name: /接口联调/ });
-  await expect(taskRow).toContainText('PAN-1');
-  await expect(taskRow).toContainText('迭代0105');
-  await expect(taskRow).toContainText('未排期');
+  await expect(taskRow.getByText('PAN-1', { exact: true })).toBeVisible();
+  await expect(taskRow.getByText('迭代0105', { exact: true })).toBeVisible();
+  await expect(taskRow.getByText('未排期', { exact: true })).toBeVisible();
   const owned = page.getByRole('region', { name: /我负责的需求/ });
   await expect(owned.getByRole('link', { name: /PAN-1/ })).toBeVisible();
   await expect(owned.getByRole('link', { name: /DOC-1/ })).toContainText('第二组织');

@@ -46,7 +46,7 @@ function Section({
 }) {
   const id = useId();
   return (
-    <section aria-labelledby={id} className="flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card">
+    <section aria-labelledby={id} className="flex min-w-0 flex-col justify-start overflow-hidden rounded-lg border bg-card">
       <h2 id={id} className="flex items-center justify-between border-b px-4 py-2.5 font-semibold">
         <span className="flex min-w-0 items-baseline gap-2">
           <span className="truncate">{title}</span>
@@ -63,11 +63,11 @@ function Section({
       </h2>
       {total === 0 ? (
         emptyHref ? (
-          <Link href={emptyHref} className="px-4 py-3 text-center text-[13px] text-primary hover:underline">
+          <Link href={emptyHref} className="shrink-0 px-4 py-2 text-left text-[13px] text-primary hover:underline">
             {empty}
           </Link>
         ) : (
-          <p className="px-4 py-3 text-center text-[13px] text-muted-foreground">{empty}</p>
+          <p className="shrink-0 px-4 py-2 text-left text-[13px] text-muted-foreground">{empty}</p>
         )
       ) : (
         <ul className="divide-y">{children}</ul>
@@ -123,7 +123,7 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
   const badge = showOrgBadge(data.orgs);
   if (workbenchIsEmpty(data)) return <EmptyWorkbench org={org} />;
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+    <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-3">
       <Section title="我负责的需求与工作项" total={data.owned.total} shown={data.owned.items.length} empty="没有进行中的需求与工作项" emptyHref={emptySectionHref(org, 'owned')}>
         {data.owned.items.map((r) => (
           <li key={r.id}>
@@ -165,10 +165,10 @@ function Sections({ org, data }: { org: string; data: Workbench }) {
               <OrgBadge show={badge} name={t.org.name} />
               <span className="shrink-0 font-mono text-xs text-muted-foreground">{t.displayKey}</span>
               <span className="min-w-0 flex-1 truncate">{t.title}</span>
-              {t.requirement && <span className="font-mono text-xs text-muted-foreground">{t.requirement.displayKey}</span>}
-              {t.iteration && <span className="text-xs text-muted-foreground">{t.iteration.name}</span>}
-              <span className="font-mono text-xs text-muted-foreground">{t.planStart ?? '未排期'}</span>
-              <span className="w-10 text-right font-mono text-xs">{t.progress}%</span>
+              {t.requirement && <span className="shrink-0 font-mono text-xs text-muted-foreground">{t.requirement.displayKey}</span>}
+              {t.iteration && <span className="min-w-0 max-w-24 shrink-0 truncate text-xs text-muted-foreground">{t.iteration.name}</span>}
+              <span className="shrink-0 font-mono text-xs text-muted-foreground">{t.planStart ?? '未排期'}</span>
+              <span className="w-10 shrink-0 text-right font-mono text-xs">{t.progress}%</span>
             </Link>
           </li>
         ))}

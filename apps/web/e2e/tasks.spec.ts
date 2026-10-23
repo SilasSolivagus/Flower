@@ -36,10 +36,9 @@ test('任务编号：甘特与人员负载显示 PAN-T-n，点进任务详情；
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/acme');
   const taskRow = page.getByRole('region', { name: /我的任务/ }).getByRole('link', { name: /PAN-T-1/ });
-  await expect(taskRow).toBeVisible();
-  await expect(taskRow).toContainText(req.displayKey);
-  await expect(taskRow).toContainText('迭代0105');
-  await expect(taskRow).toContainText('2026-01-05');
+  await expect(taskRow.getByText(req.displayKey, { exact: true })).toBeVisible();
+  await expect(taskRow.getByText('迭代0105', { exact: true })).toBeVisible();
+  await expect(taskRow.getByText('2026-01-05', { exact: true })).toBeVisible();
 });
 
 test('任务不存在时提示；任务详情在 1440 与 760 宽度下不横向滚动', async ({ page, request }) => {

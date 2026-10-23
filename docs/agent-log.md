@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · 工作台卡片按内容定高（FIX-2）
+- 分支 / PR：`fix/dux-e-workbench-density`（草稿 #39，不要 merge，不要标 ready）
+- 做了什么：已处理同日 FIX-2。工作台网格加 `items-start`，卡片按内容定高，不再把同一行拉齐。空文案改为顶对齐、`py-2`，不再在被拉高的卡里垂直居中。任务行迭代名 `min-w-0 max-w-24 shrink-0 truncate`，进度百分比 `shrink-0`，长迭代名截断、不挤掉百分比。1280 的编号、迭代、计划日断言改成逐字段 `toBeVisible()`。「了解更多」展开后再点一次，回到 `aria-expanded=false` 和「了解更多」。满负荷造数在 `apps/web/e2e/dux-e-workbench-density.spec.ts`；截图在 `docs/dux-e/workbench-full-1280.png` 与 `docs/dux-e/workbench-partial-1280.png`。没有 masonry，没有改共享组件、后端和计数接口。不碰 47.x。
+- 怎么验证的：`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。Playwright：`layout`、`tasks`、`ux-residual-batch1`、`work-items`、`workbench`、`dux-e-workbench-density` 共 20 条通过。1280 实测：6 条数据卡 289px，12 条检查项 535px，同行的 6 条简报/未读仍是 289px。部分有数据时空块 80px，空文案距卡顶 43px；有数据卡仍是 289px。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰 47.x。回滚：去掉网格 `items-start`，空文案改回居中。截图用 `WB_SHOT=1` 重跑 `dux-e-workbench-density` 会写回 `docs/dux-e/`。
+
 ### 2026-10-23 · 云端 · 工作台任务行恢复计划日，页头按钮可收起（FIX-1）
 - 分支 / PR：`fix/dux-e-workbench-density`（草稿 #39，不要 merge，不要标 ready）
 - 做了什么：已处理同日组验的 FIX-1。任务行不再按卡宽隐藏需求编号、迭代名、计划日，「未排期」在 1280 上重新可见。`@container` 随这段隐藏逻辑去掉。页头「了解更多」带 `aria-controls` 和 `aria-expanded`，展开后按钮文案变成「收起」。端到端里空态 `status` 收在「工作台空态」组内。补了 1280 满负荷和部分有数据截图，只记录不改布局。没有新计数接口，没有改共享组件，没有动后端。不碰 47.x。
