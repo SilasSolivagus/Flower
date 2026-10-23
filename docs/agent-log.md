@@ -20,6 +20,24 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · FIX-5 修订：迭代名三列限宽，字数扣掉省略号
+- 分支 / PR：`fix/dux-e-workbench-3col-readable`（草稿 #40，不要 merge，不要标 ready）
+- 做了什么：已处理同日 FIX-5 修订。三列门槛仍是 `3xl`（`120rem`），没有改。只动「我的任务」行：迭代名加 `3xl:max-w-16`（64px），`title` 仍是全名。只加这一条时，多组织 1920 的长标题是「联调任务 2 名字」，7 个非空格字、104px，还不到 8。于是任务行保持 `gap-2`，三列时组织徽标再限到 `5em` 并截断，`title` 为全名。编号、迭代、计划日都还在，其他区块的行没改。可见字：行或标题溢出时，右边界先减去省略号宽度，字形必须完全落在这条边界左边。空格不算。`layout.spec` 增加 1919 两列、1920 三列。1920 的两张满负荷图重截。不碰生产。
+- 怎么验证的：`pnpm --filter @flower/web lint` 0 警告。`pnpm typecheck` 通过。Playwright 24 条通过，含 1919 两列 / 1920 三列。扣掉省略号之后的非空格字：单组织 1280 长标题「联调任务 2 名字也」8 字 / 116px，1440 全文 11 字 / 196px，1536 全文 11 字 / 244px，1920 全文 11 字 / 196px。多组织短名 1536 全文 11 字 / 176px；1920「联调任务 2 名字也比」9 字 / 128px。多组织长名 1920 同样 9 字 / 128px。短标题「接口任务 N」全文 5 字都在。迭代在 1920 为 64px，计划日和进度完整。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰生产。同日上一条 FIX-5 里「徽标 3.5em、1920 多组织 8 字 / 114px」已被这条取代。回滚：任务行改回共用 `ROW`，迭代名去掉 `3xl:max-w-16`，徽标去掉 `compactAt3xl`。
+
+### 2026-10-23 · 云端 · 三列多组织时任务标题仍不少于 8 个字（FIX-5）
+- 分支 / PR：`fix/dux-e-workbench-3col-readable`（草稿 #40，不要 merge，不要标 ready）
+- 做了什么：已处理同日 FIX-5。只改工作台「我的任务」行。任务行间距从 `gap-3` 收到 `gap-2`，其他区块仍用原来的 `ROW`。3xl 时这一行的组织徽标 `max-w-[3.5em]`，截断，`title` 为组织全名。4em 时 1920 长标题可见宽 108px，第 8 个非空格字的中线还差约 0.5px，被省略号盖住，所以收到 3.5em。编号、迭代、计划日都还在。没有改共享组件、后端、计数接口，也没有改三列断点。断言改为可见非空格字不少于 `min(8, 全文非空格字数)`；空格不算，省略号盖住的字不算；104px 不能单独过关。补了单组织、侧栏展开、1920，以及多组织长名称 1920。新截图 `docs/dux-e/workbench-full-1920-multiorg.png`。任务行间距变了，原四张满负荷图和 `workbench-partial-1280.png` 重截。不碰生产。
+- 怎么验证的：`pnpm --filter @flower/web lint` 0 警告。`pnpm typecheck` 通过。Playwright：`layout`、`tasks`、`ux-residual-batch1`、`work-items`、`workbench`、`dux-e-workbench-density` 共 24 条通过。单组织长标题可见字 / 宽：1280 卡宽 480，8 字 / 116px；1440 卡宽 560，11 字 / 196px；1536 卡宽 608，11 字 / 244px；1920 三列卡宽 528，11 字 / 164px。短标题「接口任务 N」全文 5 字都在。多组织短名 1536：长标题 11 字 / 176px，进度 40/40。多组织 1920（短名与长组织名相同）：长标题 8 字（联调任务2名字也）/ 114px，进度 40/40，迭代 96px，计划日完整。侧栏收起后 1536 仍两列，1920 仍三列。006-A、007-A、三字段没有回归。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰生产。回滚：任务行改回 `ROW`，去掉徽标的 `compactAt3xl`。截图用 `WB_SHOT=1` 重跑 `dux-e-workbench-density` 会写回 `docs/dux-e/`。
+
+### 2026-10-23 · 云端 · 工作台三列改到 ≥1920，1536 任务标题能对上号（FIX-4）
+- 分支 / PR：`fix/dux-e-workbench-3col-readable`（草稿，不要 merge，不要标 ready）
+- 做了什么：已处理同日 FIX-4。工作台网格从 `xl:grid-cols-2 2xl:grid-cols-3` 改为 `xl:grid-cols-2 3xl:grid-cols-3`。`3xl` 是 `120rem`，根字号 16px 时等于 1920px，排在 `xl`（80rem）和 `2xl`（96rem）之后。直接写 `min-[1920px]:` 或把断点写成 `1920px` 都会排在 `xl:grid-cols-2` 前面，同一条规则被盖住，1920 仍是两列。xl 起两列，≥1920 才三列。没有任务卡跨列，没有标题折行，没有改卡内列、共享组件、后端和计数接口。删掉密度端到端里 4 处 `console.log`。断言改成可见字符不少于 8，或可见宽不少于 104px；可见宽与卡片可视区、裁切父级取交集，标题自己的 `min-w-[64px]` 撑不满 104。迭代名 `toBeVisible` 且可见宽不少于 32px。计划日和进度复用同一套裁切宽度，须完整落在可视区里。宽度阈值留 0.5px。补了多组织徽标（1536 / 1920 进度不被裁）和侧栏收起。`layout.spec` 按 1440 / 1536 两列、1920 三列断言。满负荷截图：`docs/dux-e/workbench-full-1280.png`、`workbench-full-1440.png`、`workbench-full-1536.png`、`workbench-full-1920.png`。不碰生产。
+- 怎么验证的：`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。Playwright：`layout`、`tasks`、`ux-residual-batch1`、`work-items`、`workbench`、`dux-e-workbench-density` 共 22 条通过。单组织满负荷：1280 卡宽 480，长标题可见 9 字 / 96px，短标题 6 字 / 130px；1440 卡宽 560，长标题 13 字 / 176px，短标题 6 字 / 210px；1536 卡宽 608，长标题 13 字 / 224px，短标题 6 字 / 258px；1920 三列卡宽 528，长标题 13 字 / 144px，短标题 6 字 / 178px。多组织徽标下 1536 进度宽 40/40，1920 进度宽 40/40；1920 长标题可见 7 字 / 72px，序号还在。侧栏收起后 1536 仍两列，页头「收起」仍能收回说明。006-A、007-A、三字段没有回归。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰生产。回滚：去掉 `3xl` 断点，网格改回 `xl:grid-cols-2 2xl:grid-cols-3`。截图用 `WB_SHOT=1` 重跑 `dux-e-workbench-density` 会写回 `docs/dux-e/`。仓外的 ACCEPT-CRITERIA / FIX-BRIEF / GATE 不在本仓库，没有改。
+
 ### 2026-10-23 · 云端 · 工作台 1280 改两列，任务标题不再被挤没（FIX-3）
 - 分支 / PR：`fix/dux-e-workbench-density`（草稿 #39，不要 merge，不要标 ready）
 - 做了什么：已处理同日 FIX-3。工作台网格从 `xl:grid-cols-3` 改为 `xl:grid-cols-2 2xl:grid-cols-3`。1280 与 1440 是两列，1536 才三列。任务标题加 `min-w-[64px]`，迭代名去掉 `shrink-0`、保留截断，并加上 `title` 以便悬停看全名。端到端在 1280 断言任务标题的可见宽度（算上父级 overflow 裁切）不少于 64px，计划日和进度的右边界不超出行。截图覆盖 `docs/dux-e/workbench-full-1280.png`、`docs/dux-e/workbench-partial-1280.png`，并新增 `docs/dux-e/workbench-full-1536.png`。没有 masonry，没有改共享组件、后端和计数接口。不碰 47.x。
