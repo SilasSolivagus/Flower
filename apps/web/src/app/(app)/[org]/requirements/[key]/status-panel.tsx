@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
+import { Fragment, useState } from 'react';
 import { DisabledReason } from '@/components/disabled-reason';
 import { FormError } from '@/components/form-error';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Textarea } from '@/components/ui/textarea';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { primaryStatusAction, transitionDisabledReason } from '@/features/requirements/status-menu';
 import { primaryTransitionTo } from '@/features/requirements/transitions';
 import { api } from '@/lib/api';
 import { qk, requirementKeys, useApiMutation } from '@/lib/queries';
@@ -31,6 +33,7 @@ export function StatusPanel({ org, requirement: r }: { org: string; requirement:
   });
   const canEdit = r.myRole !== 'viewer';
   const primaryTo = primaryTransitionTo(r.stateKey, r.workflow.states, r.transitions);
+  const primary = primaryStatusAction(canEdit, primaryTo, r.transitions);
   const closeForcing = () => {
     setForcing(null);
     setReason('');
@@ -42,65 +45,51 @@ export function StatusPanel({ org, requirement: r }: { org: string; requirement:
       <h2 id="status-title" className="mb-3 text-sm font-semibold">
         状态
       </h2>
-      <p className="mb-3 flex items-center gap-2 text-base font-medium" data-testid="current-state">
-        <span className="size-2.5 rounded-full" style={{ background: state?.color }} aria-hidden="true" />
-        {state?.label ?? r.stateKey}
-      </p>
-      {!canEdit && r.transitions.length > 0 && <p className="mb-2 text-[12px] text-muted-foreground">只有编辑可以改状态</p>}
-      <ul className="flex flex-col gap-2" aria-label="可流转到">
-        {r.transitions.map((t) => {
-          const unmetText = t.unmet.map((u) => u.message).join('；');
-          let reason: string | undefined;
-          if (!t.allowed) reason = unmetText || '现在不能改到这个状态';
-          else if (!canEdit) reason = '只有编辑可以改状态';
-          const emphasis = t.to === primaryTo ? 'primary' : 'secondary';
-          const button = (
-            <Button
-              size="sm"
-              variant={emphasis === 'primary' ? 'default' : 'outline'}
-              data-emphasis={emphasis}
-              disabled={!t.allowed || !canEdit || move.isPending}
-              onClick={() => move.mutate({ to: t.to })}
-            >
-              {t.label}
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="flex min-w-0 items-center gap-2 text-sm font-medium" data-testid="current-state">
+          <span className="size-2.5 shrink-0 rounded-full" style={{ background: state?.color }} aria-hidden="true" />
+          {state?.label ?? r.stateKey}
+        </p>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {r.transitions.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="outline" size="sm">
+                  变更状态
+                  <ChevronDown aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72" aria-label="可流转到">
+                {r.transitions.map((t) => {
+                  const disabledReason = transitionDisabledReason(t, canEdit);
+                  return (
+                    <Fragment key={t.to}>
+                      <DropdownMenuItem
+                        disabled={!!disabledReason || move.isPending}
+                        className="items-start whitespace-normal"
+                        onSelect={() => move.mutate({ to: t.to })}
+                      >
+                        <span className="flex min-w-0 flex-col items-start gap-0.5">
+                          <span>{t.label}</span>
+                          {disabledReason && <span className="text-[12px] font-normal leading-4 text-muted-foreground">{disabledReason}</span>}
+                        </span>
+                      </DropdownMenuItem>
+                      {!t.allowed && r.canForce && canEdit && (
+                        <DropdownMenuItem onSelect={() => setForcing({ to: t.to, label: t.label })}>强制流转到「{t.label}」</DropdownMenuItem>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {primary && (
+            <Button type="button" size="sm" data-emphasis="primary" disabled={move.isPending} onClick={() => move.mutate({ to: primary.to })}>
+              {primary.label}
             </Button>
-          );
-          return (
-          <li key={t.to} className="flex flex-col gap-1">
-            <div className="flex items-center gap-2">
-              {!t.allowed ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="inline-flex" tabIndex={0} title={reason}>
-                      {button}
-                    </span>
-                  </TooltipTrigger>
-                  {unmetText && <TooltipContent>{unmetText}</TooltipContent>}
-                </Tooltip>
-              ) : !canEdit ? (
-                <span className="inline-flex" title={reason}>
-                  {button}
-                </span>
-              ) : (
-                button
-              )}
-              {!t.allowed && r.canForce && (
-                <button type="button" className="text-[12px] text-muted-foreground underline" onClick={() => setForcing({ to: t.to, label: t.label })}>
-                  强制流转
-                </button>
-              )}
-            </div>
-            {t.unmet.length > 0 && (
-              <ul className="pl-1 text-[12px] text-muted-foreground">
-                {t.unmet.map((u, i) => (
-                  <li key={i}>· {u.message}</li>
-                ))}
-              </ul>
-            )}
-          </li>
-          );
-        })}
-      </ul>
+          )}
+        </div>
+      </div>
       <Dialog open={!!forcing} onOpenChange={(o) => !o && closeForcing()}>
         <DialogContent>
           <DialogHeader>

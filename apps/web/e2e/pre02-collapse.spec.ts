@@ -39,8 +39,9 @@ test('PRE-02：1280 收起左轨和右栏后中间变宽并记住；760 汉堡�
   await expect(nav.getByRole('link', { name: '需求', exact: true })).toBeVisible();
   await expect(aside).toBeVisible();
   await expect(page.getByRole('heading', { name: '跟进' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '状态历史' })).toBeVisible();
-  await expect(narrative.getByRole('heading', { name: '状态历史' })).toBeVisible();
+  await expect(aside.getByRole('heading', { name: '状态历史' })).toBeVisible();
+  await expect(narrative.getByRole('heading', { name: '状态历史' })).toHaveCount(0);
+  expect(Math.abs((await widthOf(page.getByTestId('req-detail-rail'))) - 380)).toBeLessThan(2);
   const mainExpanded = await widthOf(shellMain);
   const narrativeExpanded = await widthOf(narrative);
 
@@ -60,7 +61,9 @@ test('PRE-02：1280 收起左轨和右栏后中间变宽并记住；760 汉堡�
   await expect(aside).toBeHidden();
   await expect(page.getByRole('heading', { name: '状态', exact: true })).toBeHidden();
   await expect(page.getByRole('heading', { name: '跟进' })).toBeHidden();
-  await expect(narrative.getByRole('heading', { name: '状态历史' })).toBeVisible();
+  await expect(narrative.getByRole('heading', { name: '状态历史' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '状态历史' })).toBeHidden();
+  expect(await widthOf(page.getByTestId('req-detail-rail'))).toBeLessThan(48);
   await expect(page.getByRole('button', { name: '展开属性栏' })).toBeVisible();
   const narrativeBoth = await widthOf(narrative);
   expect(narrativeBoth - narrativeExpanded).toBeGreaterThan(400);
@@ -73,7 +76,8 @@ test('PRE-02：1280 收起左轨和右栏后中间变宽并记住；760 汉堡�
   await expect.poll(() => widthOf(nav)).toBeLessThan(80);
   await expect(page.getByTestId('req-detail-grid')).toHaveAttribute('data-aside-collapsed', 'true');
   await expect(aside).toBeHidden();
-  await expect(narrative.getByRole('heading', { name: '状态历史' })).toBeVisible();
+  await expect(narrative.getByRole('heading', { name: '状态历史' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '状态历史' })).toBeHidden();
 
   await page.getByRole('button', { name: '展开侧栏' }).click();
   await page.getByRole('button', { name: '展开属性栏' }).click();
@@ -95,7 +99,8 @@ test('PRE-02：1280 收起左轨和右栏后中间变宽并记住；760 汉堡�
   await expect(page.getByRole('button', { name: '展开属性栏' })).toBeHidden();
   await expect(page.getByRole('heading', { name: '跟进' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '状态', exact: true })).toBeVisible();
-  await expect(narrative.getByRole('heading', { name: '状态历史' })).toBeVisible();
+  await expect(narrative.getByRole('heading', { name: '状态历史' })).toHaveCount(0);
+  await expect(aside.getByRole('heading', { name: '状态历史' })).toBeVisible();
   await expectNoPageOverflow(page);
 
   await page.getByRole('button', { name: '打开导航' }).click();

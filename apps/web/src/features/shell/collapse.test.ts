@@ -8,10 +8,11 @@ import {
   railItemClassName,
   railLabelClassName,
   REQ_ASIDE_COLLAPSED_KEY,
-  requirementAsideClassName,
   requirementGridClassName,
-  requirementStatusBodyClassName,
-  requirementStatusColumnClassName,
+  requirementMainClassName,
+  requirementRailBodyClassName,
+  requirementRailClassName,
+  trackingBelowMain,
 } from './collapse';
 
 describe('收展偏好', () => {
@@ -64,22 +65,42 @@ describe('图标轨文字', () => {
 });
 
 describe('需求详情右栏', () => {
-  it('展开栅格保持 320px，右栏和状态卡都在', () => {
-    expect(requirementGridClassName(false)).toBe('grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]');
-    expect(requirementAsideClassName(false)).toBe('order-3 flex flex-col gap-4 lg:col-start-2');
-    expect(requirementAsideClassName(false)).not.toContain('lg:hidden');
-    expect(requirementStatusBodyClassName(false)).toBe('');
-    expect(requirementStatusColumnClassName(false)).not.toContain('lg:hidden');
+  it('展开写死 380px，收起仍是 2.5rem，localStorage 键不变', () => {
+    expect(requirementGridClassName(false)).toBe('grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_380px]');
+    expect(requirementGridClassName(false)).not.toContain('320px');
+    const collapsed = requirementGridClassName(true);
+    expect(collapsed).toContain('grid-cols-1');
+    expect(collapsed).toContain('lg:grid-cols-[minmax(0,1fr)_2.5rem]');
+    expect(collapsed).not.toContain('380px');
+    expect(collapsed).not.toContain('320px');
   });
 
-  it('收起后右栏不占格，只留 2.5rem 把手，小于 lg 的单列不受影响', () => {
-    const grid = requirementGridClassName(true);
-    expect(grid).toContain('grid-cols-1');
-    expect(grid).toContain('lg:grid-cols-[minmax(0,1fr)_2.5rem]');
-    expect(grid).not.toContain('320px');
-    expect(requirementAsideClassName(true).split(/\s+/)).toContain('lg:hidden');
-    expect(requirementStatusBodyClassName(true)).toBe('lg:hidden');
-    expect(requirementStatusColumnClassName(true)).toContain('lg:col-start-2');
-    expect(requirementStatusColumnClassName(true)).not.toContain('lg:hidden');
+  it('单一右轨与主列同一行，跟进不会落到主列之下', () => {
+    const rail = requirementRailClassName(false);
+    const main = requirementMainClassName();
+    expect(rail).toContain('order-1');
+    expect(rail).toContain('lg:col-start-2');
+    expect(rail).toContain('lg:row-start-1');
+    expect(rail).toContain('lg:self-start');
+    expect(main).toContain('order-2');
+    expect(main).toContain('lg:col-start-1');
+    expect(main).toContain('lg:row-start-1');
+    expect(trackingBelowMain(rail, main)).toBe(false);
+    // PRE-02：状态占 row1，aside 不写 row，自动落到 row2，跟进在主列底边之下。
+    expect(trackingBelowMain('order-3 flex flex-col gap-4 lg:col-start-2', 'order-2 flex min-w-0 flex-col gap-4 lg:col-start-1 lg:row-start-1')).toBe(true);
+    expect(trackingBelowMain('lg:col-start-2 lg:row-start-2', 'lg:col-start-1 lg:row-start-1')).toBe(true);
+  });
+
+  it('右轨 sticky、限高、内滚，把手与栏体共用这一层', () => {
+    const rail = requirementRailClassName(false);
+    expect(rail).toContain('lg:sticky');
+    expect(rail).toContain('lg:top-4');
+    expect(rail).toContain('lg:max-h-[calc(100vh-2rem)]');
+    expect(rail).toContain('lg:overflow-y-auto');
+    expect(rail).not.toContain('lg:hidden');
+    expect(requirementRailClassName(true)).toContain('lg:sticky');
+    expect(requirementRailClassName(true)).not.toContain('lg:hidden');
+    expect(requirementRailBodyClassName(false)).not.toContain('lg:hidden');
+    expect(requirementRailBodyClassName(true).split(/\s+/)).toContain('lg:hidden');
   });
 });

@@ -17,13 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { WikiText } from '@/components/wiki-text';
 import { WikilinkTextarea } from '@/components/wikilink-textarea';
 import { useMarkNotificationsRead } from '@/features/member-notifications/use-mark-read';
-import {
-  REQ_ASIDE_COLLAPSED_KEY,
-  requirementAsideClassName,
-  requirementGridClassName,
-  requirementStatusBodyClassName,
-  requirementStatusColumnClassName,
-} from '@/features/shell/collapse';
+import { REQ_ASIDE_COLLAPSED_KEY, requirementGridClassName, requirementMainClassName, requirementRailBodyClassName, requirementRailClassName } from '@/features/shell/collapse';
 import { useCollapsedPref } from '@/features/shell/use-collapsed-pref';
 import { ProgressList } from '@/features/tracking/components/progress-list';
 import { api } from '@/lib/api';
@@ -79,15 +73,15 @@ export default function RequirementPage() {
           你是查看者，不能修改这条需求。状态、描述、属性和跟进已锁定；需要修改时请联系产品编辑。评论仍可以发表。
         </p>
       )}
-      {/* 右栏整列收起只在 lg 及以上生效。状态历史留在主列，不在这次改动里搬家。 */}
+      {/* 单一右轨与主列同一行。跟进、状态、历史都在轨内，避免状态独占 row1 把跟进挤到主列之下。收起只在 lg 及以上。 */}
       <div className={requirementGridClassName(asideCollapsed)} data-testid="req-detail-grid" data-aside-collapsed={asideCollapsed ? 'true' : 'false'}>
-        <div className={requirementStatusColumnClassName(asideCollapsed)}>
+        <div className={requirementRailClassName(asideCollapsed)} data-testid="req-detail-rail">
           <Button
             type="button"
             variant="outline"
             size={asideCollapsed ? 'icon-sm' : 'sm'}
             data-testid="req-aside-collapse"
-            className={asideCollapsed ? 'sticky top-4 hidden lg:inline-flex' : 'hidden lg:inline-flex lg:self-end'}
+            className={asideCollapsed ? 'hidden shrink-0 lg:inline-flex' : 'hidden shrink-0 lg:inline-flex lg:self-end'}
             aria-expanded={!asideCollapsed}
             aria-controls="req-detail-aside"
             aria-label={asideCollapsed ? '展开属性栏' : '收起属性栏'}
@@ -97,11 +91,21 @@ export default function RequirementPage() {
             {asideCollapsed ? <PanelRightOpen aria-hidden="true" /> : <PanelRightClose aria-hidden="true" />}
             <span className={asideCollapsed ? 'sr-only' : undefined}>{asideCollapsed ? '展开属性栏' : '收起属性栏'}</span>
           </Button>
-          <div id="req-detail-status" className={requirementStatusBodyClassName(asideCollapsed)}>
-            <StatusPanel org={org} requirement={r} />
+          <div id="req-detail-aside" data-testid="req-detail-aside" className={requirementRailBodyClassName(asideCollapsed)}>
+            <TrackingPanel org={org} requirement={r} />
+            <div id="req-detail-status">
+              <StatusPanel org={org} requirement={r} />
+            </div>
+            <History requirement={r} />
+            <BriefCard org={org} requirement={r} />
+            <PrdCard org={org} requirement={r} />
+            <FieldsPanel org={org} requirement={r} />
+            <Assignments org={org} requirement={r} />
+            <SideLists org={org} requirement={r} />
+            <Releases org={org} requirement={r} />
           </div>
         </div>
-        <div className="order-2 flex min-w-0 flex-col gap-4 lg:col-start-1 lg:row-start-1" data-testid="req-detail-main">
+        <div className={requirementMainClassName()} data-testid="req-detail-main">
           <section className="rounded-md border bg-card p-4" aria-labelledby="desc-title">
             <div className="mb-2 flex items-center justify-between">
               <h2 id="desc-title" className="text-sm font-semibold">
@@ -173,16 +177,6 @@ export default function RequirementPage() {
               />
             </TabsContent>
           </Tabs>
-          <History requirement={r} />
-        </div>
-        <div id="req-detail-aside" data-testid="req-detail-aside" className={requirementAsideClassName(asideCollapsed)}>
-          <TrackingPanel org={org} requirement={r} />
-          <BriefCard org={org} requirement={r} />
-          <PrdCard org={org} requirement={r} />
-          <FieldsPanel org={org} requirement={r} />
-          <Assignments org={org} requirement={r} />
-          <SideLists org={org} requirement={r} />
-          <Releases org={org} requirement={r} />
         </div>
       </div>
     </>

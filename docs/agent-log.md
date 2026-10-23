@@ -20,6 +20,18 @@
 
 ## 记录
 
+### 2026-10-23 · 云端 · 需求详情单一右轨、紧凑状态、历史出主列
+- 分支 / PR：`fix/dux-b-detail-narrative`（草稿，不要 merge，不要标 ready）
+- 做了什么：B 余 DUX-002/003/004/011/012。PRE-02 把状态卡单独放在 `lg:row-start-1`，aside 不写行号，宽屏上 aside 落到 row2，跟进整段在主列底边之下。这次收成**一个**右轨父节点，DOM 顺序是跟进 → 状态 → 状态历史 → 简报及其余；主列与右轨都是 `lg:row-start-1`，右轨 `lg:col-start-2`。展开写死 380px，收起仍是 2.5rem 把手。`flower.req.detail.asideCollapsed` 与 `flower.shell.navCollapsed` 没改。右轨 `lg:sticky lg:top-4`、`lg:max-h-[calc(100vh-2rem)]`、`lg:overflow-y-auto`，收展把手在同一层，不再单独 sticky。状态是当前态一行 + `变更状态` 菜单（非法项禁用并带短因）+ 至多一个主按钮；未满足条件只在菜单项副文案里，按钮下不再挂常驻列表。状态历史离开主列，默认最近 3 条，可展开全部。没有改流转 API，没有拖拽改宽，没有改壳 max-width，没有动列表、工作台、甘特。空态折叠（RA-009/010/012）没做。不碰 47.x。
+- 怎么验证的：`collapse`、`history-preview`、`status-menu` 单测 13 项通过（含 `trackingBelowMain` 对 PRE-02 分格为 true、单轨为 false）。`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。Playwright：`dux-b-rail`（1280 轨宽 380、跟进不在主列之下、滚到中段跟进仍贴在 top 16px 内；760 跟进 → 状态 → 历史 → 主列）、`pre02-collapse`、`requirements` 详情流转、`documents-prd-flow`、`ux-gap` 的 C3 与 M0-007，共 15 条通过。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰 47.x。回滚：状态历史放回主列；右轨拆回状态格 + aside 两格；展开宽改回 320px；状态恢复竖排按钮。已处理同日并行提交把窄屏主列放在跟进前面的问题：760 仍是跟进 → 状态 → 历史，然后才是主列。
+
+### 2026-10-23 · 云端 · 详情主叙事、紧凑状态与跟进置顶（B 余）
+- 分支 / PR：`fix/dux-b-detail-narrative`（草稿，不要 merge，不要标 ready）
+- 做了什么：DUX-002/003/004/011/012 同一 PR。状态历史从主列挪到右栏，顺序是跟进 → 状态 → 状态历史 → 其余属性。右栏展开定宽 **380px**（360–400），lg 起 `sticky top-4`，过长时栏内滚动。状态改成一行：色点 + 当前文案，至多一个主操作，其余下一态在「变更状态」里；条件不满足的停用并写短因，不再竖排全部流转按钮。PRE-02 的 localStorage 键和收起把手（2.5rem）没改。没有拖拽改宽。没有改流转 API 或状态机。不碰 47.x。
+- 怎么验证的：`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。收展与状态菜单单测 13 通过。端到端：`pre02-collapse`、需求详情流转、`documents-prd-flow`、`ux-gap-p0-mid` 共 17 通过。1280 展开右栏宽在 360–400；滚过主列后跟进仍贴在视口上沿；收起后历史不在主列、把手仍在；760 跟进仍在状态前面。状态区高度小于 96，没有竖排流转按钮。截图在 PR 描述。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰 47.x。回滚：历史放回主列，去掉 sticky，右栏回到 320，状态恢复竖排按钮，跟进回到状态下。
+
 ### 2026-10-23 · 云端 · 左导航图标轨与需求详情右栏可收起
 - 分支 / PR：`fix/pre02-collapse-panels`（草稿，不要 merge，不要标 ready）
 - 做了什么：只做 PRE-02。桌面（xl，1280）左导航可收到 56px 图标轨（`xl:w-14`），展开仍是 `w-60`。需求详情右栏在 lg 及以上整列收成 40px 把手，状态卡一并收起，中间列变宽；状态历史仍留在主列。偏好只写 localStorage：`flower.shell.navCollapsed`、`flower.req.detail.asideCollapsed`（`1` 收起，`0` 或没有则展开）。760 抽屉仍是宽 240 的文字导航，汉堡、Esc、遮罩、收起都在；桌面收起偏好不会把窄屏右栏藏掉。没有新 API，没有迁移，没有账号同步。不做 DUX-002 / DUX-003 / DUX-004。不碰 47.x。已变基到 main@e24e042c（PRE-01 已合入）；冲突只在本日志，列表与 `related=me` 未改。
