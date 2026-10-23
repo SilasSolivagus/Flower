@@ -201,11 +201,14 @@ a.wikilink-card:hover {
   color: var(--muted-foreground);
 }
 
-/* 「去改」滚到的小节：顶栏留空，并短暂高亮 */
-.bn-editor .brief-section-target {
+/*
+ * 「去改」滚到的小节：顶栏留空，并琥珀色闪 1.6s。
+ * 高亮是编辑器外面的遮罩（标题上的 class 会被编辑器立刻改回去），不在 .bn-editor 里面。
+ */
+.brief-section-target {
   scroll-margin-top: 4.5rem;
   border-radius: 4px;
-  animation: brief-section-flash 1.6s ease-out;
+  animation: brief-section-flash 1.6s ease-out both;
 }
 @keyframes brief-section-flash {
   0% {

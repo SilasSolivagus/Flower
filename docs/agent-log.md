@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-24 · 云端 · 失败简报「去改」补上琥珀色高亮
+- 分支 / PR：`fix/sd02-brief-goto-highlight`（草稿 #45，不要 merge，不要标 ready）
+- 做了什么：SD-02。点失败简报「去改」时，琥珀色遮罩画在编辑器外面，样式却写在 `.bn-editor .brief-section-target` 上，选不中这块遮罩，所以只滚动、没有琥珀色。选择器改成 `.brief-section-target`，动画仍是 1.6 秒。滚动仍留 72px（上方空隙 ≥56）。没有小节的检查项不显示「去改」。点完以及带着 `section` / `at` 打开时清掉这两个参数。已再 rebase 到 main@`f70e5148`（#44 已合入）。日志里 SD-01、SD-02、SD-03 的记录都留着。不碰 47.x，没有 schema，不含 Phase 2、H4/H5。合仓不等于部署。
+- 怎么验证的：先写端到端，改样式前背景是 `rgba(0, 0, 0, 0)`，断言失败。改选择器后 Playwright：`ux-residual-batch2` 6 条、`briefs` 4 条通过。1280 上「1. 问题与目标」有琥珀色条，目标顶距视口 72px，动画时长 1.6 秒，地址栏没有 `section=`。`pnpm --filter @flower/web lint` 0 警告。`pnpm --filter @flower/web typecheck` 通过。不是 CI，不得称三绿。
+- 留给对方：不要 merge，不要标 ready。合仓不等于部署，不碰生产。回滚：把 `.brief-section-target` 的样式改回 `.bn-editor .brief-section-target`。测席 GATE-test 的 U2-05 不在本仓库，本提交只交端到端和 1280 高亮帧。
+
 ### 2026-10-24 · 云端 · SD-01 rebase 到 main@5cf865bf
 - 分支 / PR：`fix/sd01-now-status-dedupe`（#44，本代理没有合，没有标 ready）
 - 做了什么：已处理同日与 #43 的协作日志冲突。#43 已 squash 进 main@`5cf865bf`。rebase 后只动 `docs/agent-log.md`：两条 2026-10-24 记录都留，按时间把 SD-03 放在 SD-01 原记录上面。行内「进行中」去重的产品改动原样保留。不碰 47.x，没有扩大范围。合仓不等于部署。
