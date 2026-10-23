@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MemberTask } from '@/lib/types';
-import { groupByIteration, heatClass, heatRows, parseHalfDays, parseProgress, shortDate, timelineCells, upcomingWorkdays } from './model';
+import { groupByIteration, heatClass, heatRows, overviewIsHollow, parseHalfDays, parseProgress, shortDate, timelineCells, upcomingWorkdays } from './model';
 
 describe('甘特输入解析', () => {
   it('工期、延期以半天为单位；空表示未填；提示文字与服务端一致', () => {
@@ -17,6 +17,19 @@ describe('甘特输入解析', () => {
     expect(parseProgress('60')).toEqual({ ok: true, value: 60 });
     expect(parseProgress('60.5')).toEqual({ ok: false, message: '进度应为 0–100 的整数' });
     expect(parseProgress('101')).toEqual({ ok: false, message: '进度应为 0–100 的整数' });
+  });
+});
+
+describe('概览矮态', () => {
+  const zero = { overall: 0, expected: 0, behind: 0, deferred: 0 };
+
+  it('无任务或四项都是 0 时不铺四张卡；有任务且任一项非 0 时仍分卡', () => {
+    expect(overviewIsHollow(zero, 0)).toBe(true);
+    expect(overviewIsHollow({ overall: 0, expected: 100, behind: 100, deferred: 0 }, 0)).toBe(true);
+    expect(overviewIsHollow(zero, 2)).toBe(true);
+    expect(overviewIsHollow({ overall: 0, expected: 100, behind: 100, deferred: 0 }, 1)).toBe(false);
+    expect(overviewIsHollow({ overall: 40, expected: 0, behind: 0, deferred: 0 }, 1)).toBe(false);
+    expect(overviewIsHollow({ overall: 0, expected: 0, behind: 0, deferred: 1 }, 1)).toBe(false);
   });
 });
 

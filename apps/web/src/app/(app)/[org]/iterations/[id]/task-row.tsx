@@ -79,7 +79,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
           </Button>
         </TableCell>
         <TableCell className="overflow-hidden">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 items-center gap-1">
             <Link href={`/${org}/tasks/${t.displayKey}`} className="shrink-0 font-mono text-[12px] text-muted-foreground hover:underline">
               {t.displayKey}
             </Link>
@@ -90,21 +90,23 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
               placeholder={t.title}
               maxLength={50}
               disabled={disabled}
-              className="h-8 w-32 shrink-0 font-medium"
+              className="h-8 w-16 shrink-0 px-1.5 font-medium"
               onBlur={(e) => {
                 const v = e.target.value.trim();
                 if (v !== (t.alias ?? '')) save({ alias: v || null }, 'alias');
               }}
             />
-            <div className="flex min-w-0 items-center gap-1.5 truncate text-[12px] text-muted-foreground">
+            <div className="flex min-w-0 flex-1 items-center gap-1 text-[12px] text-muted-foreground">
               {t.requirement ? (
-                <Link href={`/${org}/requirements/${t.requirement.displayKey}`} className="flex min-w-0 shrink-0 gap-1.5 hover:underline">
-                  <span className="font-mono">{t.requirement.displayKey}</span>
+                <Link href={`/${org}/requirements/${t.requirement.displayKey}`} className="shrink-0 font-mono hover:underline">
+                  {t.requirement.displayKey}
                 </Link>
               ) : (
                 <span className="shrink-0">未挂需求</span>
               )}
-              <span className="truncate">· {t.title}</span>
+              <span className="min-w-0 flex-1 truncate" title={t.title}>
+                · {t.title}
+              </span>
             </div>
           </div>
         </TableCell>
@@ -125,7 +127,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
         </TableCell>
         <TableCell>
           <Select value={t.status} disabled={disabled} onValueChange={(v) => save({ status: v as Task['status'] })}>
-            <SelectTrigger className="h-8 w-full" aria-label={`状态 ${label}`}>
+            <SelectTrigger className="h-8 w-full px-1.5 text-[13px]" aria-label={`状态 ${label}`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -138,14 +140,14 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
           </Select>
         </TableCell>
         <TableCell>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1">
             <Input
               key={fieldKey('planStart', t.planStart)}
               type="date"
               aria-label={`开始日期 ${label}`}
               defaultValue={t.planStart ?? ''}
               disabled={disabled}
-              className="h-8 w-36 font-mono text-[12px]"
+              className="h-8 w-[6.5rem] px-1 font-mono text-[12px]"
               onBlur={(e) => {
                 const v = e.target.value || null;
                 if (v !== t.planStart) save({ planStart: v }, 'planStart');
@@ -159,13 +161,13 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
               aria-label={`工期 ${label}`}
               defaultValue={t.planDays ?? ''}
               disabled={disabled}
-              className="h-8 w-20"
+              className="h-8 w-16 px-1"
               onBlur={(e) => saveNumber(parseHalfDays(e.target.value, 0.5, '工期'), t.planDays, 'planDays', (v) => ({ planDays: v }))}
             />
           </div>
         </TableCell>
         <TableCell>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <Input
               key={fieldKey('progressOverride', t.progressOverride)}
               type="number"
@@ -176,7 +178,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
               defaultValue={t.progressOverride ?? ''}
               placeholder="自动"
               disabled={disabled}
-              className="h-8 w-20"
+              className="h-8 w-14 px-1"
               onBlur={(e) => saveNumber(parseProgress(e.target.value), t.progressOverride, 'progressOverride', (v) => ({ progress: v }))}
             />
             <div
@@ -189,13 +191,13 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
             >
               <div className={cn('h-full rounded-full', t.progress >= 100 ? 'bg-emerald-600' : 'bg-primary')} style={{ width: `${t.progress}%` }} />
             </div>
-            <span className="w-9 text-right font-mono text-[12px]">{t.progress}%</span>
+            <span className="w-8 shrink-0 text-right font-mono text-[12px]">{t.progress}%</span>
           </div>
         </TableCell>
         <TableCell>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1">
             <Select value={t.flag ?? NONE} disabled={disabled} onValueChange={(v) => save({ flag: v === NONE ? null : 'attention' })}>
-              <SelectTrigger className="h-8 w-20" aria-label={`标记 ${label}`}>
+              <SelectTrigger className="h-8 w-[3.75rem] px-1.5" aria-label={`标记 ${label}`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -212,7 +214,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
               defaultValue={t.delayDays ?? ''}
               placeholder="0"
               disabled={disabled}
-              className="h-8 w-20"
+              className="h-8 w-16 px-1"
               onBlur={(e) => saveNumber(parseHalfDays(e.target.value, 0, '延期'), t.delayDays, 'delayDays', (v) => ({ delayDays: v }))}
             />
           </div>
@@ -225,7 +227,7 @@ export function TaskRow({ org, task: t, people }: { org: string; task: Task; peo
             placeholder="卡点、周知事项"
             maxLength={200}
             disabled={disabled}
-            className="h-8"
+            className="h-8 px-1.5"
             onBlur={(e) => {
               const v = e.target.value.trim();
               if (v !== (t.note ?? '')) save({ note: v || null }, 'note');

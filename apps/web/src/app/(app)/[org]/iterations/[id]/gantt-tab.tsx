@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { heatRows } from '@/features/gantt/model';
+import { heatRows, overviewIsHollow } from '@/features/gantt/model';
 import { activePeople, canListMembers } from '@/features/members/model';
 import { TASK_STATUS_LABEL } from '@/lib/labels';
 import { api } from '@/lib/api';
@@ -20,13 +20,37 @@ import type { IterationGantt } from '@/lib/types';
 import { TaskRow } from './task-row';
 import { Timeline } from './timeline';
 
-function OverviewStrip({ overview }: { overview: IterationGantt['overview'] }) {
+function OverviewStrip({ overview, taskCount }: { overview: IterationGantt['overview']; taskCount: number }) {
   const tiles = [
     { label: '整体进度', value: `${overview.overall}%` },
     { label: '理论进度', value: `${overview.expected}%` },
     { label: '落后', value: `${overview.behind}%` },
     { label: '遗留', value: `${overview.deferred} 项` },
   ];
+  if (overviewIsHollow(overview, taskCount)) {
+    return (
+      <section aria-label="进度概览" className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border bg-card px-3 py-2 text-[13px]">
+        <span className="text-sm font-semibold">概览</span>
+        <p className="text-muted-foreground">
+          {taskCount === 0
+            ? '添加任务并填写开始日期后，这里会汇总整体、理论、落后和遗留。'
+            : '整体 0% · 理论 0% · 落后 0% · 遗留 0 项。填写开始日期后，进度会显示在任务表和时间轴。'}
+        </p>
+        {overview.attention.length > 0 && (
+          <ul aria-label="关注与周知" className="flex min-w-full flex-col gap-1">
+            {overview.attention.map((a) => (
+              <li key={`${a.kind}-${a.title}`} className="flex flex-wrap items-center gap-2">
+                <span className={a.kind === 'attention' ? 'font-medium text-destructive' : 'font-medium text-primary'}>{a.kind === 'attention' ? '关注' : '周知'}</span>
+                <span>{a.title}</span>
+                {a.assignees.length > 0 && <span className="text-muted-foreground">{a.assignees.join('、')}</span>}
+                {a.note && <span className="text-muted-foreground">· {a.note}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    );
+  }
   return (
     <section aria-label="进度概览" className="flex flex-col gap-2">
       <div className="grid grid-cols-4 gap-3">
@@ -127,7 +151,7 @@ export function GanttTab({ org, iterationId }: { org: string; iterationId: strin
   const people = members.data ? activePeople(members.data) : null;
   return (
     <div className="flex flex-col gap-4">
-      <OverviewStrip overview={g.overview} />
+      <OverviewStrip overview={g.overview} taskCount={g.tasks.length} />
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-2 font-semibold">
           任务（{g.tasks.length}）
@@ -156,21 +180,33 @@ export function GanttTab({ org, iterationId }: { org: string; iterationId: strin
             </li>
           ))}
         </ul>
-        <div className="hidden overflow-x-auto rounded-md border bg-card md:block">
-          <Table className="min-w-[1472px] table-fixed">
+        <div className="hidden min-w-0 overflow-x-auto rounded-md border bg-card md:block">
+          {/* 1280 展开侧栏后表卡约 974px。min-w 960 让主列落在可用宽里；更窄时这层 overflow 仍是安全阀。 */}
+          <Table className="min-w-[960px] table-fixed [&_td]:px-1.5 [&_th]:px-1.5">
+            <colgroup>
+              <col className="w-10" />
+              <col />
+              <col className="w-24" />
+              <col className="w-[5.5rem]" />
+              <col className="w-[11.5rem]" />
+              <col className="w-32" />
+              <col className="w-[8.75rem]" />
+              <col className="w-16" />
+              <col className="w-10" />
+            </colgroup>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-10">
+                <TableHead>
                   <span className="sr-only">重点</span>
                 </TableHead>
-                <TableHead className="w-72">需求 / 任务</TableHead>
-                <TableHead className="w-36">负责人</TableHead>
-                <TableHead className="w-28">状态</TableHead>
-                <TableHead className="w-64">开始 / 工期（天）</TableHead>
-                <TableHead className="w-52">进度（%）</TableHead>
-                <TableHead className="w-48">标记 / 延期（天）</TableHead>
-                <TableHead className="w-48">说明</TableHead>
-                <TableHead className="w-10">
+                <TableHead>需求 / 任务</TableHead>
+                <TableHead>负责人</TableHead>
+                <TableHead>状态</TableHead>
+                <TableHead>开始 / 工期（天）</TableHead>
+                <TableHead>进度（%）</TableHead>
+                <TableHead>标记 / 延期（天）</TableHead>
+                <TableHead>说明</TableHead>
+                <TableHead>
                   <span className="sr-only">操作</span>
                 </TableHead>
               </TableRow>
