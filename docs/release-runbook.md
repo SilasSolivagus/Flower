@@ -136,7 +136,22 @@ edge-nginx 把域名指到 Flower。切之前 Flower 已经挂在 edge 上（第
 
 Flower 自己的库和附件用 `scripts/backup-flower.sh`。它只读，不停服务，不执行 down，也不删卷。不备份 `.env` 和 `.env.migrate`，密钥由 Silas 放进保险箱。日志里不打印环境变量、连接串或密钥。compose 解析失败时只提示「无法解析」，不转发命令的错误输出。
 
-数据库：`docker compose exec -T postgres pg_dump -U flower_admin -d flower -Fc`。附件卷：`docker run --rm --pull never --network none --entrypoint tar`，把卷只读挂到 `/data`。入口直接是 `tar`。镜像默认是同一组 compose 文件里 `postgres` 服务的镜像（`docker compose config --images postgres` 的第一行）。仓库和当前生产 overlay 下，这只镜像是 `pgvector/pgvector:pg17`。`postgres:17-alpine` 是 prd-src 的默认镜像，不是 Flower 的 postgres。也可以 `--tar-image <镜像>` 或 `FLOWER_BACKUP_TAR_IMAGE`。裸 `alpine` / `alpine:latest` 会直接拒绝。本机没有这只镜像就退出，不拉取、不构建。脚本开头是 `umask 077`：产物和 `.sha256` 是 600，`--out` 目录会被收到 700。
+数据库：`docker compose exec -T postgres pg_dump -U flower_admin -d flower -Fc`。附件卷：先 `docker volume inspect`，卷不存在就退出，不打包。`docker run -v` 会把不存在的卷建成空卷，空目录打出来的包不是空文件，不能拿「包有内容」当成功。卷存在但是空的，备份仍然成功，并打印附件条目数；数为 0 时另给一行 `WARN`。打包用 `docker run --rm --pull never --network none --entrypoint tar`，把卷只读挂到 `/data`。入口直接是 `tar`。镜像默认是同一组 compose 文件里 `postgres` 服务的镜像（`docker compose config --images postgres` 的第一行）。仓库和当前生产 overlay 下，这只镜像是 `pgvector/pgvector:pg17`。`postgres:17-alpine` 是 prd-src 的默认镜像，不是 Flower 的 postgres。也可以 `--tar-image <镜像>` 或 `FLOWER_BACKUP_TAR_IMAGE`。裸 `alpine` / `alpine:latest` 会直接拒绝。本机没有这只镜像就退出，不拉取、不构建。脚本开头是 `umask 077`：产物和 `.sha256` 是 600。已经存在的 `--out` 目录权限保持原样；只有脚本自己新建的目录才是 700。备份目录仍由操作者用 `install -d -m 700` 事先建好。
+
+退出码（脚本头注释与此相同）：
+
+| 码 | 含义 |
+|---|---|
+| 0 | 成功。卷存在但没有条目时也是 0，并另打印一行 WARN |
+| 1 | 参数或 `--out` 不合法 |
+| 2 | compose 文件或镜像名无法确定 |
+| 3 | 本机没有打包镜像，或拒绝裸 alpine |
+| 4 | 附件卷不存在 |
+| 5 | 数据库备份失败 |
+| 6 | 附件打包失败 |
+| 7 | 校验失败（`pg_restore --list`、`tar -tzf`，或写不出 sha256） |
+
+失败时退出前只多打印一行说明，不带密钥，也不转发可能含环境值的命令错误输出。未完成的 dump、附件包和 `.sha256` 会删掉。
 
 compose 文件，先命中的为准：
 
@@ -166,7 +181,7 @@ sha256sum -c *.sha256
 D=first-up-<执行日>
 docker image inspect pgvector/pgvector:pg17 --format '{{.Id}}'
 cd /opt/flower
-docker compose -p flower -f docker-compose.yml -f compose.prod.yml config --images postgres
+docker compose -p flower -f docker-compose.yml -f compose.prod.yml config --images postgres 2>/dev/null
 install -d -m 700 /opt/backups/flower/$D
 umask 077
 scripts/backup-flower.sh --out /opt/backups/flower/$D --project flower \
@@ -179,13 +194,14 @@ cd /opt/backups/flower/$D && sha256sum -c *.sha256 && ls -la
 
 ```bash
 D=first-up-<执行日>
+umask 077
 install -d -m 700 /home/box/backups/flower-47x/$D
 scp -p '<47.x>:/opt/backups/flower/'$D'/*' /home/box/backups/flower-47x/$D/
 chmod 600 /home/box/backups/flower-47x/$D/*
 cd /home/box/backups/flower-47x/$D && sha256sum -c *.sha256 && ls -la
 ```
 
-`config --images postgres` 的期望输出是 `pgvector/pgvector:pg17`。`docker image inspect` 必须有输出。脚本成功时 stdout 三行，其中附件镜像是 `pgvector/pgvector:pg17`。留档保留两边的 `sha256sum -c`、两边的 `ls -la`、这三行，以及 47.x 上新脚本的 sha256。
+`config --images postgres` 的期望输出是 `pgvector/pgvector:pg17`。这条预检把标准错误丢掉，失败只看退出码，不要把 compose 的错误输出贴进记录。`docker image inspect` 必须有输出。脚本成功时 stdout 四行：两行备份路径、一行附件镜像（`pgvector/pgvector:pg17`）、一行附件条目数。条目数为 0 时 stderr 另有一行 WARN，退出码仍是 0。留档保留两边的 `sha256sum -c`、两边的 `ls -la`、这四行，以及 47.x 上新脚本的 sha256。
 
 恢复演练（待演练验证，下面是步骤，不是已测耗时）：
 

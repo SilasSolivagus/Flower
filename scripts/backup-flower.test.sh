@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 备份脚本的行为测试。用假的 docker 拦住拉取，不连接生产，也不起真实容器。
-# 调用方 umask 故意放宽，产物仍须是 600、目录 700。
+# 调用方 umask 故意放宽。产物仍须是 600。已经存在的 --out 目录保持调用方设的权限。
 set -euo pipefail
 umask 022
 
@@ -199,6 +199,9 @@ if [[ "${1:-}" == "compose" ]]; then
   fi
   if [[ "$sub" == "exec" ]]; then
     if [[ "$*" == *" pg_dump "* ]]; then
+      if [[ "${MOCK_DUMP_STATUS:-0}" -ne 0 ]]; then
+        exit "${MOCK_DUMP_STATUS}"
+      fi
       printf 'PGDMP'
       exit 0
     fi
@@ -211,7 +214,14 @@ if [[ "${1:-}" == "compose" ]]; then
   exit 96
 fi
 
-  if [[ "${1:-}" == "inspect" ]]; then
+if [[ "${1:-}" == "volume" && "${2:-}" == "inspect" ]]; then
+  if [[ "${MOCK_VOLUME_MISSING:-0}" -eq 1 ]]; then
+    exit 1
+  fi
+  exit 0
+fi
+
+if [[ "${1:-}" == "inspect" ]]; then
   printf '%s\n' "${MOCK_VOLUME:-}"
   exit 0
 fi
@@ -265,6 +275,14 @@ if [[ "${1:-}" == "run" ]]; then
   if [[ "${MOCK_RUN_STATUS:-0}" -ne 0 ]]; then
     exit "${MOCK_RUN_STATUS}"
   fi
+  if [[ "${MOCK_BAD_TAR:-0}" -eq 1 ]]; then
+    printf 'not-a-tar'
+    exit 0
+  fi
+  if [[ "${MOCK_EMPTY_TAR:-0}" -eq 1 ]]; then
+    python3 -c 'import io,sys,tarfile; raw=io.BytesIO(); t=tarfile.open(fileobj=raw, mode="w:gz"); info=tarfile.TarInfo("./"); info.type=tarfile.DIRTYPE; t.addfile(info); t.close(); sys.stdout.buffer.write(raw.getvalue())'
+    exit 0
+  fi
   python3 -c 'import io,sys,tarfile; raw=io.BytesIO(); t=tarfile.open(fileobj=raw, mode="w:gz"); info=tarfile.TarInfo("hello.txt"); data=b"hi"; info.size=len(data); t.addfile(info, io.BytesIO(data)); t.close(); sys.stdout.buffer.write(raw.getvalue())'
   exit 0
 fi
@@ -286,6 +304,9 @@ run_backup() {
     MOCK_OK_IMAGES="$MOCK_OK_IMAGES" MOCK_CONFIG_STATUS="${MOCK_CONFIG_STATUS:-0}" \
     MOCK_RUN_STATUS="${MOCK_RUN_STATUS:-0}" \
     MOCK_FLOWER_ID="${MOCK_FLOWER_ID:-}" MOCK_VOLUME="${MOCK_VOLUME:-}" \
+    MOCK_VOLUME_MISSING="${MOCK_VOLUME_MISSING:-0}" \
+    MOCK_DUMP_STATUS="${MOCK_DUMP_STATUS:-0}" \
+    MOCK_BAD_TAR="${MOCK_BAD_TAR:-0}" MOCK_EMPTY_TAR="${MOCK_EMPTY_TAR:-0}" \
     POSTGRES_ADMIN_PASSWORD="$secret" FLOWER_SECRET_KEY="$secret" \
     DATABASE_URL="postgres://flower_app:${secret}@postgres:5432/flower" \
     PATH="$MOCK_BIN:$PATH" \
@@ -345,6 +366,8 @@ write_mock "$MOCK_BIN"
 MOCK_IMAGE='pgvector/pgvector:pg17'
 MOCK_OK_IMAGES="$MOCK_IMAGE"
 out="$work/out1"
+mkdir -p "$out"
+chmod 750 "$out"
 status="$(run_backup "$fx" "$out")"
 assert_ok "生产 compose 备份成功" "$status"
 no_secret "成功时不打印密钥" "$out/script.log"
@@ -442,9 +465,14 @@ if [[ -f "$dump" && -f "$tgz" && -f "${dump}.sha256" && -f "${tgz}.sha256" ]]; t
   assert_eq "附件包是 600" "600" "$(mode_of "$tgz")"
   assert_eq "dump 的 sha256 是 600" "600" "$(mode_of "${dump}.sha256")"
   assert_eq "附件包的 sha256 是 600" "600" "$(mode_of "${tgz}.sha256")"
-  assert_eq "备份目录是 700" "700" "$(mode_of "$out")"
+  assert_eq "不改已有 --out 目录权限" "750" "$(mode_of "$out")"
 else
   fail "无法检查产物权限"
+fi
+if grep -q '附件条目数：1' "$out/script.log" && ! grep -q 'WARN：' "$out/script.log"; then
+  pass "有条目时打印数量，且没有 WARN"
+else
+  fail "条目数或 WARN 不对"
 fi
 if tar -tzf "$tgz" | grep -q 'hello.txt'; then
   pass "tar -tzf 能列出附件包"
@@ -493,7 +521,7 @@ else
   fail "默认 compose 文件不对（$repo_files）"
 fi
 
-# 2b. 生产布局是 docker-compose.yml + compose.prod.yml，没有 compose.yml。
+# 3. 生产布局是 docker-compose.yml + compose.prod.yml，没有 compose.yml。
 fx="$work/ship"
 new_fixture "$fx" ship
 MOCK_DIR="$work/mock-ship"
@@ -540,7 +568,7 @@ else
   fail "生产布局上 --file 没有替换自动检测（$ship_override）"
 fi
 
-# 3. 缺镜像时退出，且不执行 docker run。
+# 4. 缺镜像时退出，且不执行 docker run。
 fx="$work/missing"
 new_fixture "$fx" repo
 MOCK_DIR="$work/mock3"
@@ -573,7 +601,7 @@ else
   pass "缺镜像时没有产物"
 fi
 
-# 4. compose 解析失败时不转发错误输出（里面可能有环境值）。
+# 5. compose 解析失败时不转发错误输出（里面可能有环境值）。
 fx="$work/cfgfail"
 new_fixture "$fx" repo
 MOCK_DIR="$work/mock4"
@@ -594,7 +622,7 @@ else
 fi
 unset MOCK_CONFIG_STATUS
 
-# 5. --tar-image 覆盖默认镜像。
+# 6. --tar-image 覆盖默认镜像。
 fx="$work/override"
 new_fixture "$fx" repo
 MOCK_DIR="$work/mock5"
@@ -620,7 +648,7 @@ else
   assert_eq "--tar-image 被用于打包" "postgres:17-alpine" "$(run_image "${ARGS[@]}")"
 fi
 
-# 6. 显式 --file 覆盖自动检测。
+# 7. 显式 --file 覆盖自动检测。
 fx="$work/files"
 new_fixture "$fx" prod
 printf 'services:\n  postgres:\n    image: nginx:alpine\n' >"$fx/custom.yml"
@@ -646,7 +674,7 @@ else
   fail "--file 没有替换默认列表（$custom_files）"
 fi
 
-# 7. FLOWER_COMPOSE_FILES 优先于 COMPOSE_FILE，相对路径按仓库根解析。
+# 8. FLOWER_COMPOSE_FILES 优先于 COMPOSE_FILE，相对路径按仓库根解析。
 fx="$work/envfiles"
 new_fixture "$fx" prod
 printf 'services:\n  postgres:\n    image: nginx:alpine\n' >"$fx/custom.yml"
@@ -675,7 +703,7 @@ else
 fi
 unset FLOWER_COMPOSE_FILES COMPOSE_FILE
 
-# 8. 打包失败时不留下未校验产物。
+# 9. 打包失败时不留下未校验产物。
 fx="$work/runfail"
 new_fixture "$fx" repo
 MOCK_DIR="$work/mock7"
@@ -687,7 +715,13 @@ MOCK_OK_IMAGES="$MOCK_IMAGE"
 MOCK_RUN_STATUS=1
 out="$work/out7"
 status="$(run_backup "$fx" "$out")"
-assert_fail "打包失败时退出" "$status"
+assert_eq "打包失败时退出 6" "6" "$status"
+no_secret "打包失败时不打印密钥" "$out/script.log"
+if grep -q '附件打包失败' "$out/script.log"; then
+  pass "打包失败时有明确报错"
+else
+  fail "打包失败时没有明确报错"
+fi
 if find "$out" \( -name 'flower-*.dump' -o -name 'flower-storage-*.tgz' -o -name '*.sha256' \) -print -quit | grep -q .; then
   fail "打包失败仍留下产物"
 else
@@ -695,7 +729,7 @@ else
 fi
 unset MOCK_RUN_STATUS
 
-# 8. compose 若给出裸 alpine，直接拒绝，不 run。
+# 10. compose 若给出裸 alpine，直接拒绝，不 run。
 fx="$work/bare"
 new_fixture "$fx" repo
 MOCK_DIR="$work/mock8"
@@ -717,7 +751,7 @@ while IFS= read -r f; do
 done < <(invocations "$MOCK_DIR")
 assert_eq "拒绝裸 alpine 时没有 run 或 pull" "0" "$ran"
 
-# 9. flower 容器还在时，附件卷用它实际挂载的名字。
+# 11. flower 容器还在时，附件卷用它实际挂载的名字。
 fx="$work/vol"
 new_fixture "$fx" repo
 MOCK_DIR="$work/mock-vol"
@@ -748,7 +782,120 @@ done
 assert_eq "使用容器上的附件卷" "custom_storage_name:/data:ro" "$vol"
 unset MOCK_FLOWER_ID MOCK_VOLUME
 
-# 10. --out 不能指向仓库内部。
+# 12. 附件卷不存在时失败，且不打包。
+fx="$work/novol"
+new_fixture "$fx" repo
+MOCK_DIR="$work/mock-novol"
+MOCK_BIN="$work/bin-novol"
+mkdir -p "$MOCK_DIR"
+write_mock "$MOCK_BIN"
+MOCK_IMAGE='pgvector/pgvector:pg17'
+MOCK_OK_IMAGES="$MOCK_IMAGE"
+MOCK_VOLUME_MISSING=1
+out="$work/out-novol"
+status="$(run_backup "$fx" "$out")"
+assert_eq "附件卷不存在时退出 4" "4" "$status"
+no_secret "卷不存在时不打印密钥" "$out/script.log"
+if grep -q '附件卷不存在' "$out/script.log"; then
+  pass "卷不存在时有明确报错"
+else
+  fail "卷不存在时没有明确报错"
+fi
+ran=0
+while IFS= read -r f; do
+  [[ -z "$f" ]] && continue
+  read_args "$f"
+  if [[ "${ARGS[0]:-}" == "run" || "${ARGS[0]:-}" == "pull" ]]; then
+    ran=1
+  fi
+done < <(invocations "$MOCK_DIR")
+assert_eq "卷不存在时没有 run 或 pull" "0" "$ran"
+if find "$out" -name 'flower-*' -print -quit | grep -q .; then
+  fail "卷不存在时留下了产物"
+else
+  pass "卷不存在时没有产物"
+fi
+unset MOCK_VOLUME_MISSING
+
+# 13. 卷存在但是空的：成功，条目数为 0，并打印 WARN。
+fx="$work/emptyvol"
+new_fixture "$fx" repo
+MOCK_DIR="$work/mock-empty"
+MOCK_BIN="$work/bin-empty"
+mkdir -p "$MOCK_DIR"
+write_mock "$MOCK_BIN"
+MOCK_IMAGE='pgvector/pgvector:pg17'
+MOCK_OK_IMAGES="$MOCK_IMAGE"
+MOCK_EMPTY_TAR=1
+out="$work/out-empty"
+status="$(run_backup "$fx" "$out")"
+assert_ok "空卷备份成功" "$status"
+no_secret "空卷时不打印密钥" "$out/script.log"
+if grep -q '附件条目数：0' "$out/script.log" && grep -q 'WARN：附件卷存在，但里面没有条目。' "$out/script.log"; then
+  pass "空卷打印条目数 0 和 WARN"
+else
+  fail "空卷没有条目数或 WARN"
+fi
+if find "$out" -name 'flower-*.dump' -print -quit | grep -q . && find "$out" -name '*.sha256' | grep -q .; then
+  pass "空卷仍留下已校验的产物"
+else
+  fail "空卷没有留下产物"
+fi
+unset MOCK_EMPTY_TAR
+
+# 14. pg_dump 失败时退出 5，并留下人能看懂的提示。
+fx="$work/dumpfail"
+new_fixture "$fx" repo
+MOCK_DIR="$work/mock-dump"
+MOCK_BIN="$work/bin-dump"
+mkdir -p "$MOCK_DIR"
+write_mock "$MOCK_BIN"
+MOCK_IMAGE='pgvector/pgvector:pg17'
+MOCK_OK_IMAGES="$MOCK_IMAGE"
+MOCK_DUMP_STATUS=1
+out="$work/out-dump"
+status="$(run_backup "$fx" "$out")"
+assert_eq "dump 失败时退出 5" "5" "$status"
+no_secret "dump 失败时不打印密钥" "$out/script.log"
+if grep -q '数据库备份失败' "$out/script.log"; then
+  pass "dump 失败时有明确报错"
+else
+  fail "dump 失败时没有明确报错"
+fi
+if find "$out" \( -name 'flower-*.dump' -o -name 'flower-storage-*.tgz' -o -name '*.sha256' \) -print -quit | grep -q .; then
+  fail "dump 失败仍留下产物"
+else
+  pass "dump 失败不留产物"
+fi
+unset MOCK_DUMP_STATUS
+
+# 15. tar 校验失败时退出 7，并留下人能看懂的提示。
+fx="$work/badtar"
+new_fixture "$fx" repo
+MOCK_DIR="$work/mock-badtar"
+MOCK_BIN="$work/bin-badtar"
+mkdir -p "$MOCK_DIR"
+write_mock "$MOCK_BIN"
+MOCK_IMAGE='pgvector/pgvector:pg17'
+MOCK_OK_IMAGES="$MOCK_IMAGE"
+MOCK_BAD_TAR=1
+out="$work/out-badtar"
+status="$(run_backup "$fx" "$out")"
+assert_eq "tar 校验失败时退出 7" "7" "$status"
+no_secret "tar 校验失败时不打印密钥" "$out/script.log"
+if grep -q '附件包校验失败' "$out/script.log"; then
+  pass "tar 校验失败时有明确报错"
+else
+  fail "tar 校验失败时没有明确报错"
+fi
+if find "$out" \( -name 'flower-*.dump' -o -name 'flower-storage-*.tgz' -o -name '*.sha256' \) -print -quit | grep -q .; then
+  fail "tar 校验失败仍留下产物"
+else
+  pass "tar 校验失败不留产物"
+fi
+unset MOCK_BAD_TAR
+
+# 16. --out 不能指向仓库内部。
 inside="$work/inside-repo"
 mkdir -p "$inside"
 set +e
