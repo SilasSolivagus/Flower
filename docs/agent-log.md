@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-24 · 云端 · 组织顶栏增加 Flower 产品反馈入口
+- 分支 / PR：`cursor/org-topbar-feedback-f3b7`
+- 做了什么：登录后进入组织，顶栏在通知铃左侧增加「反馈」。点开会在新标签打开 `https://forms.gle/XaEtvkHrRQZePrwL8`。所有能看到组织壳的角色都能看到，不进用户菜单，也不做应用内弹窗或反馈接口。这是对 Flower 本身的反馈，和 pan123 需求无关。合仓不等于部署，不碰生产。
+- 怎么验证的：本机登录后进入 `/acme`。顶栏「反馈」在通知铃左侧，可见文案是「反馈」，可访问名称是「反馈 Flower 产品」，href 为 `https://forms.gle/XaEtvkHrRQZePrwL8`，`target=_blank`，`rel=noopener noreferrer`。点击后新标签打开 Google 表单「Flower 产品反馈」。390 宽仍能看到。Playwright `product-feedback` 1 条通过（所有者与访客、新标签、窄屏）。`pnpm --filter @flower/web lint` 0 警告，`pnpm --filter @flower/web typecheck` 通过。不是 CI，不得称三绿。
+- 留给对方：无。合仓不等于部署，不碰生产。
+
 ### 2026-10-24 · 云端 · 工作台按人格区分默认布局（RW Phase 2）
 - 分支 / PR：`feat/rw-phase2-persona-layout`（草稿，不要 merge，不要标 ready）
 - 做了什么：单一工作台页按 `PERSONA_LAYOUTS` 调整六块顺序、强调和默认折叠，以及「此刻迭代」里已有字段的默认展开。解析顺序是 URL `?persona=`（只预览）→ `accounts.preferences.workbenchPersona` → 职能标签别名 → 中性（Phase 1）。偏好扩 jsonb 可选键，`PATCH /me` 放行该键，没有 schema 迁移，不下发 `resolvedPersona`，不改权限。外接槽只显示「即将接入」，没有假数据，也没有外链。不做 Phase 3/4、列表默认筛、软债和 47.x。合仓不等于部署。
