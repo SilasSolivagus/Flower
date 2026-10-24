@@ -14,6 +14,7 @@ import {
   List,
   ListChecks,
   Menu,
+  MessageSquarePlus,
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
@@ -26,6 +27,7 @@ import {
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { type ReactNode, useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { NAV_COLLAPSED_KEY, orgNavClassName, railItemClassName, railLabelClassName } from '@/features/shell/collapse';
 import { activeNavKey, buildNav, type NavIcon, type NavItem } from '@/features/shell/nav';
 import { useCollapsedPref } from '@/features/shell/use-collapsed-pref';
@@ -228,6 +230,12 @@ export function OrgShell({ children }: { children: ReactNode }) {
             <Menu className="size-4" aria-hidden="true" />
           </button>
           <div className="ml-auto flex items-center gap-1">
+            <Button variant="ghost" size="sm" className="px-2 text-[13px]" asChild>
+              <a href="https://forms.gle/XaEtvkHrRQZePrwL8" target="_blank" rel="noopener noreferrer" aria-label="反馈 Flower 产品">
+                <MessageSquarePlus aria-hidden="true" />
+                反馈
+              </a>
+            </Button>
             <NotificationBell org={org} />
             <UserMenu />
           </div>
