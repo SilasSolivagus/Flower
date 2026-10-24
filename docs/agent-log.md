@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-24 · 云端 · 备份脚本不再依赖裸 alpine 镜像
+- 分支 / PR：`cursor/backup-no-alpine-6dc3`（草稿，不要 merge，不要部署）
+- 做了什么：首发 S10 停在 `backup-flower.sh` 用 `docker run … alpine tar` 打包附件卷。生产机没有裸 `alpine`，而 `docker run` 缺镜像时会拉取，清单禁止现场 pull，所以备份没跑。脚本改为使用同一组 compose 文件里 postgres 服务的镜像（可 `--tar-image` / `FLOWER_BACKUP_TAR_IMAGE`），`docker run` 加 `--pull never`，缺镜像或解析到裸 `alpine` 就退出。compose 与生产 `$DC` 对齐：仓库根同时有 `compose.yml` 和 `compose.prod.yml` 时自动 `-f` 这两份，否则用 `docker-compose.yml`；可用 `--file` 或 `FLOWER_COMPOSE_FILES`。`pg_dump` / `pg_restore --list` 仍走 `compose exec -T postgres`，并保留 `tar -tzf` 与按文件名写的 `.sha256`。日志不打印环境值；compose 的错误输出直接丢掉。没有改迁移、schema 和业务代码。仓里没有 OPS-UP-CHECKLIST，只改了发布手册。不碰 47.x。合仓不等于部署。
+- 怎么验证的：`shellcheck` 与 `bash scripts/backup-flower.test.sh`（假 docker，不拉取镜像）。覆盖生产两份 compose、仓库默认 compose、缺镜像不 run、错误输出不进日志、`--tar-image`、`--file`、`FLOWER_COMPOSE_FILES`、失败不留产物、拒绝裸 alpine、容器上的实际卷名、sha256 与 `tar -tzf`。本环境没有 docker，没有跑 `scripts/smoke.sh`。不是 CI，不得称三绿。
+- 留给对方：不要 merge，不要部署，不碰 47.x。生产机上的 `compose.yml` / `compose.prod.yml` 不在本仓库；两份都在仓库根时脚本会自动用它们，否则用 `--file` 跟启动命令对齐。附件卷若 flower 容器已删除，退回 `<项目名>_flower_storage`。回滚：恢复脚本里的 `alpine` 与不带 `-f` 的 compose 调用。
+
 ### 2026-10-24 · 云端 · 工作台按人格区分默认布局（RW Phase 2）
 - 分支 / PR：`feat/rw-phase2-persona-layout`（草稿，不要 merge，不要标 ready）
 - 做了什么：单一工作台页按 `PERSONA_LAYOUTS` 调整六块顺序、强调和默认折叠，以及「此刻迭代」里已有字段的默认展开。解析顺序是 URL `?persona=`（只预览）→ `accounts.preferences.workbenchPersona` → 职能标签别名 → 中性（Phase 1）。偏好扩 jsonb 可选键，`PATCH /me` 放行该键，没有 schema 迁移，不下发 `resolvedPersona`，不改权限。外接槽只显示「即将接入」，没有假数据，也没有外链。不做 Phase 3/4、列表默认筛、软债和 47.x。合仓不等于部署。
