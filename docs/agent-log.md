@@ -20,6 +20,12 @@
 
 ## 记录
 
+### 2026-10-24 · 云端 · 备份脚本补上生产 overlay 和产物权限
+- 分支 / PR：`cursor/backup-no-alpine-6dc3`（草稿 #47，不要 merge，不要部署）
+- 做了什么：已处理同日运维评审的放行条件。生产 `/opt/flower` 是 `docker-compose.yml` 加 `compose.prod.yml`，脚本原先只在看到 `compose.yml` 时才带 overlay。现在这两种组合都会带上，`--file` 仍然优先。脚本开头 `umask 077`，产物和 `.sha256` 收到 600，`--out` 目录收到 700。发布手册改了自动带 prod 文件的说法，并补上 S10 命令：700 目录、`--project flower`、两个 `--file`、scp 到机外、两边 `sha256sum -c`。没有改迁移、schema 和业务代码。不碰 47.x。合仓不等于部署。
+- 怎么验证的：`bash scripts/backup-flower.test.sh`（含 shellcheck）。新增生产布局用例，以及调用方 umask 022 时产物 600、目录 700。不是 CI，不得称三绿。
+- 留给对方：不要 merge，不要部署，不碰 47.x。传到 47.x 要 Silas 另批，并核对获批 commit 的脚本 sha256。评审时的 `2a793ae` / `d21c60f2` 已过期。端到端是否转绿以这次推送后的 CI 为准。
+
 ### 2026-10-24 · 云端 · 备份脚本不再依赖裸 alpine 镜像
 - 分支 / PR：`cursor/backup-no-alpine-6dc3`（草稿 #47，不要 merge，不要部署）
 - 做了什么：首发 S10 停在 `backup-flower.sh` 用 `docker run … alpine tar` 打包附件卷。生产机没有裸 `alpine`，而 `docker run` 缺镜像时会拉取，清单禁止现场 pull，所以备份没跑。脚本改为使用同一组 compose 文件里 postgres 服务的镜像（可 `--tar-image` / `FLOWER_BACKUP_TAR_IMAGE`），`docker run` 加 `--pull never`，缺镜像或解析到裸 `alpine` 就退出。compose 与生产 `$DC` 对齐：仓库根同时有 `compose.yml` 和 `compose.prod.yml` 时自动 `-f` 这两份，否则用 `docker-compose.yml`；可用 `--file` 或 `FLOWER_COMPOSE_FILES`。`pg_dump` / `pg_restore --list` 仍走 `compose exec -T postgres`，并保留 `tar -tzf` 与按文件名写的 `.sha256`。日志不打印环境值；compose 的错误输出直接丢掉。没有改迁移、schema 和业务代码。仓里没有 OPS-UP-CHECKLIST，只改了发布手册。不碰 47.x。合仓不等于部署。

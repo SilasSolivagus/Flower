@@ -2,6 +2,8 @@
 # 在线备份 Flower 的数据库和附件卷。只读，不停止服务，不删除任何东西。
 # 不打印环境变量、连接串或密钥。附件打包只用本机已有镜像，不拉取、不构建。
 set -euo pipefail
+# 产物 600，脚本自己创建的目录 700。已有的 --out 目录再收到 700。
+umask 077
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 out=""
@@ -82,12 +84,14 @@ if [[ -z "$project" ]]; then
   echo "缺少 --project，且没有 COMPOSE_PROJECT_NAME" >&2
   exit 1
 fi
+chmod 700 "$out_real"
 
 # 1. 重复的 --file
 # 2. FLOWER_COMPOSE_FILES（冒号分隔）
 # 3. COMPOSE_FILE（与 docker compose 相同）
 # 4. 仓库根同时有 compose.yml 与 compose.prod.yml
-# 5. 只有 docker-compose.yml
+# 5. 仓库根同时有 docker-compose.yml 与 compose.prod.yml（生产 /opt/flower）
+# 6. 只有 docker-compose.yml
 if [[ "$files_from_args" -eq 0 && -n "${FLOWER_COMPOSE_FILES:-}" ]]; then
   raw="${FLOWER_COMPOSE_FILES}"
   while [[ "$raw" == *:* ]]; do
@@ -109,10 +113,12 @@ fi
 if [[ "$files_from_args" -eq 0 ]]; then
   if [[ -f "$repo/compose.yml" && -f "$repo/compose.prod.yml" ]]; then
     compose_files=("$repo/compose.yml" "$repo/compose.prod.yml")
+  elif [[ -f "$repo/docker-compose.yml" && -f "$repo/compose.prod.yml" ]]; then
+    compose_files=("$repo/docker-compose.yml" "$repo/compose.prod.yml")
   elif [[ -f "$repo/docker-compose.yml" ]]; then
     compose_files=("$repo/docker-compose.yml")
   else
-    echo "找不到 compose 文件。生产默认是 compose.yml 加 compose.prod.yml，可用 --file 指定。" >&2
+    echo "找不到 compose 文件。生产是 docker-compose.yml 加 compose.prod.yml，可用 --file 指定。" >&2
     exit 1
   fi
 fi
@@ -221,6 +227,7 @@ tar -tzf "$tgz" >/dev/null
     sha256sum "$(basename "$dump")" >"$(basename "$dump").sha256" &&
     sha256sum "$(basename "$tgz")" >"$(basename "$tgz").sha256"
 )
+chmod 600 "$dump" "$tgz" "${dump}.sha256" "${tgz}.sha256"
 finished=1
 echo "备份完成：$dump"
 echo "备份完成：$tgz"

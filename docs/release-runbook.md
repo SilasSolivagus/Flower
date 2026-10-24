@@ -125,7 +125,7 @@ edge-nginx 把域名指到 Flower。切之前 Flower 已经挂在 edge 上（第
 0. 🔒 在机外用同一个 commit 构建 `flower:local`，需要导入时也构建 `flower-migrate:local`。`docker save` 后在生产机 `docker load`。**load 之前**，只把 47.x 上实际跑过的镜像打成 `flower:prev` / `flower-migrate:prev`。把当时的 `docker-compose.yml`、`.env` 和 commit 号一起留档。不得用本地或 box 构建的旧镜像顶替。
 1. 🔒 建 `.env.migrate`，权限 600。`FLOWER_APP_DB_PASSWORD` 与 `.env` 一致。连接串主机名是 `postgres`。
 2. 🔒 `docker compose stop flower`（停机开始）。
-3. 🔒 `scripts/backup-flower.sh --out <机外同步目录> --project <项目名>`。compose 文件与启动这套栈时相同。仓库根同时有 `compose.yml` 和 `compose.prod.yml` 时脚本会自动带上这两份；只有 `docker-compose.yml` 时用这一份。启动命令若用了别的 `-f`，这里重复同样的 `--file`。
+3. 🔒 `scripts/backup-flower.sh --out <机外同步目录> --project <项目名>`。compose 文件与启动这套栈时相同。仓库根同时有 `docker-compose.yml` 和 `compose.prod.yml` 时（生产 `/opt/flower` 就是这样），脚本会自动带上这两份；同时有 `compose.yml` 和 `compose.prod.yml` 时也带上那两份；只有 `docker-compose.yml` 时用这一份。启动命令若用了别的 `-f`，这里重复同样的 `--file`。首发备份的完整命令见下文「生产首发备份」。
 4. 🔒 `docker compose --profile schema run --rm schema`，退出码必须为 0。
 5. 🔒 `docker compose up -d --wait flower`。版本闸通过才算成功。闸失败时先 `docker compose stop flower`。
 6. 登录和关键页面。`docker inspect` 确认没有 admin 变量（只数行数）。删除 `.env.migrate`，`ls -la` 核对。
@@ -136,15 +136,16 @@ edge-nginx 把域名指到 Flower。切之前 Flower 已经挂在 edge 上（第
 
 Flower 自己的库和附件用 `scripts/backup-flower.sh`。它只读，不停服务，不执行 down，也不删卷。不备份 `.env` 和 `.env.migrate`，密钥由 Silas 放进保险箱。日志里不打印环境变量、连接串或密钥。compose 解析失败时只提示「无法解析」，不转发命令的错误输出。
 
-数据库：`docker compose exec -T postgres pg_dump -U flower_admin -d flower -Fc`。附件卷：`docker run --rm --pull never --network none --entrypoint tar`，把卷只读挂到 `/data`。入口直接是 `tar`，不走镜像自带的入口脚本。镜像默认是同一组 compose 文件里 `postgres` 服务的镜像（`docker compose config --images postgres` 的第一行）。仓库里的 `docker-compose.yml` 写的是 `pgvector/pgvector:pg17`。生产若在 `compose.prod.yml` 里把 postgres 写成 `postgres:17-alpine`，用的就是这只。也可以 `--tar-image <镜像>` 或 `FLOWER_BACKUP_TAR_IMAGE`。裸 `alpine` / `alpine:latest` 会直接拒绝。本机没有这只镜像就退出，不拉取、不构建。
+数据库：`docker compose exec -T postgres pg_dump -U flower_admin -d flower -Fc`。附件卷：`docker run --rm --pull never --network none --entrypoint tar`，把卷只读挂到 `/data`。入口直接是 `tar`。镜像默认是同一组 compose 文件里 `postgres` 服务的镜像（`docker compose config --images postgres` 的第一行）。仓库和当前生产 overlay 下，这只镜像是 `pgvector/pgvector:pg17`。`postgres:17-alpine` 是 prd-src 的默认镜像，不是 Flower 的 postgres。也可以 `--tar-image <镜像>` 或 `FLOWER_BACKUP_TAR_IMAGE`。裸 `alpine` / `alpine:latest` 会直接拒绝。本机没有这只镜像就退出，不拉取、不构建。脚本开头是 `umask 077`：产物和 `.sha256` 是 600，`--out` 目录会被收到 700。
 
 compose 文件，先命中的为准：
 
-1. 重复的 `--file`
+1. 重复的 `--file`（优先于下面的自动检测）
 2. `FLOWER_COMPOSE_FILES`（冒号分隔的路径，相对仓库根）
 3. `COMPOSE_FILE`（与 `docker compose` 相同）
-4. 仓库根同时有 `compose.yml` 和 `compose.prod.yml` 时，用这两份，顺序与生产 `$DC` 一致
-5. 否则用 `docker-compose.yml`
+4. 仓库根同时有 `compose.yml` 和 `compose.prod.yml` 时，用这两份
+5. 仓库根同时有 `docker-compose.yml` 和 `compose.prod.yml` 时，用这两份。生产 `/opt/flower` 是这种布局
+6. 否则只用 `docker-compose.yml`
 
 命令形如 `docker compose --project-directory <仓库> -p <项目名> -f …`。附件卷默认是 `<项目名>_flower_storage`。flower 容器还在（含已经 stop）时，改用它挂到 `/app/data/storage` 的那只卷。
 
@@ -154,6 +155,37 @@ compose 文件，先命中的为准：
 cd <备份目录>
 sha256sum -c *.sha256
 ```
+
+### 生产首发备份 🔒
+
+下面是 S10 的命令草稿。传到 47.x、以及在 47.x 上执行，都要 Silas 另行批准，由 Origin 在允许的窗口里用 root 做。不在 47.x 上 pull 或 build，不 down。脚本先核对 sha256 与获批的 commit 一致，再覆盖 `/opt/flower/scripts/backup-flower.sh`。`.env` 是 600 且属 root，脚本要用 root 跑，否则读不到它，会停在「无法解析」。
+
+在 47.x 上：
+
+```bash
+D=first-up-<执行日>
+docker image inspect pgvector/pgvector:pg17 --format '{{.Id}}'
+cd /opt/flower
+docker compose -p flower -f docker-compose.yml -f compose.prod.yml config --images postgres
+install -d -m 700 /opt/backups/flower/$D
+umask 077
+scripts/backup-flower.sh --out /opt/backups/flower/$D --project flower \
+  --file docker-compose.yml --file compose.prod.yml
+chmod 600 /opt/backups/flower/$D/*
+cd /opt/backups/flower/$D && sha256sum -c *.sha256 && ls -la
+```
+
+在 box 上，把同一份拷出来再核一次：
+
+```bash
+D=first-up-<执行日>
+install -d -m 700 /home/box/backups/flower-47x/$D
+scp -p '<47.x>:/opt/backups/flower/'$D'/*' /home/box/backups/flower-47x/$D/
+chmod 600 /home/box/backups/flower-47x/$D/*
+cd /home/box/backups/flower-47x/$D && sha256sum -c *.sha256 && ls -la
+```
+
+`config --images postgres` 的期望输出是 `pgvector/pgvector:pg17`。`docker image inspect` 必须有输出。脚本成功时 stdout 三行，其中附件镜像是 `pgvector/pgvector:pg17`。留档保留两边的 `sha256sum -c`、两边的 `ls -la`、这三行，以及 47.x 上新脚本的 sha256。
 
 恢复演练（待演练验证，下面是步骤，不是已测耗时）：
 

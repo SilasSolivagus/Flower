@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # 备份脚本的行为测试。用假的 docker 拦住拉取，不连接生产，也不起真实容器。
+# 调用方 umask 故意放宽，产物仍须是 600、目录 700。
 set -euo pipefail
+umask 022
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 script="$root/scripts/backup-flower.sh"
@@ -309,8 +311,14 @@ new_fixture() {
     repo)
       printf 'services:\n  postgres:\n    image: pgvector/pgvector:pg17\n' >"$dir/docker-compose.yml"
       ;;
+    ship)
+      printf 'services:\n  postgres:\n    image: pgvector/pgvector:pg17\n' >"$dir/docker-compose.yml"
+      printf 'services:\n  postgres:\n    pull_policy: never\n' >"$dir/compose.prod.yml"
+      ;;
   esac
 }
+
+mode_of() { stat -c '%a' "$1"; }
 
 f_args() {
   local file="$1" flag="$2"
@@ -429,6 +437,15 @@ if (cd "$out" && sha256sum -c ./*.sha256 >/dev/null); then
 else
   fail "sha256 校验失败"
 fi
+if [[ -f "$dump" && -f "$tgz" && -f "${dump}.sha256" && -f "${tgz}.sha256" ]]; then
+  assert_eq "dump 是 600" "600" "$(mode_of "$dump")"
+  assert_eq "附件包是 600" "600" "$(mode_of "$tgz")"
+  assert_eq "dump 的 sha256 是 600" "600" "$(mode_of "${dump}.sha256")"
+  assert_eq "附件包的 sha256 是 600" "600" "$(mode_of "${tgz}.sha256")"
+  assert_eq "备份目录是 700" "700" "$(mode_of "$out")"
+else
+  fail "无法检查产物权限"
+fi
 if tar -tzf "$tgz" | grep -q 'hello.txt'; then
   pass "tar -tzf 能列出附件包"
 else
@@ -474,6 +491,53 @@ if [[ "$repo_files" == *"/docker-compose.yml" && "$repo_files" != *"compose.prod
   pass "只有 docker-compose.yml 时不追加 compose.prod.yml"
 else
   fail "默认 compose 文件不对（$repo_files）"
+fi
+
+# 2b. 生产布局是 docker-compose.yml + compose.prod.yml，没有 compose.yml。
+fx="$work/ship"
+new_fixture "$fx" ship
+MOCK_DIR="$work/mock-ship"
+MOCK_BIN="$work/bin-ship"
+mkdir -p "$MOCK_DIR"
+write_mock "$MOCK_BIN"
+MOCK_IMAGE='pgvector/pgvector:pg17'
+MOCK_OK_IMAGES="$MOCK_IMAGE"
+out="$work/out-ship"
+status="$(run_backup "$fx" "$out")"
+assert_ok "生产 docker-compose 布局备份成功" "$status"
+ship_files="$(invocations "$MOCK_DIR" | while IFS= read -r f; do
+  read_args "$f"
+  if [[ "${ARGS[0]:-}" == "compose" ]]; then
+    f_args "$f" -f | paste -sd, -
+    break
+  fi
+done)"
+if [[ "$ship_files" == *"/docker-compose.yml,"*"/compose.prod.yml" && "$ship_files" != *"/compose.yml,"* ]]; then
+  pass "自动带上 docker-compose.yml 与 compose.prod.yml"
+else
+  fail "生产布局的 compose 文件不对（$ship_files）"
+fi
+printf 'services:\n  postgres:\n    image: nginx:alpine\n' >"$fx/only.yml"
+MOCK_DIR="$work/mock-ship-file"
+MOCK_BIN="$work/bin-ship-file"
+mkdir -p "$MOCK_DIR"
+write_mock "$MOCK_BIN"
+MOCK_IMAGE='nginx:alpine'
+MOCK_OK_IMAGES='nginx:alpine'
+out="$work/out-ship-file"
+status="$(run_backup "$fx" "$out" --file "$fx/only.yml")"
+assert_ok "生产布局上 --file 仍然优先" "$status"
+ship_override="$(invocations "$MOCK_DIR" | while IFS= read -r f; do
+  read_args "$f"
+  if [[ "${ARGS[0]:-}" == "compose" ]]; then
+    f_args "$f" -f | paste -sd, -
+    break
+  fi
+done)"
+if [[ "$ship_override" == *"/only.yml" && "$ship_override" != *"compose.prod.yml"* && "$ship_override" != *"docker-compose.yml"* ]]; then
+  pass "生产布局上 --file 替换自动检测"
+else
+  fail "生产布局上 --file 没有替换自动检测（$ship_override）"
 fi
 
 # 3. 缺镜像时退出，且不执行 docker run。
