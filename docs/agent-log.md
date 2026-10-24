@@ -20,6 +20,24 @@
 
 ## 记录
 
+### 2026-10-24 · 云端 · 备份成功必须对应真实附件卷
+- 分支 / PR：`cursor/backup-no-alpine-6dc3`（草稿 #47，不要 merge，不要部署）
+- 做了什么：已处理同日第二轮评审里测试报的空包缺陷，以及运维剩下的不合项。`docker run -v` 会把不存在的卷建成空卷，空目录的 tar 不是空文件，脚本原先退出 0。现在先 `docker volume inspect`，卷不存在则退出 4，不打包。卷存在但没有条目时仍成功，打印附件条目数，数为 0 时给一行 WARN。dump 失败退出 5，打包失败退出 6，校验失败退出 7，退出前各有一行说明，命令的错误输出丢掉，不带密钥。已有的 `--out` 目录不再改权限，700 只给脚本自己新建的目录。退出码写进脚本头和发布手册。手册里 S10 预检加了 `2>/dev/null`，box 侧建目录前先 `umask 077`。测试编号 8 不再重复。没有改迁移、schema 和业务代码。不碰 47.x。合仓不等于部署。
+- 怎么验证的：`bash scripts/backup-flower.test.sh`（含 shellcheck）。新增卷不存在、空卷、dump 失败、tar 校验失败，并核对已有 `--out` 仍是 750、产物 600。不是 CI，不得称三绿。端到端是否转绿以这次推送后的 CI 为准。
+- 留给对方：不要 merge，不要部署，不碰 47.x。传到 47.x 要 Silas 另批，并核对获批 commit 的脚本 sha256。先前的 `2a793ae` / `d21c60f2` 和 `bda47de` / `7f1a2ab2` 都已过期。
+
+### 2026-10-24 · 云端 · 备份脚本补上生产 overlay 和产物权限
+- 分支 / PR：`cursor/backup-no-alpine-6dc3`（草稿 #47，不要 merge，不要部署）
+- 做了什么：已处理同日运维评审的放行条件。生产 `/opt/flower` 是 `docker-compose.yml` 加 `compose.prod.yml`，脚本原先只在看到 `compose.yml` 时才带 overlay。现在这两种组合都会带上，`--file` 仍然优先。脚本开头 `umask 077`，产物和 `.sha256` 收到 600，`--out` 目录收到 700。发布手册改了自动带 prod 文件的说法，并补上 S10 命令：700 目录、`--project flower`、两个 `--file`、scp 到机外、两边 `sha256sum -c`。没有改迁移、schema 和业务代码。不碰 47.x。合仓不等于部署。
+- 怎么验证的：`bash scripts/backup-flower.test.sh`（含 shellcheck）。新增生产布局用例，以及调用方 umask 022 时产物 600、目录 700。不是 CI，不得称三绿。
+- 留给对方：不要 merge，不要部署，不碰 47.x。传到 47.x 要 Silas 另批，并核对获批 commit 的脚本 sha256。评审时的 `2a793ae` / `d21c60f2` 已过期。端到端是否转绿以这次推送后的 CI 为准。
+
+### 2026-10-24 · 云端 · 备份脚本不再依赖裸 alpine 镜像
+- 分支 / PR：`cursor/backup-no-alpine-6dc3`（草稿 #47，不要 merge，不要部署）
+- 做了什么：首发 S10 停在 `backup-flower.sh` 用 `docker run … alpine tar` 打包附件卷。生产机没有裸 `alpine`，而 `docker run` 缺镜像时会拉取，清单禁止现场 pull，所以备份没跑。脚本改为使用同一组 compose 文件里 postgres 服务的镜像（可 `--tar-image` / `FLOWER_BACKUP_TAR_IMAGE`），`docker run` 加 `--pull never`，缺镜像或解析到裸 `alpine` 就退出。compose 与生产 `$DC` 对齐：仓库根同时有 `compose.yml` 和 `compose.prod.yml` 时自动 `-f` 这两份，否则用 `docker-compose.yml`；可用 `--file` 或 `FLOWER_COMPOSE_FILES`。`pg_dump` / `pg_restore --list` 仍走 `compose exec -T postgres`，并保留 `tar -tzf` 与按文件名写的 `.sha256`。日志不打印环境值；compose 的错误输出直接丢掉。没有改迁移、schema 和业务代码。仓里没有 OPS-UP-CHECKLIST，只改了发布手册。不碰 47.x。合仓不等于部署。
+- 怎么验证的：`shellcheck` 与 `bash scripts/backup-flower.test.sh`（假 docker，不拉取镜像）。覆盖生产两份 compose、仓库默认 compose、缺镜像不 run、错误输出不进日志、`--tar-image`、`--file`、`FLOWER_COMPOSE_FILES`、失败不留产物、拒绝裸 alpine、容器上的实际卷名、sha256 与 `tar -tzf`。本环境没有 docker，没有跑 `scripts/smoke.sh`。不是 CI，不得称三绿。
+- 留给对方：不要 merge，不要部署，不碰 47.x。生产机上的 `compose.yml` / `compose.prod.yml` 不在本仓库；两份都在仓库根时脚本会自动用它们，否则用 `--file` 跟启动命令对齐。附件卷若 flower 容器已删除，退回 `<项目名>_flower_storage`。回滚：恢复脚本里的 `alpine` 与不带 `-f` 的 compose 调用。
+
 ### 2026-10-24 · 云端 · 工作台按人格区分默认布局（RW Phase 2）
 - 分支 / PR：`feat/rw-phase2-persona-layout`（草稿，不要 merge，不要标 ready）
 - 做了什么：单一工作台页按 `PERSONA_LAYOUTS` 调整六块顺序、强调和默认折叠，以及「此刻迭代」里已有字段的默认展开。解析顺序是 URL `?persona=`（只预览）→ `accounts.preferences.workbenchPersona` → 职能标签别名 → 中性（Phase 1）。偏好扩 jsonb 可选键，`PATCH /me` 放行该键，没有 schema 迁移，不下发 `resolvedPersona`，不改权限。外接槽只显示「即将接入」，没有假数据，也没有外链。不做 Phase 3/4、列表默认筛、软债和 47.x。合仓不等于部署。
